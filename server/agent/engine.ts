@@ -59,15 +59,24 @@ export class AgentEngine {
     }
     const provider = createProvider(providerCfg);
 
+    // 历史消息(供记忆注入与 provider 回放)
+    const history = db.getMessages(session.id).slice(-MAX_HISTORY_MESSAGES);
+
     // 组装系统提示:人格 + 记忆 + 环境
     const memories = agent.memoryEnabled ? await memory.recall(userContent, 6) : [];
-    const memoryBlock = memories.length
+    let memoryBlock = memories.length
       ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
       : "";
+    // 新会话(历史很少)时注入最近的对话经历,让"记忆不断片"
+    if (agent.memoryEnabled && history.length <= 2 && memory.mode !== "hindsight") {
+      const recent = await memory.recentExperiences(5);
+      if (recent.length) {
+        memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
+      }
+    }
     const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock);
 
     // 历史消息 → provider 消息
-    const history = db.getMessages(session.id).slice(-MAX_HISTORY_MESSAGES);
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
       ...historyToProviderMessages(history),
@@ -281,7 +290,7 @@ function deriveTitle(session: SessionMeta, content: string): string {
 }
 
 function summarize(user: string, reply: string): string {
-  const u = user.replace(/\s+/g, " ").trim().slice(0, 200);
-  const r = reply.replace(/\s+/g, " ").trim().slice(0, 300);
-  return `对话:用户说"${u}";助手回应"${r}"`;
+  const u = user.replace(/\s+/g, " ").trim().slice(0, 300);
+  const r = reply.replace(/\s+/g, " ").trim().slice(0, 500);
+  return `[${new Date().toLocaleString("zh-CN")}] 用户:${u}\n助手回应:${r}`;
 }

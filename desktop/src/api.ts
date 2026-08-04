@@ -85,6 +85,10 @@ export const api = {
   search: (q: string) =>
     request<{ sessions: { session: SessionMeta; matches: number }[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   getMessages: (id: string) => request<{ messages: ChatMessage[] }>(`/api/sessions/${id}/messages`),
+  deleteMessage: (sessionId: string, msgId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${msgId}`, { method: "DELETE" }),
+
+  memoryStats: () => request<{ stats: { facts: number; experiences: number } }>("/api/memory/stats"),
+  memoryClear: () => request<{ ok: boolean }>("/api/memory/clear", { method: "POST" }),
 
   /** 流式聊天:逐事件回调,返回完整 assistant 消息 */
   async chatStream(req: ChatRequest, onEvent: (e: StreamEvent) => void, signal?: AbortSignal): Promise<void> {

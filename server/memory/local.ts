@@ -38,6 +38,13 @@ export class LocalMemory implements MemoryBackend {
   }
 
   async recall(query: string, limit = 8): Promise<MemoryItem[]> {
+    // 空查询 = 返回最近的经历(按更新时间倒序)
+    if (!query.trim()) {
+      return this.all()
+        .filter((i) => i.kind === "experience")
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, limit);
+    }
     const tokens = query
       .toLowerCase()
       .split(/[\s,。，、;；:：!！?？"'()\[\]{}]+/)
@@ -81,5 +88,16 @@ export class LocalMemory implements MemoryBackend {
 
   async isHealthy(): Promise<boolean> {
     return true;
+  }
+
+  async stats(): Promise<{ facts: number; experiences: number }> {
+    return { facts: this.facts.length, experiences: this.experiences.length };
+  }
+
+  clear(): void {
+    this.facts = [];
+    this.experiences = [];
+    this.save(FACTS_FILE, []);
+    this.save(EXPERIENCES_FILE, []);
   }
 }

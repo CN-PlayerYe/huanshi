@@ -112,6 +112,16 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ text });
   });
 
+  /** 本地记忆统计(条数)与清空 */
+  app.get("/api/memory/stats", async (c) => {
+    return c.json({ stats: await deps.memory.stats() });
+  });
+
+  app.post("/api/memory/clear", async (c) => {
+    deps.memory.clear();
+    return c.json({ ok: true });
+  });
+
   // ---- 人格 / Agents ----
 
   app.get("/api/agents", (c) => c.json({ agents: deps.db.listAgents() }));
@@ -152,6 +162,12 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get("/api/sessions/:id/messages", (c) => {
     return c.json({ messages: deps.db.getMessages(c.req.param("id")) });
+  });
+
+  /** 删除单条消息(手动压缩上下文) */
+  app.delete("/api/sessions/:id/messages/:msgId", (c) => {
+    const ok = deps.db.deleteMessage(c.req.param("id"), c.req.param("msgId"));
+    return c.json({ ok });
   });
 
   // ---- 聊天(SSE 流式) ----

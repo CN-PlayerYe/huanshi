@@ -25,6 +25,7 @@ interface AppState {
   deleteSession(id: string): Promise<void>;
   archiveSession(id: string): Promise<void>;
   renameSession(id: string, title: string): Promise<void>;
+  deleteMessage(sessionId: string, msgId: string): Promise<void>;
   setView(v: "chat" | "settings"): void;
   updateSettings(patch: Partial<Settings>): Promise<void>;
   changeDataDir(path: string): Promise<void>;
@@ -112,6 +113,16 @@ export const useApp = create<AppState>((set, get) => ({
   async renameSession(id, title) {
     await api.renameSession(id, title);
     await get().refreshSessions();
+  },
+
+  async deleteMessage(sessionId, msgId) {
+    await api.deleteMessage(sessionId, msgId);
+    set((s) => ({
+      messagesBySession: {
+        ...s.messagesBySession,
+        [sessionId]: (s.messagesBySession[sessionId] ?? []).filter((m) => m.id !== msgId),
+      },
+    }));
   },
 
   setView(v) {

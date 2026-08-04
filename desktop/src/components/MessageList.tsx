@@ -7,6 +7,7 @@ import { useApp } from "../store";
 export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
+  const deleteMessage = useApp((s) => s.deleteMessage);
   const text = msg.parts
     .filter((p) => p.type === "text")
     .map((p) => p.text ?? "")
@@ -44,6 +45,17 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
             <span />
           </div>
         ) : null}
+        <button
+          className="msg-delete"
+          title="删除这条消息(压缩上下文)"
+          onClick={() => {
+            if (window.confirm("删除这条消息?它将从本会话移除,用于压缩上下文。")) {
+              void deleteMessage(msg.sessionId, msg.id);
+            }
+          }}
+        >
+          🗑
+        </button>
       </div>
     </div>
   );

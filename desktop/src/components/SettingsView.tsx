@@ -88,9 +88,11 @@ export function SettingsView() {
   const [modelList, setModelList] = useState<Record<string, string[]>>({});
   const [fetchingKey, setFetchingKey] = useState<string | null>(null);
   const [presetForm, setPresetForm] = useState<{ kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string } | null>(null);
+  const [memStats, setMemStats] = useState<{ facts: number; experiences: number } | null>(null);
 
   useEffect(() => {
     void api.providerPresets().then((r) => setPresets(r.presets)).catch(() => undefined);
+    void api.memoryStats().then((r) => setMemStats(r.stats)).catch(() => undefined);
   }, []);
 
   const runTest = async (key: string, cfg: ModelConfig) => {
@@ -332,6 +334,19 @@ export function SettingsView() {
           <span>
             {systemInfo?.hindsightConnected ? "Hindsight 已连接" : "Hindsight 未连接(自动回退本地)"}
           </span>
+          {memStats && <span style={{ marginLeft: 8 }}>· 本地记忆:{memStats.facts} 条事实 / {memStats.experiences} 条经历</span>}
+          <button
+            className="btn danger sm"
+            style={{ marginLeft: "auto" }}
+            onClick={async () => {
+              if (window.confirm("确定清空本地记忆?此操作不可恢复。")) {
+                await api.memoryClear();
+                setMemStats({ facts: 0, experiences: 0 });
+              }
+            }}
+          >
+            清空记忆
+          </button>
         </div>
 
         <div className="field">

@@ -146,6 +146,16 @@ export class Db {
     }
   }
 
+  /** 删除单条消息(手动压缩上下文用) */
+  deleteMessage(sessionId: string, msgId: string): boolean {
+    const file = this.messagesFile(sessionId);
+    const all = file.read();
+    const kept = all.filter((m) => m.id !== msgId);
+    if (kept.length === all.length) return false;
+    file.write(kept);
+    return true;
+  }
+
   private messagesFile(sessionId: string): JsonFile<ChatMessage[]> {
     let f = this.messageCache.get(sessionId);
     if (!f) {

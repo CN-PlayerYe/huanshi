@@ -19,6 +19,8 @@ export interface MemoryBackend {
   retain(content: string, kind: MemoryKind): Promise<void>;
   reflect(bankId: string): Promise<string>;
   isHealthy(): Promise<boolean>;
+  stats(): Promise<{ facts: number; experiences: number }>;
+  clear(): void;
 }
 
 /**
@@ -54,6 +56,16 @@ export class MemoryService {
     }
   }
 
+  /** 最近的经历回顾(供新会话注入,让"记忆不断片") */
+  async recentExperiences(limit = 5): Promise<MemoryItem[]> {
+    try {
+      const items = await this.backend.recall("", limit);
+      return items;
+    } catch {
+      return [];
+    }
+  }
+
   async retain(content: string, kind: MemoryKind = "experience"): Promise<void> {
     if (!content?.trim()) return;
     try {
@@ -69,6 +81,15 @@ export class MemoryService {
     } catch (err) {
       return `反思失败:${(err as Error).message}`;
     }
+  }
+
+  /** 本地记忆统计(条数)与清空 */
+  stats(): Promise<{ facts: number; experiences: number }> {
+    return this.backend.stats();
+  }
+
+  clear(): void {
+    this.backend.clear();
   }
 
   async status(): Promise<{ mode: string; backend: string; healthy: boolean }> {

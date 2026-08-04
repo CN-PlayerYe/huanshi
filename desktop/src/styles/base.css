@@ -421,6 +421,29 @@ select {
   border-radius: var(--radius);
   line-height: 1.65;
   overflow-wrap: break-word;
+  position: relative;
+}
+
+.msg-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  opacity: 0;
+  color: var(--text-dim);
+  transition: opacity 0.12s;
+}
+
+.message-row:hover .msg-delete {
+  opacity: 0.6;
+}
+
+.msg-delete:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+  color: var(--danger);
 }
 
 .message-row.user .message-bubble {

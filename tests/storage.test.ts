@@ -69,6 +69,17 @@ describe("Db 存储", () => {
     expect(db.getMessages(s.id)[0].parts[0].text).toBe("你好,更新版");
   });
 
+  it("删除单条消息(压缩上下文)", () => {
+    const s = db.createSession("x", "gentle");
+    const m1: ChatMessage = { id: "m1", sessionId: s.id, role: "user", parts: [{ type: "text", text: "a" }], createdAt: 1 };
+    const m2: ChatMessage = { id: "m2", sessionId: s.id, role: "assistant", parts: [{ type: "text", text: "b" }], createdAt: 2 };
+    db.appendMessage(m1);
+    db.appendMessage(m2);
+    expect(db.deleteMessage(s.id, "m1")).toBe(true);
+    expect(db.getMessages(s.id).map((m) => m.id)).toEqual(["m2"]);
+    expect(db.deleteMessage(s.id, "nonexistent")).toBe(false);
+  });
+
   it("人格 CRUD", () => {
     db.saveAgent({ id: "a1", name: "人格A", description: "", systemPrompt: "p", memoryEnabled: true, tools: [], createdAt: Date.now() });
     expect(db.getAgent("a1")?.name).toBe("人格A");

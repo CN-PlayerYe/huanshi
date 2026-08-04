@@ -97,4 +97,13 @@ export class HindsightMemory implements MemoryBackend {
       return false;
     }
   }
+
+  async stats(): Promise<{ facts: number; experiences: number }> {
+    return this.fallback.stats();
+  }
+
+  clear(): void {
+    // 云端记忆不易批量清空,仅清本地回退;如需清云端可删除 bank 重建
+    this.fallback.clear();
+  }
 }
