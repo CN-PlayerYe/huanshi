@@ -1,0 +1,130 @@
+// ===== 前后端共享类型契约 =====
+
+export type Role = "user" | "assistant" | "system";
+
+export interface ToolCallPart {
+  id: string;
+  name: string;
+  input: string; // 工具入参(JSON 字符串)
+  output?: string; // 工具输出
+  status: "pending" | "running" | "done" | "error";
+  startedAt: number;
+  finishedAt?: number;
+}
+
+export interface MessagePart {
+  type: "text" | "tool";
+  text?: string;
+  tool?: ToolCallPart;
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: Role;
+  parts: MessagePart[];
+  createdAt: number;
+  model?: string;
+  error?: string;
+}
+
+export interface SessionMeta {
+  id: string;
+  title: string;
+  agentId: string;
+  createdAt: number;
+  updatedAt: number;
+  archived: boolean;
+}
+
+export interface AgentDef {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  memoryEnabled: boolean;
+  tools: string[];
+  createdAt: number;
+}
+
+export type ProviderKind = "openai" | "anthropic" | "ollama";
+
+export interface ModelConfig {
+  kind: ProviderKind;
+  baseUrl?: string;
+  apiKey?: string;
+  model: string;
+  label?: string;
+}
+
+export interface MemoryConfig {
+  mode: "local" | "hindsight";
+  hindsightBaseUrl: string;
+  hindsightApiKey?: string;
+  hindsightBankId: string;
+  hindsightLlmProvider?: string;
+  hindsightLlmApiKey?: string;
+  localEnabled: boolean;
+}
+
+export interface Settings {
+  providers: Record<string, ModelConfig>;
+  activeProvider: string;
+  mainModel: string;
+  smallModel: string;
+  dataDir: string;
+  memory: MemoryConfig;
+  theme: "dark" | "light";
+  language: "zh-CN" | "en" | "ja" | "ko" | "zh-TW";
+  toolWhitelistDir: string;
+}
+
+export interface SystemInfo {
+  version: string;
+  dataDir: string;
+  portable: boolean;
+  hindsightConnected: boolean;
+  platform: string;
+}
+
+// ---- 流式聊天事件(SSE) ----
+
+export interface ChatRequest {
+  sessionId: string;
+  content: string;
+  agentId?: string;
+}
+
+export type StreamEvent =
+  | { type: "session_created"; session: SessionMeta }
+  | { type: "delta"; content: string }
+  | { type: "tool_start"; tool: ToolCallPart }
+  | { type: "tool_end"; tool: ToolCallPart }
+  | { type: "done"; message: ChatMessage; session: SessionMeta }
+  | { type: "error"; message: string };
+
+// ---- 默认值 ----
+
+export const DEFAULT_SETTINGS: Settings = {
+  providers: {},
+  activeProvider: "",
+  mainModel: "",
+  smallModel: "",
+  dataDir: "",
+  memory: {
+    mode: "local",
+    hindsightBaseUrl: "http://localhost:8888",
+    hindsightApiKey: "",
+    hindsightBankId: "hanalite",
+    hindsightLlmProvider: "anthropic",
+    hindsightLlmApiKey: "",
+    localEnabled: true,
+  },
+  theme: "dark",
+  language: "zh-CN",
+  toolWhitelistDir: "",
+};
+
+export function newId(prefix = "id"): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}

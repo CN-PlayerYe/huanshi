@@ -1,0 +1,35 @@
+appId: com.hanalite.app
+productName: HanaLite
+copyright: Copyright © 2026 HanaLite
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist-electron/**/*
+  - dist-renderer/**/*
+  - package.json
+asar: true
+compression: normal
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+
+# NSIS 安装器:允许用户选择安装路径(自定义安装路径)
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: HanaLite
+
+# 绿色版:解压即用,数据目录跟随 exe 旁 data/(portable 模式)
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+artifactName: ${productName}-Setup-${version}.${ext}
