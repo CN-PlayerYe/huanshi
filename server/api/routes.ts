@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import type { AgentDef, ChatRequest, Settings, StreamEvent } from "../../shared/types";
+import type { AgentDef, ChatRequest, SessionMeta, Settings, StreamEvent } from "../../shared/types";
 import { AgentEngine } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
@@ -164,6 +164,33 @@ export function createApp(deps: AppDeps): Hono {
     const { title } = (await c.req.json()) as { title: string };
     deps.db.updateSession(c.req.param("id"), { title: title || "新会话" });
     return c.json({ ok: true });
+  });
+
+  // ---- 搜索(会话标题 + 消息正文) ----
+
+  app.get("/api/search", (c) => {
+    const q = (c.req.query("q") ?? "").trim().toLowerCase();
+    if (!q) return c.json({ sessions: [] });
+    const hits: { session: SessionMeta; matches: number }[] = [];
+    for (const s of deps.db.listSessions()) {
+      if (s.title.toLowerCase().includes(q)) {
+        hits.push({ session: s, matches: -1 }); // -1 = 标题命中
+        continue;
+      }
+      const messages = deps.db.getMessages(s.id);
+      let matches = 0;
+      for (const m of messages) {
+        for (const p of m.parts) {
+          if (p.type === "text" && (p.text ?? "").toLowerCase().includes(q)) {
+            matches++;
+            break;
+          }
+          if (p.type === "tool" && (p.tool?.output ?? "").toLowerCase().includes(q)) matches++;
+        }
+      }
+      if (matches > 0) hits.push({ session: s, matches });
+    }
+    return c.json({ sessions: hits.slice(0, 50) });
   });
 
   // ---- Cherry Studio 迁移导入 ----

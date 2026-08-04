@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../api";
 import { useApp } from "../store";
+import type { SessionMeta } from "@shared/types";
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);
@@ -25,6 +27,31 @@ export function Sidebar() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchHits, setSearchHits] = useState<{ session: SessionMeta; matches: number }[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // 搜索防抖
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchHits([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.search(q);
+        setSearchHits(res.sessions);
+      } catch {
+        setSearchHits([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // 会话按 Agent 分组(保持 Agent 顺序:有会话的在前,按会话数降序)
   const sessionGroups = useMemo(() => {
@@ -56,9 +83,44 @@ export function Sidebar() {
         </button>
       </div>
 
+      <div className="sidebar-search">
+        <input
+          type="text"
+          placeholder="🔍 搜索会话与消息…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
       <div className="session-list">
-        {sessions.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13, padding: 16 }}>还没有会话,点击 ＋ 开始</div>}
-        {sessionGroups.map(([agentId, list]) => (
+        {searchQuery.trim() ? (
+          searching ? (
+            <div style={{ color: "var(--text-dim)", fontSize: 13, padding: 12 }}>搜索中…</div>
+          ) : searchHits.length === 0 ? (
+            <div style={{ color: "var(--text-dim)", fontSize: 13, padding: 12 }}>没有匹配的会话</div>
+          ) : (
+            <>
+              <div className="search-hint">找到 {searchHits.length} 个会话</div>
+              {searchHits.map(({ session: s, matches }) => (
+                <div
+                  key={s.id}
+                  className={`search-hit${s.id === activeSessionId ? " active" : ""}`}
+                  onClick={() => {
+                    void selectSession(s.id);
+                    setSearchQuery("");
+                  }}
+                >
+                  <span className="title">{s.title}</span>
+                  {matches > 0 && <span className="tag">{matches} 条命中</span>}
+                  {matches === -1 && <span className="tag">标题</span>}
+                </div>
+              ))}
+            </>
+          )
+        ) : sessions.length === 0 ? (
+          <div style={{ color: "var(--text-dim)", fontSize: 13, padding: 16 }}>还没有会话,点击 ＋ 开始</div>
+        ) : (
+        sessionGroups.map(([agentId, list]) => (
           <div key={agentId} className="agent-group">
             <button
               className={`agent-group-title${collapsed.has(agentId) ? " collapsed" : ""}`}
@@ -129,7 +191,7 @@ export function Sidebar() {
                 </div>
               ))}
           </div>
-        ))}
+        )))}
       </div>
 
       <div className="sidebar-foot">

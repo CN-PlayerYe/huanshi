@@ -67,6 +67,8 @@ export const api = {
     request<{ ok: boolean }>(`/api/sessions/${id}/rename`, { method: "POST", body: JSON.stringify({ title }) }),
   setSessionAgent: (id: string, agentId: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/agent`, { method: "POST", body: JSON.stringify({ agentId }) }),
+  search: (q: string) =>
+    request<{ sessions: { session: SessionMeta; matches: number }[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   getMessages: (id: string) => request<{ messages: ChatMessage[] }>(`/api/sessions/${id}/messages`),
 
   /** 流式聊天:逐事件回调,返回完整 assistant 消息 */

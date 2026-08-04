@@ -564,6 +564,128 @@ select {
   border-bottom: 1px solid var(--border);
 }
 
+.tool-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tool-img {
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+  object-fit: cover;
+}
+
+.tool-img:hover {
+  border-color: var(--accent-dim);
+}
+
+/* ---- 全屏图片查看器 ---- */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  cursor: zoom-out;
+}
+
+.lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  font-size: 18px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ---- 侧栏搜索 ---- */
+
+.sidebar-search {
+  padding: 8px 10px 4px;
+}
+
+.sidebar-search input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+.sidebar-search input:focus {
+  border-color: var(--accent-dim);
+}
+
+.search-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 4px 12px 6px;
+}
+
+.search-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-dim);
+  width: 100%;
+  text-align: left;
+}
+
+.search-hit:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.search-hit.active {
+  background: var(--bg-elev);
+  color: var(--text);
+}
+
+.search-hit .title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.search-hit .tag {
+  font-size: 10.5px;
+  color: var(--accent);
+  background: rgba(124, 156, 255, 0.12);
+  border-radius: 8px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+
 /* ---- 输入区 ---- */
 
 .chat-input-wrap {
