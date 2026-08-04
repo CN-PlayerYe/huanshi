@@ -1,9 +1,9 @@
-import { useEffect, useReducer, useRef } from "react";
+import { memo, useEffect, useReducer, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCallPart } from "@shared/types";
 
-export function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
+export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === "user";
   const text = msg.parts
     .filter((p) => p.type === "text")
@@ -35,7 +35,7 @@ export function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: 
       </div>
     </div>
   );
-}
+});
 
 function ToolCallBlock({ tool }: { tool: ToolCallPart }) {
   let inputText = "";
@@ -135,7 +135,7 @@ function stripImages(text: string): string {
     .replace(/\{"type"\s*:\s*"image"[\s\S]*?"data"\s*:\s*"[A-Za-z0-9+/=\s]{100,}"\s*\}/g, "[图片]");
 }
 
-export function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
+export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,4 +161,4 @@ export function MessageList({ messages, streaming }: { messages: ChatMessage[]; 
       <Lightbox />
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../store";
 import { MessageList } from "./MessageList";
@@ -13,25 +13,13 @@ export function ChatView() {
   const agents = useApp((s) => s.agents);
   const sending = useApp((s) => s.sending);
   const settings = useApp((s) => s.settings);
-  const selectSession = useApp((s) => s.selectSession);
-  const newSession = useApp((s) => s.newSession);
   const sendMessage = useApp((s) => s.sendMessage);
   const stop = useApp((s) => s.stop);
 
-  const [input, setInput] = useState("");
-  const taRef = useRef<HTMLTextAreaElement>(null);
-
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  // 切换会话时清空输入焦点状态
-  useEffect(() => {
-    taRef.current?.focus();
-  }, [activeSessionId]);
-
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput("");
+  const handleSend = (text: string) => {
+    if (!text.trim() || sending) return;
     void sendMessage(text);
   };
 
@@ -62,35 +50,60 @@ export function ChatView() {
 
       <MessageList messages={messages} streaming={sending} />
 
-      <div className="chat-input-wrap">
-        <div className="chat-input-box">
-          <textarea
-            ref={taRef}
-            className="chat-input"
-            rows={1}
-            placeholder={sending ? "助手正在思考…" : "给 HanaLite 发消息(Enter 发送, Shift+Enter 换行)"}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <button className="send-btn" disabled={sending || !input.trim()} onClick={sending ? stop : handleSend} title={sending ? "停止" : "发送"}>
-            {sending ? "■" : "➤"}
-          </button>
-        </div>
-        <div className="chat-hint">
-          {sending ? "正在生成,点击 ■ 停止" : "工具:文件 / 命令 / 网页 / 记忆 · 数据与记忆仅存本机"}
-        </div>
-      </div>
+      <ChatInput
+        sending={sending}
+        onSend={(text) => handleSend(text)}
+        onStop={() => stop()}
+      />
     </div>
   );
 }
+
+/** 独立输入框组件:本地 state,打字只重渲染自身,不拖累消息列表 */
+const ChatInput = memo(function ChatInput({ sending, onSend, onStop }: { sending: boolean; onSend: (t: string) => void; onStop: () => void }) {
+  const [input, setInput] = useState("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    taRef.current?.focus();
+  }, []);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput("");
+    onSend(text);
+  };
+
+  return (
+    <div className="chat-input-wrap">
+      <div className="chat-input-box">
+        <textarea
+          ref={taRef}
+          className="chat-input"
+          rows={1}
+          placeholder={sending ? "助手正在思考…" : "给 HanaLite 发消息(Enter 发送, Shift+Enter 换行)"}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+        />
+        <button className="send-btn" disabled={sending || !input.trim()} onClick={sending ? onStop : handleSend} title={sending ? "停止" : "发送"}>
+          {sending ? "■" : "➤"}
+        </button>
+      </div>
+      <div className="chat-hint">
+        {sending ? "正在生成,点击 ■ 停止" : "工具:文件 / 命令 / 网页 / 记忆 · 数据与记忆仅存本机"}
+      </div>
+    </div>
+  );
+});
 

@@ -54,6 +54,17 @@ export function Sidebar() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // 点击菜单外部关闭(替代 mouseLeave,避免菜单一闪而过)
+  useEffect(() => {
+    if (!menuFor && !moveFor) return;
+    const close = () => {
+      setMenuFor(null);
+      setMoveFor(null);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuFor, moveFor]);
+
   // 会话按 Agent 分组(保持 Agent 顺序:有会话的在前,按会话数降序)
   const sessionGroups = useMemo(() => {
     const map = new Map<string, typeof sessions>();
@@ -160,7 +171,7 @@ export function Sidebar() {
                       ⋯
                     </button>
                     {menuFor === s.id && (
-                      <div className="session-pop" onMouseLeave={() => setMenuFor(null)}>
+                      <div className="session-pop">
                         {moveFor === s.id ? (
                           <>
                             <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--text-dim)" }}>移动到人格:</div>
