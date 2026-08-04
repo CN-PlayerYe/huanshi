@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { ModelConfig, ProviderKind } from "@shared/types";
+import { useEffect, useState } from "react";
+import type { ModelConfig, ProviderKind, TaskDef } from "@shared/types";
 import { api } from "../api";
 import { useApp } from "../store";
 
@@ -14,6 +14,26 @@ const KIND_HINT: Record<ProviderKind, string> = {
   anthropic: "Claude(api.anthropic.com)",
   ollama: "本地模型,默认 http://localhost:11434/v1",
 };
+
+/** 简易 cron 描述(与后端 describeCron 一致的前端版) */
+function describeCron(expr: string): string {
+  try {
+    const [m, h, d, mo, w] = expr.trim().split(/\s+/);
+    if (!m || !h || !d || !mo || !w) return expr;
+    const parts: string[] = [];
+    if (m === "*") parts.push("每分钟");
+    else if (m.includes("/")) parts.push(`每${m.split("/")[1]}分钟`);
+    else parts.push(`${m} 分`);
+    if (h !== "*") parts.push(`${h} 时`);
+    if (d !== "*") parts.push(`${d} 日`);
+    if (mo !== "*") parts.push(`${mo} 月`);
+    if (w === "*") parts.push("每天");
+    else parts.push(`周${w}`);
+    return parts.join(" ");
+  } catch {
+    return expr;
+  }
+}
 
 export function SettingsView() {
   const settings = useApp((s) => s.settings);
@@ -32,6 +52,23 @@ export function SettingsView() {
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
   const [csInfo, setCsInfo] = useState("");
+  const [tasks, setTasks] = useState<TaskDef[]>([]);
+  const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
+  const [taskMsg, setTaskMsg] = useState("");
+
+  const refreshTasks = async () => {
+    try {
+      setTasks((await api.listTasks()).tasks);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    void refreshTasks();
+    if (!taskForm.agentId && agents.length) setTaskForm((f) => ({ ...f, agentId: agents[0].id }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents.length]);
 
   if (!settings) return <div className="settings">加载中…</div>;
 
@@ -292,6 +329,85 @@ export function SettingsView() {
             {csInfo}
           </div>
         )}
+      </div>
+
+      {/* ---- 定时任务 ---- */}
+      <div className="settings-section">
+        <h3>⏰ 定时任务</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
+          Agent 按 cron 计划自动执行提示词。格式:分 时 日 月 星期(如 <code>0 9 * * *</code> = 每天 9:00,<code>*/30 * * * *</code> = 每 30 分钟)。执行结果会创建一个独立会话。
+        </p>
+        {tasks.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13, marginBottom: 10 }}>还没有定时任务</div>}
+        {tasks.map((t) => (
+          <div className="provider-card" key={t.id}>
+            <div className="head">
+              <span className="name">
+                {t.name}
+                <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>{describeCron(t.schedule)}</span>
+              </span>
+              <label style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4 }}>
+                <input type="checkbox" checked={t.enabled} onChange={(e) => void api.updateTask(t.id, { enabled: e.target.checked }).then(refreshTasks)} />
+                启用
+              </label>
+              <button className="btn secondary sm" onClick={() => void api.runTask(t.id).then((r) => setTaskMsg(`立即执行完成:${r.result.slice(0, 80)}`))}>
+                ▶ 立即运行
+              </button>
+              <button className="remove" onClick={() => void api.deleteTask(t.id).then(refreshTasks)}>
+                ✕ 删除
+              </button>
+            </div>
+            <div className="desc" style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              人格:{agents.find((a) => a.id === t.agentId)?.name ?? t.agentId} · 下次:{t.nextRunAt ? new Date(t.nextRunAt).toLocaleString("zh-CN") : "—"}
+              {t.lastRunAt ? ` · 上次:${new Date(t.lastRunAt).toLocaleString("zh-CN")}(${t.lastStatus})` : ""}
+            </div>
+            {t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
+          </div>
+        ))}
+        <div className="provider-card" style={{ marginTop: 12 }}>
+          <div className="field-row">
+            <div className="field">
+              <label>任务名称</label>
+              <input type="text" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} placeholder="如:晨间简报" />
+            </div>
+            <div className="field">
+              <label>Cron 表达式</label>
+              <input type="text" value={taskForm.schedule} onChange={(e) => setTaskForm({ ...taskForm, schedule: e.target.value })} placeholder="0 9 * * *" />
+            </div>
+            <div className="field">
+              <label>人格</label>
+              <select value={taskForm.agentId} onChange={(e) => setTaskForm({ ...taskForm, agentId: e.target.value })}>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label>提示词(Agent 要执行的内容)</label>
+            <textarea value={taskForm.prompt} onChange={(e) => setTaskForm({ ...taskForm, prompt: e.target.value })} placeholder="例如:总结我昨天的笔记,提醒我今天要处理的事项。" />
+          </div>
+          <div className="field-row">
+            <button
+              className="btn"
+              disabled={!taskForm.name.trim() || !taskForm.schedule.trim() || !taskForm.prompt.trim()}
+              onClick={async () => {
+                try {
+                  await api.createTask({ ...taskForm, name: taskForm.name.trim(), schedule: taskForm.schedule.trim(), prompt: taskForm.prompt.trim() });
+                  setTaskForm({ name: "", prompt: "", schedule: "", agentId: agents[0]?.id ?? "" });
+                  setTaskMsg("");
+                  await refreshTasks();
+                } catch (err) {
+                  setTaskMsg(`创建失败:${(err as Error).message}`);
+                }
+              }}
+            >
+              ➕ 创建定时任务
+            </button>
+            {taskMsg && <span style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>{taskMsg}</span>}
+          </div>
+        </div>
       </div>
 
       {/* ---- 人格 ---- */}

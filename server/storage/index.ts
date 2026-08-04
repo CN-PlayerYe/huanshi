@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { newId, type AgentDef, type ChatMessage, type SessionMeta } from "../../shared/types";
+import { newId, type AgentDef, type ChatMessage, type SessionMeta, type TaskDef } from "../../shared/types";
 import type { ResolvedPaths } from "../config";
 
 /** 通用 JSON 文件读写(带内存缓存,原子替换) */
@@ -51,6 +51,7 @@ function requireDir(file: string): string {
 export class Db {
   private sessions: JsonFile<SessionMeta[]>;
   private agents: JsonFile<AgentDef[]>;
+  private tasks: JsonFile<TaskDef[]>;
   private messageCache = new Map<string, JsonFile<ChatMessage[]>>();
 
   constructor(public readonly dataDir: string) {
@@ -58,6 +59,7 @@ export class Db {
     mkdirSync(dbDir, { recursive: true });
     this.sessions = new JsonFile<SessionMeta[]>(join(dbDir, "sessions.json"), () => []);
     this.agents = new JsonFile<AgentDef[]>(join(dbDir, "agents.json"), () => []);
+    this.tasks = new JsonFile<TaskDef[]>(join(dbDir, "tasks.json"), () => []);
   }
 
   static fromPaths(paths: ResolvedPaths): Db {
@@ -173,5 +175,27 @@ export class Db {
 
   deleteAgent(id: string): void {
     this.agents.write(this.agents.read().filter((a) => a.id !== id));
+  }
+
+  // ---- Tasks(定时任务) ----
+
+  listTasks(): TaskDef[] {
+    return this.tasks.read();
+  }
+
+  getTask(id: string): TaskDef | undefined {
+    return this.tasks.read().find((t) => t.id === id);
+  }
+
+  saveTask(task: TaskDef): void {
+    const all = this.tasks.read();
+    const idx = all.findIndex((t) => t.id === task.id);
+    if (idx >= 0) all[idx] = task;
+    else all.push(task);
+    this.tasks.write(all);
+  }
+
+  deleteTask(id: string): void {
+    this.tasks.write(this.tasks.read().filter((t) => t.id !== id));
   }
 }

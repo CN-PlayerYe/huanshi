@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import type { AgentDef, ChatRequest, SessionMeta, Settings, StreamEvent } from "../../shared/types";
+import { newId, type AgentDef, type ChatRequest, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
 import { AgentEngine } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
+import { nextRunTime, parseCron } from "../cron";
 import { importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, type ImportStats } from "../import/cherrystudio";
 import type { MemoryService } from "../memory/service";
 import type { Db } from "../storage";
@@ -227,6 +228,76 @@ export function createApp(deps: AppDeps): Hono {
     const { agentId } = (await c.req.json()) as { agentId: string };
     const s = deps.db.updateSession(c.req.param("id"), { agentId });
     return c.json({ ok: Boolean(s) });
+  });
+
+  // ---- 定时任务 ----
+
+  app.get("/api/tasks", (c) => c.json({ tasks: deps.db.listTasks() }));
+
+  app.post("/api/tasks", async (c) => {
+    const body = (await c.req.json()) as { name?: string; prompt?: string; schedule?: string; agentId?: string };
+    if (!body.name?.trim() || !body.prompt?.trim() || !body.schedule?.trim()) {
+      return c.json({ error: "名称、提示词、cron 表达式均不能为空" }, 400);
+    }
+    let nextRunAt: number;
+    try {
+      const d = nextRunTime(parseCron(body.schedule.trim()), new Date(Date.now() + 60_000));
+      if (!d) return c.json({ error: "无法计算下次执行时间" }, 400);
+      nextRunAt = d.getTime();
+    } catch (err) {
+      return c.json({ error: `cron 表达式无效:${(err as Error).message}` }, 400);
+    }
+    const task: TaskDef = {
+      id: newId("task"),
+      name: body.name.trim(),
+      prompt: body.prompt.trim(),
+      schedule: body.schedule.trim(),
+      agentId: body.agentId || firstAgentId(deps.db),
+      enabled: true,
+      createdAt: Date.now(),
+      nextRunAt,
+    };
+    deps.db.saveTask(task);
+    return c.json({ task });
+  });
+
+  app.put("/api/tasks/:id", async (c) => {
+    const body = (await c.req.json()) as Partial<TaskDef>;
+    const cur = deps.db.getTask(c.req.param("id"));
+    if (!cur) return c.json({ error: "任务不存在" }, 404);
+    const next: TaskDef = { ...cur, ...body, id: cur.id };
+    if (body.schedule && body.schedule !== cur.schedule) {
+      try {
+        const d = nextRunTime(parseCron(body.schedule), new Date(Date.now() + 60_000));
+        next.nextRunAt = d?.getTime() ?? cur.nextRunAt;
+      } catch (err) {
+        return c.json({ error: `cron 表达式无效:${(err as Error).message}` }, 400);
+      }
+    }
+    deps.db.saveTask(next);
+    return c.json({ task: next });
+  });
+
+  app.delete("/api/tasks/:id", (c) => {
+    deps.db.deleteTask(c.req.param("id"));
+    return c.json({ ok: true });
+  });
+
+  /** 立即手动触发一次任务(测试用) */
+  app.post("/api/tasks/:id/run", async (c) => {
+    const task = deps.db.getTask(c.req.param("id"));
+    if (!task) return c.json({ error: "任务不存在" }, 404);
+    const agent = deps.db.getAgent(task.agentId);
+    if (!agent) return c.json({ error: "人格不存在" }, 404);
+    const session = deps.db.createSession(`⏰ ${task.name}`, task.agentId);
+    let finalText = "";
+    await deps.engine.runChat(session, agent, task.prompt, (e) => {
+      if (e.type === "done") {
+        finalText = e.message.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n").slice(0, 600);
+      }
+    });
+    deps.db.saveTask({ ...task, lastRunAt: Date.now(), lastStatus: "ok", lastResult: finalText || "(无文本输出)" });
+    return c.json({ ok: true, result: finalText });
   });
 
   // ---- WebSocket:事件推送(会话更新通知) ----

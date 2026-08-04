@@ -6,6 +6,7 @@ import type {
   Settings,
   StreamEvent,
   SystemInfo,
+  TaskDef,
 } from "@shared/types";
 
 let base = "http://127.0.0.1:5178";
@@ -46,6 +47,14 @@ export const api = {
     request<{ ok: boolean; restartRequired: boolean; path: string }>("/api/settings/data-dir", { method: "POST", body: JSON.stringify({ path }) }),
 
   reflect: () => request<{ text: string }>("/api/memory/reflect", { method: "POST" }),
+
+  listTasks: () => request<{ tasks: TaskDef[] }>("/api/tasks"),
+  createTask: (body: { name: string; prompt: string; schedule: string; agentId: string }) =>
+    request<{ task: TaskDef }>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
+  updateTask: (id: string, patch: Partial<TaskDef>) =>
+    request<{ task: TaskDef }>(`/api/tasks/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
+  deleteTask: (id: string) => request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
+  runTask: (id: string) => request<{ ok: boolean; result: string }>(`/api/tasks/${id}/run`, { method: "POST" }),
 
   probeCherryStudio: () => request<{ found: string[] }>("/api/import/cherrystudio/probe"),
   importCherryStudio: (body: { dataDir?: string; includeThinking?: boolean; skipExisting?: boolean }) =>

@@ -87,6 +87,21 @@ export interface SystemInfo {
   platform: string;
 }
 
+/** 定时任务 */
+export interface TaskDef {
+  id: string;
+  name: string;
+  prompt: string;
+  schedule: string; // cron 表达式(分 时 日 月 星期)
+  agentId: string;
+  enabled: boolean;
+  createdAt: number;
+  nextRunAt: number;
+  lastRunAt?: number;
+  lastResult?: string;
+  lastStatus?: "ok" | "error" | "running";
+}
+
 // ---- 流式聊天事件(SSE) ----
 
 export interface ChatRequest {

@@ -9,6 +9,7 @@ import { createApp } from "./api/routes";
 import { ensureDirs, loadSettings, resolveDataDir, type ResolvedPaths } from "./config";
 import { MemoryService } from "./memory/service";
 import { Db } from "./storage";
+import { Scheduler } from "./tasks";
 import { datetimeTool, fileTools, shellTool, webTool } from "./tools/files";
 import { memoryTools } from "./tools/memory";
 import { ToolRegistry } from "./tools/registry";
@@ -91,6 +92,10 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   injectWebSocket(server);
   const port = (server.address() as AddressInfo).port;
 
+  // ---- 定时任务调度器 ----
+  const scheduler = new Scheduler(db, engine, (id) => db.getAgent(id));
+  scheduler.start();
+
   console.log(`[hanalite] server listening on http://127.0.0.1:${port}`);
   console.log(`[hanalite] data dir: ${paths.dataDir}${paths.portable ? " (portable)" : ""}`);
   console.log(`[hanalite] memory: ${settings.memory.mode}`);
@@ -102,6 +107,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     broadcast,
     close: () =>
       new Promise<void>((resolveClose) => {
+        scheduler.stop();
         server.close(() => resolveClose());
       }),
   };
