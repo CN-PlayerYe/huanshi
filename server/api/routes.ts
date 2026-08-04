@@ -4,6 +4,7 @@ import type { AgentDef, ChatRequest, Settings, StreamEvent } from "../../shared/
 import { AgentEngine } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
+import { importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, type ImportStats } from "../import/cherrystudio";
 import type { MemoryService } from "../memory/service";
 import type { Db } from "../storage";
 import { ToolRegistry } from "../tools/registry";
@@ -163,6 +164,35 @@ export function createApp(deps: AppDeps): Hono {
     const { title } = (await c.req.json()) as { title: string };
     deps.db.updateSession(c.req.param("id"), { title: title || "新会话" });
     return c.json({ ok: true });
+  });
+
+  // ---- Cherry Studio 迁移导入 ----
+
+  app.get("/api/import/cherrystudio/probe", (c) => {
+    const found = probeCherryStudioDirs();
+    return c.json({ found });
+  });
+
+  app.post("/api/import/cherrystudio", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { dataDir?: string; includeThinking?: boolean; skipExisting?: boolean };
+    let dataDir = body.dataDir?.trim();
+    if (!dataDir) {
+      const found = probeCherryStudioDirs();
+      dataDir = found[0];
+    }
+    if (!dataDir || !isCherryStudioDataDir(dataDir)) {
+      return c.json({ error: `不是有效的 Cherry Studio 数据目录:${dataDir ?? "(空)"}(需包含 Data/agents.db)` }, 400);
+    }
+    try {
+      const stats: ImportStats = importCherryStudio(deps.db, {
+        cherryDataDir: dataDir,
+        includeThinking: body.includeThinking ?? false,
+        skipExisting: body.skipExisting ?? true,
+      });
+      return c.json({ ok: true, stats });
+    } catch (err) {
+      return c.json({ error: `导入失败:${(err as Error).message}` }, 500);
+    }
   });
 
   /** 切换会话使用的人格 */

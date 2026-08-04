@@ -47,6 +47,13 @@ export const api = {
 
   reflect: () => request<{ text: string }>("/api/memory/reflect", { method: "POST" }),
 
+  probeCherryStudio: () => request<{ found: string[] }>("/api/import/cherrystudio/probe"),
+  importCherryStudio: (body: { dataDir?: string; includeThinking?: boolean; skipExisting?: boolean }) =>
+    request<{ ok: boolean; stats: { agents: number; sessions: number; messages: number; skippedSessions: number; skippedAgents: number; dataDir: string } }>(
+      "/api/import/cherrystudio",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   listAgents: () => request<{ agents: AgentDef[] }>("/api/agents"),
   saveAgent: (a: Partial<AgentDef>) => request<{ agent: AgentDef }>("/api/agents", { method: "POST", body: JSON.stringify(a) }),
   deleteAgent: (id: string) => request<{ ok: boolean }>(`/api/agents/${id}`, { method: "DELETE" }),

@@ -92,6 +92,14 @@ export class Db {
     return session;
   }
 
+  /** 直接插入已构造的会话(迁移导入用,保留原始 id 与时间) */
+  createSessionRaw(session: SessionMeta): void {
+    const all = this.sessions.read();
+    if (all.some((s) => s.id === session.id)) return;
+    all.push(session);
+    this.sessions.write(all);
+  }
+
   updateSession(id: string, patch: Partial<SessionMeta>): SessionMeta | undefined {
     const all = this.sessions.read();
     const idx = all.findIndex((s) => s.id === id);

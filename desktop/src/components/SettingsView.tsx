@@ -28,6 +28,10 @@ export function SettingsView() {
   const [dataDirInput, setDataDirInput] = useState(systemInfo?.dataDir ?? "");
   const [reflectText, setReflectText] = useState("");
   const [agentForm, setAgentForm] = useState<{ name: string; description: string; systemPrompt: string } | null>(null);
+  const [csDir, setCsDir] = useState("");
+  const [csIncludeThinking, setCsIncludeThinking] = useState(false);
+  const [csBusy, setCsBusy] = useState(false);
+  const [csInfo, setCsInfo] = useState("");
 
   if (!settings) return <div className="settings">加载中…</div>;
 
@@ -221,6 +225,73 @@ export function SettingsView() {
             />
           )}
         </div>
+      </div>
+
+      {/* ---- 数据迁移(从 Cherry Studio) ---- */}
+      <div className="settings-section">
+        <h3>📥 从 Cherry Studio 迁移对话</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
+          读取 Cherry Studio(v1 架构)的 <code>Data/agents.db</code>,把 Agent、会话与全部对话内容(正文、思考、工具调用)迁入 HanaLite。
+          只读迁移,不会改动 Cherry Studio 的数据,也无需关闭它。模型 Provider 配置不迁移,需重新设置。
+        </p>
+        <div className="field-row">
+          <div className="field">
+            <input
+              type="text"
+              value={csDir}
+              onChange={(e) => setCsDir(e.target.value)}
+              placeholder="Cherry Studio 数据目录(含 Data/agents.db)"
+            />
+          </div>
+          <button
+            className="btn secondary"
+            onClick={async () => {
+              const res = await api.probeCherryStudio();
+              if (res.found.length) {
+                setCsDir(res.found[0]);
+                setCsInfo(`已自动找到:${res.found.join("\n")}`);
+              } else {
+                setCsInfo("未自动发现,请手动输入数据目录路径");
+              }
+            }}
+          >
+            🔍 自动探测
+          </button>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, margin: "8px 0" }}>
+          <input type="checkbox" checked={csIncludeThinking} onChange={(e) => setCsIncludeThinking(e.target.checked)} />
+          同时迁移思考内容(thinking,会占用上下文)
+        </label>
+        <div className="field-row">
+          <button
+            className="btn"
+            disabled={!csDir.trim()}
+            onClick={async () => {
+              setCsBusy(true);
+              setCsInfo("");
+              try {
+                const res = await api.importCherryStudio({ dataDir: csDir.trim(), includeThinking: csIncludeThinking });
+                setCsInfo(
+                  `✅ 迁移完成:${res.stats.agents} 个 Agent、${res.stats.sessions} 个会话、${res.stats.messages} 条消息` +
+                    (res.stats.skippedSessions ? `(跳过已存在会话 ${res.stats.skippedSessions} 个)` : ""),
+                );
+                await useApp.getState().refreshSessions();
+                await useApp.getState().refreshAgents();
+              } catch (err) {
+                setCsInfo(`❌ ${(err as Error).message}`);
+              } finally {
+                setCsBusy(false);
+              }
+            }}
+          >
+            {csBusy ? "迁移中…" : "📥 开始迁移"}
+          </button>
+        </div>
+        {csInfo && (
+          <div className="status-line" style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>
+            {csInfo}
+          </div>
+        )}
       </div>
 
       {/* ---- 人格 ---- */}

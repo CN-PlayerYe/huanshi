@@ -23,6 +23,7 @@
     "@hono/node-server": "^1.14.0",
     "@hono/node-ws": "^1.1.0",
     "@vectorize-io/hindsight-client": "^0.8.6",
+    "classic-level": "^3.0.0",
     "hono": "^4.7.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

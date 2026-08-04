@@ -118,6 +118,16 @@ tests/            Vitest 单元测试
 - 聊天走 **SSE 流式**(`POST /api/chat`),WebSocket(`/api/ws`)用于多窗口事件广播
 - 渲染进程沙盒隔离(`contextIsolation: true`),无 `nodeIntegration`
 
+## 📥 从 Cherry Studio 迁移
+
+HanaLite 内置 Cherry Studio(v1 架构)对话迁移,一键把 **Agent、会话、全部对话内容**迁入:
+
+- 设置 → **从 Cherry Studio 迁移对话** → 自动探测数据目录(或手动填)→ 开始迁移
+- 迁移内容:Agent 人格与 instructions、会话标题与时间、每条消息的**正文、思考内容(可选)、工具调用**(含入参/输出/状态)、模型名
+- 只读迁移,不会改动 Cherry Studio 数据,无需关闭 Cherry Studio
+- 数据源为 `Data/agents.db`(v1 架构 Agent 会话正文内联在 SQLite;普通聊天不走此通道)
+- 模型 Provider / API Key 不迁移(两套体系不同),迁入后需在设置中重新配置模型
+
 ## 📦 打包发布
 
 ```bash
@@ -140,6 +150,7 @@ npm run typecheck # TypeScript 类型检查
 
 - [x] 聊天 + 会话管理 + 人格 + 工具 + Hindsight 记忆 + 自定义数据目录
 - [x] electron-builder 打包(NSIS 安装器,可选安装路径;portable 绿色版)
+- [x] 从 Cherry Studio 迁移对话(Agent/会话/正文/思考/工具调用)
 - [ ] 多 Agent 并行与频道协作
 - [ ] 定时任务(Cron)与心跳巡检
 - [ ] 插件系统(拖拽安装、路由、Provider 扩展)
