@@ -1,5 +1,6 @@
 import { serve, type ServerType } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
+import { cors } from "hono/cors";
 import type { AddressInfo } from "node:net";
 import type { Settings, StreamEvent } from "../shared/types";
 import { AgentEngine } from "./agent/engine";
@@ -66,6 +67,9 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     isPortable: () => paths.portable,
     broadcast,
   });
+
+  // CORS:渲染进程(file:// 或 dev localhost)请求本机后端;仅监听 127.0.0.1,允许所有来源无安全风险
+  hanaApp.use("*", cors({ origin: "*" }));
 
   // ---- WebSocket(需在 app 创建后注入) ----
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app: hanaApp });

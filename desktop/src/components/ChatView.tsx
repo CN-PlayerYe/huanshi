@@ -3,9 +3,12 @@ import { api } from "../api";
 import { useApp } from "../store";
 import { MessageList } from "./MessageList";
 
+// 模块级常量:避免 selector 每次返回新数组引用导致 React 无限重渲染
+const EMPTY_MESSAGES: never[] = [];
+
 export function ChatView() {
   const activeSessionId = useApp((s) => s.activeSessionId);
-  const messages = useApp((s) => (s.activeSessionId ? s.messagesBySession[s.activeSessionId] ?? [] : []));
+  const messages = useApp((s) => (s.activeSessionId ? (s.messagesBySession[s.activeSessionId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES));
   const sessions = useApp((s) => s.sessions);
   const agents = useApp((s) => s.agents);
   const sending = useApp((s) => s.sending);
