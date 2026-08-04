@@ -52,8 +52,10 @@ export function resolveDataDir(opts: {
   }
 
   // 3. portable 模式:可执行文件/应用所在目录
-  if (isPackaged && opts.appPath) {
-    const exeDir = dirname(opts.appPath);
+  //    electron-builder 的 portable 单文件会设置 PORTABLE_EXECUTABLE_DIR 指向用户放置的位置
+  const portableExeDir = env.PORTABLE_EXECUTABLE_DIR;
+  const exeDir = portableExeDir || (isPackaged && opts.appPath ? dirname(opts.appPath) : "");
+  if (exeDir) {
     const portableDir = join(exeDir, "data");
     const marker = join(exeDir, "portable.txt");
     if (existsSync(marker) || existsSync(portableDir)) {
