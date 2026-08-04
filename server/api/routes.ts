@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { newId, type AgentDef, type ChatRequest, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
+import { newId, type AgentDef, type ChatRequest, type ModelConfig, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
 import { AgentEngine } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
 import { nextRunTime, parseCron } from "../cron";
 import { importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, type ImportStats } from "../import/cherrystudio";
+import { fetchModelList, PROVIDER_PRESETS, testProvider } from "../providers/test";
 import type { MemoryService } from "../memory/service";
 import type { Db } from "../storage";
 import { ToolRegistry } from "../tools/registry";
@@ -52,6 +53,31 @@ export function createApp(deps: AppDeps): Hono {
   // ---- 设置 ----
 
   app.get("/api/settings", (c) => c.json(deps.getSettings()));
+
+  /** 常用模型提供商预设 */
+  app.get("/api/providers/presets", (c) => c.json({ presets: PROVIDER_PRESETS }));
+
+  /** 测试模型连接 */
+  app.post("/api/providers/test", async (c) => {
+    const cfg = (await c.req.json()) as ModelConfig;
+    try {
+      const detail = await testProvider(cfg);
+      return c.json({ ok: true, detail });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  /** 拉取模型列表 */
+  app.post("/api/providers/models", async (c) => {
+    const cfg = (await c.req.json()) as ModelConfig;
+    try {
+      const models = await fetchModelList(cfg);
+      return c.json({ ok: true, models });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message });
+    }
+  });
 
   app.put("/api/settings", async (c) => {
     const patch = (await c.req.json()) as Partial<Settings>;

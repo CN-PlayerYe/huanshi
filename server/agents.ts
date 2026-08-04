@@ -68,8 +68,8 @@ export function createCustomAgent(partial: Partial<AgentDef>): AgentDef {
   return {
     id: newId("agent"),
     name: partial.name || "新人格",
-    description: partial.description || "",
-    systemPrompt: partial.systemPrompt || "你是一个乐于助人的私人 AI 助手。",
+    description: partial.description ?? "",
+    systemPrompt: partial.systemPrompt ?? "你是一个乐于助人的私人 AI 助手。",
     memoryEnabled: partial.memoryEnabled ?? true,
     tools: partial.tools ?? [...CORE_TOOLS],
     createdAt: Date.now(),

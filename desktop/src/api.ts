@@ -2,6 +2,8 @@ import type {
   AgentDef,
   ChatMessage,
   ChatRequest,
+  ModelConfig,
+  ProviderKind,
   SessionMeta,
   Settings,
   StreamEvent,
@@ -45,6 +47,10 @@ export const api = {
   putSettings: (s: Partial<Settings>) => request<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(s) }),
   setDataDir: (path: string) =>
     request<{ ok: boolean; restartRequired: boolean; path: string }>("/api/settings/data-dir", { method: "POST", body: JSON.stringify({ path }) }),
+
+  providerPresets: () => request<{ presets: { key: string; label: string; kind: ProviderKind; baseUrl: string; defaultModel: string; hint?: string }[] }>("/api/providers/presets"),
+  testProvider: (cfg: ModelConfig) => request<{ ok: boolean; detail?: string; error?: string }>("/api/providers/test", { method: "POST", body: JSON.stringify(cfg) }),
+  fetchModels: (cfg: ModelConfig) => request<{ ok: boolean; models?: string[]; error?: string }>("/api/providers/models", { method: "POST", body: JSON.stringify(cfg) }),
 
   reflect: () => request<{ text: string }>("/api/memory/reflect", { method: "POST" }),
 

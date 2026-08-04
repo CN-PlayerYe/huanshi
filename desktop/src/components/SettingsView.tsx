@@ -47,7 +47,7 @@ export function SettingsView() {
   const [newProviderOpen, setNewProviderOpen] = useState(false);
   const [dataDirInput, setDataDirInput] = useState(systemInfo?.dataDir ?? "");
   const [reflectText, setReflectText] = useState("");
-  const [agentForm, setAgentForm] = useState<{ name: string; description: string; systemPrompt: string } | null>(null);
+  const [agentForm, setAgentForm] = useState<{ id?: string; name: string; description: string; systemPrompt: string } | null>(null);
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
@@ -82,6 +82,42 @@ export function SettingsView() {
     void updateSettings({ providers: next });
   };
 
+  const [presets, setPresets] = useState<{ key: string; label: string; kind: ProviderKind; baseUrl: string; defaultModel: string; hint?: string }[]>([]);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [modelList, setModelList] = useState<Record<string, string[]>>({});
+  const [fetchingKey, setFetchingKey] = useState<string | null>(null);
+  const [presetForm, setPresetForm] = useState<{ kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string } | null>(null);
+
+  useEffect(() => {
+    void api.providerPresets().then((r) => setPresets(r.presets)).catch(() => undefined);
+  }, []);
+
+  const runTest = async (key: string, cfg: ModelConfig) => {
+    setTestingKey(key);
+    try {
+      const r = await api.testProvider(cfg);
+      setTestResults((p) => ({ ...p, [key]: { ok: r.ok, msg: r.ok ? r.detail ?? "连接成功" : r.error ?? "连接失败" } }));
+    } catch (err) {
+      setTestResults((p) => ({ ...p, [key]: { ok: false, msg: (err as Error).message } }));
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
+  const runFetchModels = async (key: string, cfg: ModelConfig) => {
+    setFetchingKey(key);
+    try {
+      const r = await api.fetchModels(cfg);
+      if (r.ok && r.models) setModelList((p) => ({ ...p, [key]: r.models! }));
+      else setTestResults((p) => ({ ...p, [key]: { ok: false, msg: r.error ?? "拉取失败" } }));
+    } catch (err) {
+      setTestResults((p) => ({ ...p, [key]: { ok: false, msg: (err as Error).message } }));
+    } finally {
+      setFetchingKey(null);
+    }
+  };
+
   return (
     <div className="settings">
       <h2>⚙️ 设置</h2>
@@ -89,6 +125,24 @@ export function SettingsView() {
       {/* ---- 模型 ---- */}
       <div className="settings-section">
         <h3>🤖 模型</h3>
+
+        <div className="preset-row">
+          <span style={{ fontSize: 12, color: "var(--text-dim)", marginRight: 4 }}>常用:</span>
+          {presets.map((p) => (
+            <button
+              key={p.key}
+              className="btn secondary sm"
+              title={p.hint}
+              onClick={() => {
+                setPresetForm(p);
+                setNewProviderOpen(true);
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
         {Object.entries(settings.providers).map(([key, cfg]) => (
           <div className="provider-card" key={key}>
             <div className="head">
@@ -99,6 +153,9 @@ export function SettingsView() {
               </span>
               <button className="btn secondary sm" onClick={() => void updateSettings({ activeProvider: key })}>
                 设为当前
+              </button>
+              <button className="btn secondary sm" disabled={testingKey === key} onClick={() => void runTest(key, cfg)}>
+                {testingKey === key ? "测试中…" : "🔌 测试连接"}
               </button>
               <button className="remove" onClick={() => removeProvider(key)}>
                 ✕ 删除
@@ -111,9 +168,35 @@ export function SettingsView() {
               </div>
               <div className="field">
                 <label>模型名</label>
-                <input type="text" value={cfg.model} placeholder="如 gpt-4o / claude-sonnet-4-5 / qwen2.5" onChange={(e) => patchProvider(key, { model: e.target.value })} />
+                <div className="model-input-row">
+                  <input type="text" value={cfg.model} placeholder="如 gpt-4o / claude-sonnet-4-5 / qwen2.5" onChange={(e) => patchProvider(key, { model: e.target.value })} />
+                  {cfg.kind !== "anthropic" && (
+                    <button className="btn secondary sm" disabled={fetchingKey === key} onClick={() => void runFetchModels(key, cfg)} title="拉取该服务可用模型列表">
+                      {fetchingKey === key ? "…" : "⇩"}
+                    </button>
+                  )}
+                </div>
+                {modelList[key]?.length ? (
+                  <select
+                    className="model-pick"
+                    value={cfg.model || ""}
+                    onChange={(e) => patchProvider(key, { model: e.target.value })}
+                  >
+                    <option value="">— 选择模型 —</option>
+                    {modelList[key].map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
               </div>
             </div>
+            {testResults[key] && (
+              <div className={`status-line test-result ${testResults[key].ok ? "ok" : "fail"}`}>
+                {testResults[key].ok ? "✅" : "❌"} {testResults[key].msg}
+              </div>
+            )}
             <div className="field">
               <label>API Key(留空则使用无鉴权的本地服务,如 Ollama)</label>
               <input type="password" value={cfg.apiKey ?? ""} onChange={(e) => patchProvider(key, { apiKey: e.target.value })} />
@@ -123,10 +206,15 @@ export function SettingsView() {
 
         {newProviderOpen ? (
           <NewProviderForm
-            onCancel={() => setNewProviderOpen(false)}
+            initial={presetForm ?? undefined}
+            onCancel={() => {
+              setNewProviderOpen(false);
+              setPresetForm(null);
+            }}
             onSave={(key, cfg) => {
               void updateSettings({ providers: { ...settings.providers, [key]: cfg }, activeProvider: key });
               setNewProviderOpen(false);
+              setPresetForm(null);
             }}
           />
         ) : (
@@ -426,7 +514,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ name: a.name, description: a.description, systemPrompt: a.systemPrompt })}>
+                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt })}>
                   编辑
                 </button>
                 <button className="remove" onClick={() => void deleteAgent(a.id)}>
@@ -459,11 +547,11 @@ export function SettingsView() {
               <button
                 className="btn"
                 onClick={() => {
-                  if (agentForm.name.trim()) void saveAgent({ ...agentForm });
+                  if (agentForm.name.trim()) void saveAgent(agentForm.id ? { id: agentForm.id, ...agentForm } : agentForm);
                   setAgentForm(null);
                 }}
               >
-                保存人格
+                {agentForm.id ? "保存修改" : "创建人格"}
               </button>
               <button className="btn secondary" onClick={() => setAgentForm(null)}>
                 取消
@@ -481,11 +569,15 @@ export function SettingsView() {
   );
 }
 
-function NewProviderForm(props: { onCancel: () => void; onSave: (key: string, cfg: ModelConfig) => void }) {
-  const [kind, setKind] = useState<ProviderKind>("openai");
-  const [label, setLabel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
+function NewProviderForm(props: {
+  onCancel: () => void;
+  onSave: (key: string, cfg: ModelConfig) => void;
+  initial?: { kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string };
+}) {
+  const [kind, setKind] = useState<ProviderKind>(props.initial?.kind ?? "openai");
+  const [label, setLabel] = useState(props.initial?.label ?? "");
+  const [baseUrl, setBaseUrl] = useState(props.initial?.baseUrl ?? "");
+  const [model, setModel] = useState(props.initial?.defaultModel ?? "");
   const [apiKey, setApiKey] = useState("");
 
   const save = () => {

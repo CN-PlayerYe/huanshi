@@ -898,6 +898,50 @@ select {
   font-size: 12px;
 }
 
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.model-input-row input {
+  flex: 1;
+}
+
+.model-pick {
+  margin-top: 6px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.test-result {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--tool-bg);
+}
+
+.test-result.ok {
+  color: var(--ok);
+}
+
+.test-result.fail {
+  color: var(--danger);
+}
+
 .status-line {
   font-size: 12.5px;
   color: var(--text-dim);
