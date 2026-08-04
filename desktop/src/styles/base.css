@@ -161,6 +161,49 @@ select {
   padding: 8px;
 }
 
+.agent-group {
+  margin-bottom: 2px;
+}
+
+.agent-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.agent-group-title:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.agent-group-title .arrow {
+  font-size: 9px;
+  width: 10px;
+  transition: transform 0.12s;
+}
+
+.agent-group-title .gname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-group-title .gcount {
+  font-size: 11px;
+  opacity: 0.65;
+  background: var(--bg-elev);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
 .session-item {
   display: flex;
   align-items: center;
