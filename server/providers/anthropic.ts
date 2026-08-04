@@ -73,6 +73,8 @@ export class AnthropicProvider implements ChatProvider {
             yield { delta: cb.text };
           } else if (cb?.type === "tool_use") {
             toolAcc.set(ev.index, { id: cb.id, name: cb.name, inputJson: cb.input ? JSON.stringify(cb.input) : "" });
+          } else if (cb?.type === "thinking" && cb.thinking) {
+            yield { thinking: cb.thinking };
           }
           break;
         }
@@ -83,6 +85,8 @@ export class AnthropicProvider implements ChatProvider {
           } else if (d?.type === "input_json_delta" && d.partial_json) {
             const cur = toolAcc.get(ev.index);
             if (cur) cur.inputJson += d.partial_json;
+          } else if (d?.type === "thinking_delta" && d.thinking) {
+            yield { thinking: d.thinking };
           }
           break;
         }

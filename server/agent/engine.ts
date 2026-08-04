@@ -98,6 +98,7 @@ export class AgentEngine {
     };
 
     let textBuf = "";
+    let thinkingBuf = "";
     let iteration = 0;
     let stop = false;
 
@@ -113,6 +114,10 @@ export class AgentEngine {
           if (chunk.delta) {
             textBuf += chunk.delta;
             await onEvent({ type: "delta", content: chunk.delta });
+          }
+          if (chunk.thinking) {
+            thinkingBuf += chunk.thinking;
+            await onEvent({ type: "thinking", content: chunk.thinking });
           }
           if (chunk.toolCalls) toolCalls = chunk.toolCalls;
         }
@@ -159,6 +164,10 @@ export class AgentEngine {
         assistant.parts.push({ type: "text", text: textBuf });
       } else if (!assistant.parts.length) {
         assistant.parts.push({ type: "text", text: "(模型没有返回内容)" });
+      }
+      // 思考内容独立存档(不混入正文,前端可按设置显示)
+      if (thinkingBuf) {
+        assistant.parts.push({ type: "thinking", text: thinkingBuf });
       }
       db.updateMessage(assistant);
       db.updateSession(session.id, { title: deriveTitle(session, userContent), updatedAt: Date.now() });

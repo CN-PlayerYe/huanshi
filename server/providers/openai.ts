@@ -83,6 +83,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
       if (typeof delta.content === "string" && delta.content) {
         yield { delta: delta.content };
       }
+      // 思考过程(DeepSeek reasoning_content、OpenAI o 系列 reasoning 等)
+      if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
+        yield { thinking: delta.reasoning_content };
+      }
       if (Array.isArray(delta.tool_calls)) {
         for (const tc of delta.tool_calls as OpenAIDeltaToolCall[]) {
           const cur = toolAcc.get(tc.index) ?? { id: "", name: "", args: "" };

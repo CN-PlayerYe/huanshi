@@ -197,6 +197,15 @@ export const useApp = create<AppState>((set, get) => ({
               const textPart = m.parts.find((p) => p.type === "text");
               if (textPart) textPart.text = (textPart.text ?? "") + e.content;
             }));
+          } else if (e.type === "thinking") {
+            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+              let tp = m.parts.find((p) => p.type === "thinking");
+              if (!tp) {
+                tp = { type: "thinking", text: "" };
+                m.parts.push(tp);
+              }
+              tp.text = (tp.text ?? "") + e.content;
+            }));
           } else if (e.type === "tool_start") {
             set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
               m.parts.push({ type: "tool", tool: e.tool });

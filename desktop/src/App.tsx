@@ -8,7 +8,12 @@ export default function App() {
   const ready = useApp((s) => s.ready);
   const error = useApp((s) => s.error);
   const view = useApp((s) => s.view);
+  const theme = useApp((s) => s.settings?.theme ?? "dark");
   const init = useApp((s) => s.init);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     void init();

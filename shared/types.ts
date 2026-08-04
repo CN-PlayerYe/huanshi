@@ -13,7 +13,7 @@ export interface ToolCallPart {
 }
 
 export interface MessagePart {
-  type: "text" | "tool";
+  type: "text" | "tool" | "thinking";
   text?: string;
   tool?: ToolCallPart;
 }
@@ -77,6 +77,8 @@ export interface Settings {
   theme: "dark" | "light";
   language: "zh-CN" | "en" | "ja" | "ko" | "zh-TW";
   toolWhitelistDir: string;
+  /** 对话中是否显示思考过程(思考内容始终存档在消息里) */
+  showThinking: boolean;
 }
 
 export interface SystemInfo {
@@ -113,6 +115,7 @@ export interface ChatRequest {
 export type StreamEvent =
   | { type: "session_created"; session: SessionMeta }
   | { type: "delta"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "tool_start"; tool: ToolCallPart }
   | { type: "tool_end"; tool: ToolCallPart }
   | { type: "done"; message: ChatMessage; session: SessionMeta }
@@ -138,6 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   language: "zh-CN",
   toolWhitelistDir: "",
+  showThinking: true,
 };
 
 export function newId(prefix = "id"): string {

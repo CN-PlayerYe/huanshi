@@ -2,11 +2,17 @@ import { memo, useEffect, useReducer, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCallPart } from "@shared/types";
+import { useApp } from "../store";
 
 export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === "user";
+  const showThinking = useApp((s) => s.settings?.showThinking ?? true);
   const text = msg.parts
     .filter((p) => p.type === "text")
+    .map((p) => p.text ?? "")
+    .join("\n");
+  const thinking = msg.parts
+    .filter((p) => p.type === "thinking")
     .map((p) => p.text ?? "")
     .join("\n");
   const tools = msg.parts.filter((p) => p.type === "tool" && p.tool).map((p) => p.tool!) as ToolCallPart[];
@@ -14,6 +20,12 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`}>
       <div className="message-bubble">
+        {!isUser && thinking && showThinking && (
+          <details className="thinking-block">
+            <summary>🖊 思考过程</summary>
+            <div className="thinking-content">{thinking}</div>
+          </details>
+        )}
         {tools.length > 0 && (
           <div className="tool-list">
             {tools.map((t) => (

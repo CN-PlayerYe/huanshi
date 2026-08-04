@@ -424,6 +424,27 @@ export function SettingsView() {
         )}
       </div>
 
+      {/* ---- 界面 ---- */}
+      <div className="settings-section">
+        <h3>🎨 界面</h3>
+        <div className="radio-row">
+          <label>
+            <input type="radio" checked={settings.theme === "dark"} onChange={() => void updateSettings({ theme: "dark" })} />
+            🌙 暗色
+          </label>
+          <label>
+            <input type="radio" checked={settings.theme === "light"} onChange={() => void updateSettings({ theme: "light" })} />
+            ☀️ 亮色
+          </label>
+        </div>
+        <div className="status-line">
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={settings.showThinking} onChange={(e) => void updateSettings({ showThinking: e.target.checked })} />
+            对话中显示思考过程(思考内容始终存档,随时可打开)
+          </label>
+        </div>
+      </div>
+
       {/* ---- 定时任务 ---- */}
       <div className="settings-section">
         <h3>⏰ 定时任务</h3>

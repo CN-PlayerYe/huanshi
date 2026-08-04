@@ -32,12 +32,13 @@ class MockOpenAI {
           res.writeHead(200, { "Content-Type": "text/event-stream" });
 
           if (this.calls === 1) {
-            // 第一轮:要求调用 get_datetime 工具
+            // 第一轮:思考 + 要求调用 get_datetime 工具
             const toolCall = {
               index: 0,
               id: "call_1",
               function: { name: "get_datetime", arguments: "{}" },
             };
+            res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: "用户在问时间" } }] })}\n\n`);
             res.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [toolCall] } }] })}\n\n`);
             res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] })}\n\n`);
           } else {
@@ -116,6 +117,10 @@ describe("Agent 引擎端到端(OpenAI 兼容 + 工具调用)", () => {
     expect(types).toContain("tool_end");
     expect(types).toContain("delta");
     expect(types[types.length - 1]).toBe("done");
+
+    // 思考过程:流式事件 + 存档
+    expect(events.some((e) => e.type === "thinking" && (e as any).content === "用户在问时间")).toBe(true);
+    expect(msg.parts.some((p) => p.type === "thinking" && p.text === "用户在问时间")).toBe(true);
 
     const toolStart = events.find((e) => e.type === "tool_start")!;
     expect(toolStart.type).toBe("tool_start");

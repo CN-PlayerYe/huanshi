@@ -23,6 +23,8 @@ export interface ToolSpec {
 
 export interface ChatStreamChunk {
   delta?: string;
+  /** 思考过程增量(DeepSeek reasoning_content / Anthropic thinking 等) */
+  thinking?: string;
   toolCalls?: ProviderToolCall[]; // 一轮结束时出现的完整工具调用列表
   finishReason?: "stop" | "tool_calls" | "length" | "error";
   usage?: { input: number; output: number };
