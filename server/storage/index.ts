@@ -198,4 +198,23 @@ export class Db {
   deleteTask(id: string): void {
     this.tasks.write(this.tasks.read().filter((t) => t.id !== id));
   }
+
+  /** 清理历史遗留的空消息(parts 无任何有效内容),返回清理条数 */
+  cleanEmptyMessages(): number {
+    let cleaned = 0;
+    for (const s of this.listSessions(true)) {
+      const all = this.messagesFile(s.id);
+      const msgs = all.read();
+      const kept = msgs.filter((m) => {
+        const hasText = m.parts.some((p) => p.type === "text" && (p.text ?? "").trim());
+        const hasTool = m.parts.some((p) => p.type === "tool" && p.tool);
+        return hasText || hasTool;
+      });
+      if (kept.length !== msgs.length) {
+        all.write(kept);
+        cleaned += msgs.length - kept.length;
+      }
+    }
+    return cleaned;
+  }
 }

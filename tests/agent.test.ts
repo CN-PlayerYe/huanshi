@@ -96,4 +96,15 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
     expect(out).toHaveLength(2);
     expect(out[1].toolCalls).toBeUndefined();
   });
+
+  it("空 assistant 消息被跳过(避免 content or tool_calls must be set)", () => {
+    const msgs: ChatMessage[] = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "hi" }], createdAt: 0 },
+      { id: "2", sessionId: "s", role: "assistant", parts: [], createdAt: 0 }, // 空占位
+      { id: "3", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "hello" }], createdAt: 0 },
+    ];
+    const out = historyToProviderMessages(msgs);
+    expect(out).toHaveLength(2); // 空 assistant 被跳过
+    expect(out[1].content).toBe("hello");
+  });
 });

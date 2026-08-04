@@ -927,6 +927,18 @@ select {
   font-size: 12.5px;
 }
 
+.model-pick-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.model-pick-row .model-pick {
+  margin-top: 0;
+  flex: 1;
+}
+
 .test-result {
   margin: 8px 0;
   padding: 6px 10px;

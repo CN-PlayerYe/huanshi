@@ -30,6 +30,10 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   const db = Db.fromPaths(paths);
   ensureDefaultAgents(db);
 
+  // 清理历史遗留的空消息(旧版本失败路径可能产生 parts:[] 的 assistant,会触发 API 400)
+  const cleaned = db.cleanEmptyMessages();
+  if (cleaned > 0) console.log(`[hanalite] 清理了 ${cleaned} 条空消息`);
+
   const memory = new MemoryService(settings.memory, paths.dataDir);
 
   const registry = new ToolRegistry();

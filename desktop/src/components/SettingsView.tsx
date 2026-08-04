@@ -177,18 +177,23 @@ export function SettingsView() {
                   )}
                 </div>
                 {modelList[key]?.length ? (
-                  <select
-                    className="model-pick"
-                    value={cfg.model || ""}
-                    onChange={(e) => patchProvider(key, { model: e.target.value })}
-                  >
-                    <option value="">— 选择模型 —</option>
-                    {modelList[key].map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="model-pick-row">
+                    <select
+                      className="model-pick"
+                      value={cfg.model || ""}
+                      onChange={(e) => patchProvider(key, { model: e.target.value })}
+                    >
+                      <option value="">— 选择模型 —</option>
+                      {modelList[key].map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="btn secondary sm" onClick={() => setModelList((p) => ({ ...p, [key]: [] }))} title="收起列表">
+                      ✕
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </div>

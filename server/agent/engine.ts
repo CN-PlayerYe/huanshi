@@ -44,7 +44,18 @@ export class AgentEngine {
     const providerCfg = settings.providers[settings.activeProvider];
     if (!providerCfg) {
       const err = new Error("尚未配置模型,请先在设置中填写 API Key 和模型。");
-      return this.fail(db, session, onEvent, err);
+      const msg: ChatMessage = {
+        id: newId("msg"),
+        sessionId: session.id,
+        role: "assistant",
+        parts: [{ type: "text", text: `出错了:${err.message}` }],
+        createdAt: Date.now(),
+        error: err.message,
+      };
+      db.appendMessage(msg);
+      db.updateSession(session.id, { updatedAt: Date.now() });
+      await onEvent({ type: "error", message: err.message });
+      return msg;
     }
     const provider = createProvider(providerCfg);
 
@@ -162,23 +173,14 @@ export class AgentEngine {
 
       return assistant;
     } catch (err: any) {
-      return this.fail(db, session, onEvent, err);
+      // 失败:把错误合并进占位消息(不新增空消息,避免历史里出现 parts:[] 的空 assistant 触发 API 400)
+      assistant.parts = [{ type: "text", text: `出错了:${err.message}` }];
+      assistant.error = err.message;
+      db.updateMessage(assistant);
+      db.updateSession(session.id, { updatedAt: Date.now() });
+      await onEvent({ type: "error", message: err.message });
+      return assistant;
     }
-  }
-
-  private async fail(db: Db, session: SessionMeta, onEvent: (e: StreamEvent) => void | Promise<void>, err: Error): Promise<ChatMessage> {
-    const msg: ChatMessage = {
-      id: newId("msg"),
-      sessionId: session.id,
-      role: "assistant",
-      parts: [{ type: "text", text: `出错了:${err.message}` }],
-      createdAt: Date.now(),
-      error: err.message,
-    };
-    db.appendMessage(msg);
-    db.updateSession(session.id, { updatedAt: Date.now() });
-    await onEvent({ type: "error", message: err.message });
-    return msg;
   }
 }
 
@@ -208,6 +210,9 @@ export function historyToProviderMessages(messages: ChatMessage[]): ProviderMsg[
       for (const p of toolParts) {
         out.push({ role: "tool", content: p.tool!.output ?? "(无输出)", toolCallId: p.tool!.id });
       }
+    } else if (m.role === "assistant" && !text.trim()) {
+      // 防御:跳过既无文本也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")
+      continue;
     } else {
       out.push({ role: m.role === "system" ? "system" : "assistant", content: text });
     }
