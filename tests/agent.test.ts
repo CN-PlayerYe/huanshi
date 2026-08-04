@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPrompt, toProviderMsg } from "../server/agent/engine";
+import { buildSystemPrompt, historyToProviderMessages, toProviderMsg } from "../server/agent/engine";
 import { defaultAgents } from "../server/agents";
 import type { ChatMessage } from "../shared/types";
 
@@ -58,5 +58,42 @@ describe("defaultAgents", () => {
       expect(a.tools).toContain("memory_recall");
       expect(a.memoryEnabled).toBe(true);
     }
+  });
+});
+
+describe("historyToProviderMessages(工具调用历史回放)", () => {
+  it("assistant 带 tool_calls 后生成对应的 tool 结果消息", () => {
+    const msgs: ChatMessage[] = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "现在几点?" }], createdAt: 0 },
+      {
+        id: "2",
+        sessionId: "s",
+        role: "assistant",
+        parts: [
+          { type: "text", text: "查一下" },
+          { type: "tool", tool: { id: "t1", name: "get_datetime", input: "{}", output: "2026-08-04", status: "done", startedAt: 0, finishedAt: 1 } },
+        ],
+        createdAt: 0,
+      },
+      { id: "3", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "现在是 2026-08-04" }], createdAt: 0 },
+    ];
+    const out = historyToProviderMessages(msgs);
+    expect(out).toHaveLength(4);
+    expect(out[0]).toEqual({ role: "user", content: "现在几点?" });
+    expect(out[1].role).toBe("assistant");
+    expect(out[1].toolCalls).toEqual([{ id: "t1", name: "get_datetime", arguments: "{}" }]);
+    // 关键:tool_calls 后必须有 role=tool 消息
+    expect(out[2]).toEqual({ role: "tool", content: "2026-08-04", toolCallId: "t1" });
+    expect(out[3]).toEqual({ role: "assistant", content: "现在是 2026-08-04" });
+  });
+
+  it("纯文本历史不受影响", () => {
+    const msgs: ChatMessage[] = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "hi" }], createdAt: 0 },
+      { id: "2", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "hello" }], createdAt: 0 },
+    ];
+    const out = historyToProviderMessages(msgs);
+    expect(out).toHaveLength(2);
+    expect(out[1].toolCalls).toBeUndefined();
   });
 });

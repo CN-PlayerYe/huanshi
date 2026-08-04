@@ -25,6 +25,7 @@ export function Sidebar() {
   const renameSession = useApp((s) => s.renameSession);
   const setView = useApp((s) => s.setView);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [moveFor, setMoveFor] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,31 +161,62 @@ export function Sidebar() {
                     </button>
                     {menuFor === s.id && (
                       <div className="session-pop" onMouseLeave={() => setMenuFor(null)}>
-                        <button
-                          onClick={() => {
-                            setRenamingId(s.id);
-                            setMenuFor(null);
-                          }}
-                        >
-                          重命名
-                        </button>
-                        <button
-                          onClick={() => {
-                            void archiveSession(s.id);
-                            setMenuFor(null);
-                          }}
-                        >
-                          归档
-                        </button>
-                        <button
-                          className="danger"
-                          onClick={() => {
-                            void deleteSession(s.id);
-                            setMenuFor(null);
-                          }}
-                        >
-                          删除
-                        </button>
+                        {moveFor === s.id ? (
+                          <>
+                            <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--text-dim)" }}>移动到人格:</div>
+                            {agents.map((a) => (
+                              <button
+                                key={a.id}
+                                onClick={() => {
+                                  void api.setSessionAgent(s.id, a.id).then(() => useApp.getState().refreshSessions());
+                                  setMoveFor(null);
+                                  setMenuFor(null);
+                                }}
+                              >
+                                {a.name}
+                                {s.agentId === a.id ? " ✓" : ""}
+                              </button>
+                            ))}
+                            <button className="danger" onClick={() => setMoveFor(null)}>
+                              取消
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                setRenamingId(s.id);
+                                setMenuFor(null);
+                              }}
+                            >
+                              重命名
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMoveFor(s.id);
+                              }}
+                            >
+                              移动到人格…
+                            </button>
+                            <button
+                              onClick={() => {
+                                void archiveSession(s.id);
+                                setMenuFor(null);
+                              }}
+                            >
+                              归档
+                            </button>
+                            <button
+                              className="danger"
+                              onClick={() => {
+                                void deleteSession(s.id);
+                                setMenuFor(null);
+                              }}
+                            >
+                              删除
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </span>

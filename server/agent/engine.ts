@@ -59,7 +59,7 @@ export class AgentEngine {
     const history = db.getMessages(session.id).slice(-MAX_HISTORY_MESSAGES);
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
-      ...history.map(toProviderMsg),
+      ...historyToProviderMessages(history),
       { role: "user", content: userContent },
     ];
 
@@ -182,7 +182,40 @@ export class AgentEngine {
   }
 }
 
-/** ChatMessage(parts) → Provider 消息 */
+/** 历史消息 → Provider 消息序列。
+ * 关键:assistant 带 tool_calls 时,必须为每个工具调用生成一条 role="tool" 的结果消息
+ * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
+ */
+export function historyToProviderMessages(messages: ChatMessage[]): ProviderMsg[] {
+  const out: ProviderMsg[] = [];
+  for (const m of messages) {
+    const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
+    if (m.role === "user") {
+      out.push({ role: "user", content: text });
+      continue;
+    }
+    const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool);
+    if (m.role === "assistant" && toolParts.length) {
+      out.push({
+        role: "assistant",
+        content: text,
+        toolCalls: toolParts.map((p) => ({
+          id: p.tool!.id,
+          name: p.tool!.name,
+          arguments: p.tool!.input || "{}",
+        })),
+      });
+      for (const p of toolParts) {
+        out.push({ role: "tool", content: p.tool!.output ?? "(无输出)", toolCallId: p.tool!.id });
+      }
+    } else {
+      out.push({ role: m.role === "system" ? "system" : "assistant", content: text });
+    }
+  }
+  return out;
+}
+
+/** ChatMessage(parts) → 单条 Provider 消息(仅文本场景;带工具调用请用 historyToProviderMessages) */
 export function toProviderMsg(m: ChatMessage): ProviderMsg {
   const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
   if (m.role === "user") {
