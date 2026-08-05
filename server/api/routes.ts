@@ -147,6 +147,39 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ file: `uploads/${name}`, mime: f.type || "image/png" });
   });
 
+  /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */
+  app.post("/api/tts", async (c) => {
+    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
+    const tts = deps.getSettings().tts;
+    if (!text?.trim() || tts?.mode !== "api" || !tts.apiBaseUrl) {
+      return c.json({ error: "未配置 API 朗读" }, 400);
+    }
+    const base = tts.apiBaseUrl.replace(/\/$/, "");
+    try {
+      const res = await fetch(`${base}/audio/speech`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(tts.apiKey ? { Authorization: `Bearer ${tts.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: tts.model || "tts-1",
+          input: text.slice(0, 4000),
+          voice: tts.voice || "alloy",
+          response_format: "mp3",
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        return c.json({ error: `TTS 服务返回 ${res.status}:${errText.slice(0, 200)}` }, 502);
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      return c.newResponse(buf, { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    } catch (err) {
+      return c.json({ error: `TTS 请求失败:${(err as Error).message}` }, 502);
+    }
+  });
+
   /** 静态文件服务(自定义背景图等) */
   app.get("/files/*", (c) => {
     const rel = c.req.path.replace(/^\/files\//, "");

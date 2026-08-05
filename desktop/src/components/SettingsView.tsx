@@ -64,6 +64,8 @@ export function SettingsView() {
   const [csInfo, setCsInfo] = useState("");
   const [tasks, setTasks] = useState<TaskDef[]>([]);
   const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
+  const [systemVoices, setSystemVoices] = useState<{ name: string; lang: string }[]>([]);
+  const [ttsTesting, setTtsTesting] = useState(false);
   const [taskMsg, setTaskMsg] = useState("");
 
   const refreshTasks = async () => {
@@ -100,6 +102,17 @@ export function SettingsView() {
   const [presetForm, setPresetForm] = useState<{ kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string } | null>(null);
   const [memStats, setMemStats] = useState<{ facts: number; experiences: number } | null>(null);
   const [agentMems, setAgentMems] = useState<{ id: string; name: string; stats: { facts: number; experiences: number } }[]>([]);
+
+  useEffect(() => {
+    // 加载系统朗读音色列表(speechSynthesis 异步就绪)
+    const loadVoices = () => {
+      if (!("speechSynthesis" in window)) return;
+      setSystemVoices(window.speechSynthesis.getVoices().map((v) => ({ name: v.name, lang: v.lang })));
+    };
+    loadVoices();
+    window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
+    return () => window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices);
+  }, []);
 
   useEffect(() => {
     void api.providerPresets().then((r) => setPresets(r.presets)).catch(() => undefined);
@@ -692,6 +705,108 @@ export function SettingsView() {
           </div>
         </div>
         <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>全局风格对所有"跟随全局风格"的人格生效;编辑单个 Agent 可关闭(原生态人格)。</p>
+      </div>
+
+      {/* ---- 朗读(TTS) ---- */}
+      <div className="settings-section">
+        <h3>🔊 朗读</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
+          每条回复的 🔊 按钮朗读方式。系统语音=Windows 自带(可选音色,离线);API=OpenAI 兼容 TTS 端点,可用自己的克隆声音。
+        </p>
+        <div className="field-row">
+          <div className="field">
+            <label>朗读引擎</label>
+            <select
+              value={settings.tts?.mode ?? "system"}
+              onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), mode: e.target.value as "system" | "api" } })}
+            >
+              <option value="system">系统语音(离线)</option>
+              <option value="api">API(自定义音色/克隆)</option>
+            </select>
+          </div>
+          {(settings.tts?.mode ?? "system") === "system" && (
+            <div className="field" style={{ flex: 2 }}>
+              <label>系统音色(留空=默认中文语音)</label>
+              <select
+                value={settings.tts?.systemVoice ?? ""}
+                onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), systemVoice: e.target.value || undefined } })}
+              >
+                <option value="">默认</option>
+                {systemVoices.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        {(settings.tts?.mode ?? "system") === "api" && (
+          <>
+            <div className="field-row">
+              <div className="field" style={{ flex: 2 }}>
+                <label>API Base URL(OpenAI 兼容,如 https://api.openai.com/v1)</label>
+                <input
+                  type="text"
+                  value={settings.tts?.apiBaseUrl ?? ""}
+                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), apiBaseUrl: e.target.value } })}
+                  placeholder="https://api.openai.com/v1"
+                />
+              </div>
+              <div className="field">
+                <label>API Key</label>
+                <input
+                  type="password"
+                  value={settings.tts?.apiKey ?? ""}
+                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), apiKey: e.target.value } })}
+                  placeholder="sk-…"
+                />
+              </div>
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>模型(克隆模型名,如 tts-1 / 你的克隆模型)</label>
+                <input
+                  type="text"
+                  value={settings.tts?.model ?? ""}
+                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
+                  placeholder="tts-1"
+                />
+              </div>
+              <div className="field">
+                <label>音色 voice</label>
+                <input
+                  type="text"
+                  value={settings.tts?.voice ?? ""}
+                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
+                  placeholder="alloy / 克隆音色 id"
+                />
+              </div>
+              <div className="field">
+                <label>&nbsp;</label>
+                <button
+                  className="btn secondary"
+                  disabled={ttsTesting}
+                  onClick={async () => {
+                    setTtsTesting(true);
+                    try {
+                      const blob = await api.tts("你好,我是幻世,很高兴认识你。");
+                      const url = URL.createObjectURL(blob);
+                      const a = new Audio(url);
+                      void a.play();
+                    } catch (err) {
+                      useApp.getState().showToast(`朗读测试失败:${(err as Error).message}`);
+                    } finally {
+                      setTtsTesting(false);
+                    }
+                  }}
+                >
+                  {ttsTesting ? "合成中…" : "🔊 试听"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ---- 定时任务 ---- */}

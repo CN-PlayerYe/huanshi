@@ -32,6 +32,16 @@ export default function App() {
     window.hanalite?.setThemeBg(theme);
   }, [theme]);
 
+  // 非模态 toast:组件内(如朗读失败)通过自定义事件触发
+  useEffect(() => {
+    const showToast = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) useApp.getState().showToast(detail);
+    };
+    window.addEventListener("hanalite-toast", showToast);
+    return () => window.removeEventListener("hanalite-toast", showToast);
+  }, []);
+
   // 应用菜单动作(文件/编辑/视图/帮助)
   useEffect(() => {
     window.hanalite?.onMenuEvent((action: string) => {

@@ -1306,7 +1306,7 @@ select {
 /* ---- 朗读 / 语音 ---- */
 .msg-speak {
   position: absolute;
-  top: 6px;
+  bottom: 6px;
   right: 6px;
   background: transparent;
   border: none;
@@ -1326,7 +1326,7 @@ select {
 .msg-delete {
   position: absolute;
   top: 6px;
-  right: 26px;
+  right: 6px;
 }
 .voice-btn.listening {
   color: var(--accent);

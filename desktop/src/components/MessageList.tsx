@@ -12,22 +12,49 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   const deleteMessage = useApp((s) => s.deleteMessage);
   // 朗读状态(全局单例:同一时间只读一条)
   const [speaking, setSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const text = msg.parts
     .filter((p) => p.type === "text")
     .map((p) => p.text ?? "")
     .join("\n");
+  // 朗读引擎:API(OpenAI 兼容 TTS / 自建克隆)或系统语音
+  const ttsMode = useApp((s) => s.settings?.tts?.mode ?? "system");
+  const ttsVoice = useApp((s) => s.settings?.tts?.systemVoice);
 
-  const toggleSpeak = () => {
-    if (!("speechSynthesis" in window)) return;
+  const toggleSpeak = async () => {
     if (speaking) {
-      window.speechSynthesis.cancel();
+      if (ttsMode === "api") {
+        audioRef.current?.pause();
+      } else {
+        window.speechSynthesis?.cancel();
+      }
       setSpeaking(false);
       return;
     }
+    // API 模式:请求后端 TTS 并播放音频
+    if (ttsMode === "api") {
+      try {
+        const blob = await api.tts(text);
+        const url = URL.createObjectURL(blob);
+        if (audioRef.current) audioRef.current.src = url;
+        audioRef.current?.play().catch(() => undefined);
+        setSpeaking(true);
+      } catch (err) {
+        window.dispatchEvent(new CustomEvent("hanalite-toast", { detail: `朗读失败:${(err as Error).message}` }));
+      }
+      return;
+    }
+    if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel(); // 先停掉其他消息的朗读
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "zh-CN";
     u.rate = 0.95;
+    // 用户指定的系统语音
+    if (ttsVoice) {
+      const voices = window.speechSynthesis.getVoices();
+      const v = voices.find((x) => x.name === ttsVoice);
+      if (v) u.voice = v;
+    }
     u.onend = () => setSpeaking(false);
     u.onerror = () => setSpeaking(false);
     window.speechSynthesis.speak(u);
@@ -42,6 +69,8 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`}>
       <div className="message-bubble">
+        {/* API 朗读用隐藏音频元素 */}
+        <audio ref={audioRef} onEnded={() => setSpeaking(false)} onPause={() => setSpeaking(false)} />
         {!isUser && thinking && showThinking && (
           <details className="thinking-block">
             <summary>🖊 思考过程</summary>

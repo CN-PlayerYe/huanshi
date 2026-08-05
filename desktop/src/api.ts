@@ -97,6 +97,19 @@ export const api = {
     if (!res.ok) throw new Error((await res.text().catch(() => "上传失败")) || "上传失败");
     return (await res.json()) as { file: string; mime: string };
   },
+  /** API 朗读:文本 → 音频 Blob */
+  async tts(text: string): Promise<Blob> {
+    const res = await fetch(base + "/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error ?? `朗读失败(${res.status})`);
+    }
+    return await res.blob();
+  },
   getMessages: (id: string) => request<{ messages: ChatMessage[] }>(`/api/sessions/${id}/messages`),
   deleteMessage: (sessionId: string, msgId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${msgId}`, { method: "DELETE" }),
 

@@ -95,6 +95,15 @@ export interface Settings {
   showThinking: boolean;
   /** 视觉辅助模型:纯文本主模型时,把图片交给这个多模态 provider 转成文字描述(空=直接传图给主模型) */
   visionProvider?: string;
+  /** 朗读(TTS)配置:system=系统语音(可选手音),api=OpenAI 兼容 TTS 端点(含自己的克隆服务) */
+  tts?: {
+    mode: "system" | "api";
+    systemVoice?: string;
+    apiBaseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    voice?: string;
+  };
   /** 人格风格参数(语气/详略/幽默度) */
   style?: {
     tone?: "formal" | "casual" | "professional";
