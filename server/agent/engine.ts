@@ -129,6 +129,9 @@ export class AgentEngine {
       while (!stop && iteration < MAX_TOOL_ITERATIONS) {
         iteration++;
         let toolCalls: ProviderToolCall[] = [];
+        // 本轮增量:用于把"思考 + 文本 + 工具调用"完整回传给 API(DeepSeek thinking 要求)
+        let iterText = "";
+        let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
           { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096 },
@@ -136,10 +139,12 @@ export class AgentEngine {
         )) {
           if (chunk.delta) {
             textBuf += chunk.delta;
+            iterText += chunk.delta;
             await onEvent({ type: "delta", content: chunk.delta });
           }
           if (chunk.thinking) {
             thinkingBuf += chunk.thinking;
+            iterThinking += chunk.thinking;
             await onEvent({ type: "thinking", content: chunk.thinking });
           }
           if (chunk.toolCalls) toolCalls = chunk.toolCalls;
@@ -149,6 +154,16 @@ export class AgentEngine {
           stop = true;
           break;
         }
+
+        // 回传本轮模型回复(文本 + 思考 + 工具调用),再附上各工具结果。
+        // DeepSeek thinking 模式:带 tool_calls 的 assistant 消息必须携带
+        // 本轮生成的 reasoning_content,否则 API 报 400。
+        providerMessages.push({
+          role: "assistant",
+          content: iterText,
+          toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+          reasoningContent: iterThinking || undefined,
+        });
 
         // 执行工具
         const toolParts = [];
@@ -167,18 +182,9 @@ export class AgentEngine {
           await onEvent({ type: "tool_end", tool: donePart });
           toolParts.push(donePart);
 
-          // 追加到消息历史
+          // 持久化工具调用
           assistant.parts.push({ type: "tool", tool: donePart });
-          providerMessages.push({
-            role: "assistant",
-            content: "",
-            toolCalls: [{ id: tc.id, name: tc.name, arguments: tc.arguments }],
-          });
           providerMessages.push({ role: "tool", content: output, toolCallId: tc.id });
-        }
-        // 无文本时也记录 assistant 文本
-        if (textBuf && assistant.parts.find((p) => p.type === "text") === undefined) {
-          // 文本已在 delta 中流式展示,这里只持久化
         }
       }
 
