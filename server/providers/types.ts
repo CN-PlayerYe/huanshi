@@ -13,6 +13,11 @@ export interface ProviderMsg {
   content: string;
   toolCalls?: ProviderToolCall[]; // 仅 role=assistant
   toolCallId?: string; // 仅 role=tool
+  /**
+   * 思考原文(reasoning)。DeepSeek 等模型开启 thinking 模式后,后续请求必须
+   * 把历史 assistant 的 reasoning_content 原样回传,否则 API 报 400。
+   */
+  reasoningContent?: string;
 }
 
 export interface ToolSpec {

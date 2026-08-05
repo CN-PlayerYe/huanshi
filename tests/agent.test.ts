@@ -95,6 +95,41 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
     const out = historyToProviderMessages(msgs);
     expect(out).toHaveLength(2);
     expect(out[1].toolCalls).toBeUndefined();
+    expect(out[1].reasoningContent).toBeUndefined();
+  });
+
+  it("assistant 带思考 part 时回传 reasoningContent", () => {
+    const msgs: ChatMessage[] = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "推理题" }], createdAt: 0 },
+      {
+        id: "2",
+        sessionId: "s",
+        role: "assistant",
+        parts: [
+          { type: "thinking", text: "让我一步步想…" },
+          { type: "text", text: "答案是 42" },
+        ],
+        createdAt: 0,
+      },
+    ];
+    const out = historyToProviderMessages(msgs);
+    expect(out[1].reasoningContent).toBe("让我一步步想…");
+    expect(out[1].content).toBe("答案是 42");
+  });
+
+  it("兼容存量数据:正文内嵌 <thinking> 块也提取为 reasoningContent", () => {
+    const msgs: ChatMessage[] = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "问题" }], createdAt: 0 },
+      {
+        id: "2",
+        sessionId: "s",
+        role: "assistant",
+        parts: [{ type: "text", text: "先想\n<thinking>\n内嵌思考\n</thinking>\n回答" }],
+        createdAt: 0,
+      },
+    ];
+    const out = historyToProviderMessages(msgs);
+    expect(out[1].reasoningContent).toBe("内嵌思考");
   });
 
   it("空 assistant 消息被跳过(避免 content or tool_calls must be set)", () => {

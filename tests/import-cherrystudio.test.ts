@@ -139,10 +139,12 @@ describe("Cherry Studio 迁移", () => {
     expect(tools[0].tool?.output).toContain("hello");
     expect(m.model).toBe("mimo-v2.5");
 
-    // includeThinking=true 时包含思考
+    // includeThinking=true 时思考保存为独立 part(回放时作 reasoning_content 回传)
     const m2 = convertMessage(asst, "s", true)!;
     const text2 = m2.parts.filter((p) => p.type === "text").map((p) => p.text).join();
-    expect(text2).toContain("思考中");
+    expect(text2).not.toContain("思考中"); // 不再内嵌进正文
+    const thinkParts = m2.parts.filter((p) => p.type === "thinking").map((p) => p.text);
+    expect(thinkParts).toContain("思考中"); // 独立 thinking part 保存思考
   });
 
   it("importCherryStudio 完整导入到 Db", () => {

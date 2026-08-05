@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import type { Settings, StreamEvent } from "../shared/types";
 import { AgentEngine } from "./agent/engine";
 import { ensureDefaultAgents } from "./agents";
+import { fixEmbeddedThinking } from "./datafix";
 import { createApp } from "./api/routes";
 import { ensureDirs, loadSettings, resolveDataDir, type ResolvedPaths } from "./config";
 import { MemoryService } from "./memory/service";
@@ -33,6 +34,14 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   // 清理历史遗留的空消息(旧版本失败路径可能产生 parts:[] 的 assistant,会触发 API 400)
   const cleaned = db.cleanEmptyMessages();
   if (cleaned > 0) console.log(`[hanalite] 清理了 ${cleaned} 条空消息`);
+
+  // 存量数据修复:把内嵌 <thinking> 从正文提取为独立 part(DeepSeek reasoning_content 回传需要)
+  try {
+    const fixed = fixEmbeddedThinking(db);
+    if (fixed > 0) console.log(`[hanalite] 修复了 ${fixed} 条消息的思考内容`);
+  } catch (err) {
+    console.error("[hanalite] 数据修复失败(不影响启动):", (err as Error).message);
+  }
 
   const memory = new MemoryService(settings.memory, paths.dataDir);
 

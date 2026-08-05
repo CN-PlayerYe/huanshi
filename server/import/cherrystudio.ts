@@ -217,7 +217,8 @@ export function convertMessage(rm: RawMessage, sessionId: string, includeThinkin
       if (b.content?.trim()) textBuf.push(b.content.trim());
     } else if (b.type === "thinking") {
       if (includeThinking && b.content?.trim()) {
-        textBuf.push(`<thinking>\n${b.content.trim()}\n</thinking>`);
+        // 思考存为独立 part(回放时作为 reasoning_content 原样回传,DeepSeek 要求)
+        parts.push({ type: "thinking", text: b.content.trim() });
       }
     } else if (b.type === "tool") {
       const meta = b.metadata?.rawMcpToolResponse;

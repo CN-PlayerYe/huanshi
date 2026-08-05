@@ -121,6 +121,10 @@ function toOpenAIMessage(m: ProviderMsg) {
       function: { name: tc.name, arguments: tc.arguments },
     }));
   }
+  // DeepSeek thinking 模式:历史 assistant 的思考必须原样回传,否则 400
+  if (m.role === "assistant" && m.reasoningContent) {
+    base.reasoning_content = m.reasoningContent;
+  }
   return base;
 }
 

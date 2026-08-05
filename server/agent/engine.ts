@@ -216,9 +216,22 @@ export class AgentEngine {
   }
 }
 
+/** ChatMessage 的思考原文(parts 里的 thinking 文本;兼容迁移数据里内嵌的 <thinking> 块) */
+function thinkingText(m: ChatMessage): string {
+  const fromParts = m.parts
+    .filter((p) => p.type === "thinking" && p.text)
+    .map((p) => p.text as string)
+    .join("\n");
+  if (fromParts) return fromParts;
+  const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
+  const m2 = /<thinking>\s*([\s\S]*?)\s*<\/thinking>/.exec(text);
+  return m2 ? m2[1].trim() : "";
+}
+
 /** 历史消息 → Provider 消息序列。
  * 关键:assistant 带 tool_calls 时,必须为每个工具调用生成一条 role="tool" 的结果消息
  * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
+ * 关键2:assistant 带思考时,把 reasoning_content 原样回传(DeepSeek thinking 模式要求)。
  */
 export function historyToProviderMessages(messages: ChatMessage[]): ProviderMsg[] {
   const out: ProviderMsg[] = [];
@@ -238,15 +251,20 @@ export function historyToProviderMessages(messages: ChatMessage[]): ProviderMsg[
           name: p.tool!.name,
           arguments: p.tool!.input || "{}",
         })),
+        reasoningContent: thinkingText(m) || undefined,
       });
       for (const p of toolParts) {
         out.push({ role: "tool", content: p.tool!.output ?? "(无输出)", toolCallId: p.tool!.id });
       }
-    } else if (m.role === "assistant" && !text.trim()) {
-      // 防御:跳过既无文本也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")
+    } else if (m.role === "assistant" && !text.trim() && !thinkingText(m)) {
+      // 防御:跳过既无文本、无思考、也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")
       continue;
     } else {
-      out.push({ role: m.role === "system" ? "system" : "assistant", content: text });
+      out.push({
+        role: "assistant",
+        content: text,
+        reasoningContent: thinkingText(m) || undefined,
+      });
     }
   }
   return out;
@@ -266,10 +284,19 @@ export function toProviderMsg(m: ChatMessage): ProviderMsg {
       name: p.tool!.name,
       arguments: p.tool!.input || "{}",
     }));
-    const base: ProviderMsg = { role: "assistant", content: text, toolCalls };
+    const base: ProviderMsg = {
+      role: "assistant",
+      content: text,
+      toolCalls,
+      reasoningContent: thinkingText(m) || undefined,
+    };
     return base;
   }
-  return { role: m.role === "system" ? "system" : "assistant", content: text };
+  return {
+    role: m.role === "system" ? "system" : "assistant",
+    content: text,
+    ...(m.role === "assistant" ? { reasoningContent: thinkingText(m) || undefined } : {}),
+  };
 }
 
 export function buildSystemPrompt(
