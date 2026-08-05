@@ -45,14 +45,16 @@ export default function App() {
     const root = document.documentElement.style;
     if (appearance.accent) root.setProperty("--accent", appearance.accent);
     else root.removeProperty("--accent");
-    if (appearance.chatOpacity != null) root.setProperty("--chat-opacity", String(appearance.chatOpacity));
+    // color-mix 需要百分比单位(如 50%),不能传 0.5
+    if (appearance.chatOpacity != null) root.setProperty("--chat-opacity", `${Math.round(appearance.chatOpacity * 100)}%`);
     else root.removeProperty("--chat-opacity");
-    if (appearance.sidebarOpacity != null) root.setProperty("--side-opacity", String(appearance.sidebarOpacity));
+    if (appearance.sidebarOpacity != null) root.setProperty("--side-opacity", `${Math.round(appearance.sidebarOpacity * 100)}%`);
     else root.removeProperty("--side-opacity");
     const body = document.body;
     if (appearance.bgImage) {
       const base = useApp.getState().backendUrl;
-      body.style.backgroundImage = `url(${base}/files/${appearance.bgImage})`;
+      // 加时间戳,防止浏览器复用同名旧缓存图
+      body.style.backgroundImage = `url(${base}/files/${appearance.bgImage}?v=${Date.now()})`;
       body.style.backgroundSize = "cover";
       body.style.backgroundAttachment = "fixed";
     } else {

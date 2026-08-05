@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -117,8 +117,17 @@ export function createApp(deps: AppDeps): Hono {
     const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "png";
     const dir = join(deps.paths.dataDir, "appearance");
     mkdirSync(dir, { recursive: true });
-    const name = `bg.${safeExt}`;
+    // 文件名带时间戳,保证 URL 变化、浏览器不会复用旧缓存图
+    const name = `bg_${Date.now()}.${safeExt}`;
     writeFileSync(join(dir, name), Buffer.from(b64, "base64"));
+    // 清理旧背景图,避免堆积
+    try {
+      for (const f of readdirSync(dir)) {
+        if (f.startsWith("bg_") && f !== name) unlinkSync(join(dir, f));
+      }
+    } catch {
+      /* ignore */
+    }
     return c.json({ ok: true, path: `appearance/${name}` });
   });
 
