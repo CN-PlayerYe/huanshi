@@ -1302,3 +1302,32 @@ select {
   border: 1px solid var(--border);
   object-fit: cover;
 }
+
+/* ---- 朗读 / 语音 ---- */
+.msg-speak {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px;
+  border-radius: 6px;
+}
+.message-bubble:hover .msg-speak,
+.msg-speak.active {
+  opacity: 0.8;
+}
+.msg-speak.active {
+  color: var(--accent);
+}
+.msg-delete {
+  position: absolute;
+  top: 6px;
+  right: 26px;
+}
+.voice-btn.listening {
+  color: var(--accent);
+}

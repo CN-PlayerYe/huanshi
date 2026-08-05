@@ -72,12 +72,42 @@ const ChatInput = memo(function ChatInput({
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<{ file: string; mime: string; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [listening, setListening] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     taRef.current?.focus();
   }, []);
+
+  const startVoice = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SR) {
+      window.alert("当前环境不支持语音输入(需要 Chromium 语音服务)");
+      return;
+    }
+    if (listening) return;
+    const rec = new SR();
+    rec.lang = "zh-CN";
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results as ArrayLike<any>).map((r: any) => r[0].transcript).join("");
+      setInput(t);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = (e: any) => {
+      setListening(false);
+      window.alert(`语音识别不可用:${e?.error ?? "未知错误"}(可能需要系统语音服务)`);
+    };
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -122,6 +152,9 @@ const ChatInput = memo(function ChatInput({
           📎
         </button>
         <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => void pickFiles(e.target.files)} />
+        <button className="attach-btn voice-btn" onClick={startVoice} title={listening ? "聆听中…" : "语音输入"} disabled={sending}>
+          {listening ? "🎤…" : "🎤"}
+        </button>
         <textarea
           ref={taRef}
           className="chat-input"

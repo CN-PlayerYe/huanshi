@@ -1,4 +1,4 @@
-import { memo, useEffect, useReducer, useRef } from "react";
+import { memo, useEffect, useReducer, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCallPart } from "@shared/types";
@@ -10,10 +10,29 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
   const deleteMessage = useApp((s) => s.deleteMessage);
+  // 朗读状态(全局单例:同一时间只读一条)
+  const [speaking, setSpeaking] = useState(false);
   const text = msg.parts
     .filter((p) => p.type === "text")
     .map((p) => p.text ?? "")
     .join("\n");
+
+  const toggleSpeak = () => {
+    if (!("speechSynthesis" in window)) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    window.speechSynthesis.cancel(); // 先停掉其他消息的朗读
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN";
+    u.rate = 0.95;
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(u);
+    setSpeaking(true);
+  };
   const thinking = msg.parts
     .filter((p) => p.type === "thinking")
     .map((p) => p.text ?? "")
@@ -67,6 +86,11 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
         >
           🗑
         </button>
+        {!isUser && text && (
+          <button className={`msg-speak${speaking ? " active" : ""}`} title={speaking ? "停止朗读" : "朗读这条回复"} onClick={toggleSpeak}>
+            {speaking ? "⏹" : "🔊"}
+          </button>
+        )}
       </div>
     </div>
   );
