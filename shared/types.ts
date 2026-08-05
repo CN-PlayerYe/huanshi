@@ -79,6 +79,12 @@ export interface Settings {
   toolWhitelistDir: string;
   /** 对话中是否显示思考过程(思考内容始终存档在消息里) */
   showThinking: boolean;
+  /** 人格风格参数(语气/详略/幽默度) */
+  style?: {
+    tone?: "formal" | "casual" | "professional";
+    detail?: "concise" | "balanced" | "detailed";
+    humor?: number; // 0-5
+  };
   /** 外观自定义(皮肤):强调色 / 背景图 / 界面透明度 */
   appearance?: {
     accent?: string;
@@ -154,6 +160,7 @@ export const DEFAULT_SETTINGS: Settings = {
   toolWhitelistDir: "",
   showThinking: true,
   appearance: {},
+  style: { tone: "casual", detail: "balanced", humor: 2 },
 };
 
 export function newId(prefix = "id"): string {

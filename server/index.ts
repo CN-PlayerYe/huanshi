@@ -10,7 +10,7 @@ import { ensureDirs, loadSettings, resolveDataDir, type ResolvedPaths } from "./
 import { MemoryService } from "./memory/service";
 import { Db } from "./storage";
 import { Scheduler } from "./tasks";
-import { datetimeTool, fileTools, shellTool, webTool } from "./tools/files";
+import { datetimeTool, fileTools, searchTool, shellTool, webTool } from "./tools/files";
 import { memoryTools } from "./tools/memory";
 import { ToolRegistry } from "./tools/registry";
 
@@ -37,7 +37,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   const memory = new MemoryService(settings.memory, paths.dataDir);
 
   const registry = new ToolRegistry();
-  for (const t of [...fileTools, shellTool, webTool, datetimeTool, ...memoryTools(memory)]) {
+  for (const t of [...fileTools, shellTool, webTool, searchTool, datetimeTool, ...memoryTools(memory)]) {
     registry.register(t);
   }
 

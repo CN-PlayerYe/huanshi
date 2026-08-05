@@ -250,6 +250,24 @@ export function SettingsView() {
             切换(重启生效)
           </button>
         </div>
+        <div className="field" style={{ marginTop: 14 }}>
+          <label>工具白名单目录(Agent 可读写的工作目录,默认数据目录下的 workspace)</label>
+          <div className="field-row">
+            <div className="field">
+              <input
+                type="text"
+                value={settings.toolWhitelistDir}
+                onChange={(e) => void updateSettings({ toolWhitelistDir: e.target.value })}
+                placeholder="如 D:\我的文档"
+              />
+            </div>
+            {settings.toolWhitelistDir && (
+              <button className="btn secondary sm" onClick={() => void updateSettings({ toolWhitelistDir: "" })}>
+                恢复默认
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ---- 记忆 ---- */}
@@ -564,6 +582,47 @@ export function SettingsView() {
         <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
           提示:选好背景图后,聊天区默认透明直接显示背景;窗口透明度拉低可看到桌面。侧栏/聊天区滑条控制面板底色浓度。
         </p>
+      </div>
+
+      {/* ---- 人格风格 ---- */}
+      <div className="settings-section">
+        <h3>🎚 人格风格(对所有人格生效)</h3>
+        <div className="field-row">
+          <div className="field">
+            <label>语气</label>
+            <select
+              value={settings.style?.tone ?? "casual"}
+              onChange={(e) => void updateSettings({ style: { ...settings.style, tone: e.target.value as any } })}
+            >
+              <option value="casual">轻松自然(像朋友)</option>
+              <option value="professional">专业高效(工作伙伴)</option>
+              <option value="formal">正式严谨</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>详略</label>
+            <select
+              value={settings.style?.detail ?? "balanced"}
+              onChange={(e) => void updateSettings({ style: { ...settings.style, detail: e.target.value as any } })}
+            >
+              <option value="concise">简洁(直给结论)</option>
+              <option value="balanced">适中(先结论后补充)</option>
+              <option value="detailed">详细(充分展开)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>幽默感:{settings.style?.humor ?? 2}/5</label>
+            <input
+              type="range"
+              min="0"
+              max="5"
+              value={settings.style?.humor ?? 2}
+              onChange={(e) => void updateSettings({ style: { ...settings.style, humor: Number(e.target.value) } })}
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>调整后立即生效,影响所有后续回复。</p>
       </div>
 
       {/* ---- 定时任务 ---- */}

@@ -1,13 +1,13 @@
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { newId, type AgentDef, type ChatMessage, type SessionMeta, type StreamEvent } from "../../shared/types";
+import { newId, type AgentDef, type ChatMessage, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
 import type { MemoryService } from "../memory/service";
 import { createProvider } from "../providers";
 import type { ProviderMsg, ProviderToolCall } from "../providers/types";
 import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
-const MAX_HISTORY_MESSAGES = 40;
+const MAX_HISTORY_MESSAGES = 60;
 const MAX_TOOL_ITERATIONS = 15;
 
 export interface EngineDeps {
@@ -15,7 +15,7 @@ export interface EngineDeps {
   memory: MemoryService;
   registry: ToolRegistry;
   dataDir: string;
-  getSettings: () => { providers: Record<string, any>; activeProvider: string; mainModel: string; toolWhitelistDir: string; };
+  getSettings: () => { providers: Record<string, any>; activeProvider: string; mainModel: string; toolWhitelistDir: string; style?: Settings["style"] };
 }
 
 export class AgentEngine {
@@ -74,7 +74,7 @@ export class AgentEngine {
         memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
       }
     }
-    const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock);
+    const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock, settings.style);
 
     // 历史消息 → provider 消息
     const providerMessages: ProviderMsg[] = [
@@ -183,10 +183,10 @@ export class AgentEngine {
       const updatedSession = db.getSession(session.id)!;
       await onEvent({ type: "done", message: assistant, session: updatedSession });
 
-      // 异步记住本次对话要点
+      // 异步记住本次对话要点(过滤过短/无意义内容)
       if (agent.memoryEnabled) {
         const summary = summarize(userContent, textBuf);
-        void memory.retain(summary, "experience");
+        if (summary.length > 20) void memory.retain(summary, "experience");
       }
 
       return assistant;
@@ -258,8 +258,15 @@ export function toProviderMsg(m: ChatMessage): ProviderMsg {
   return { role: m.role === "system" ? "system" : "assistant", content: text };
 }
 
-export function buildSystemPrompt(agent: AgentDef, dataDir: string, whitelistDir: string, memoryBlock: string): string {
+export function buildSystemPrompt(
+  agent: AgentDef,
+  dataDir: string,
+  whitelistDir: string,
+  memoryBlock: string,
+  style?: Settings["style"],
+): string {
   const cwd = whitelistDir || join(dataDir, "workspace");
+  const styleBlock = buildStyleBlock(style);
   return `${agent.systemPrompt || "你是一个乐于助人的私人 AI 助手。"}
 
 【环境信息】
@@ -271,7 +278,43 @@ export function buildSystemPrompt(agent: AgentDef, dataDir: string, whitelistDir
 
 【工作方式】
 - 需要操作文件、执行命令、抓取网页、回忆记忆时,先调用对应工具,再根据结果回答。
-- 回答使用用户的语言;简洁自然,像朋友一样。`;
+- 回答使用用户的语言;简洁自然,像朋友一样。${styleBlock}`;
+}
+
+/** 风格参数 → 指令文本 */
+function buildStyleBlock(style?: Settings["style"]): string {
+  if (!style) return "";
+  const parts: string[] = [];
+  switch (style.tone) {
+    case "formal":
+      parts.push("语气正式、礼貌、措辞严谨");
+      break;
+    case "professional":
+      parts.push("语气专业、清晰、高效,像可靠的工作伙伴");
+      break;
+    case "casual":
+    default:
+      parts.push("语气轻松自然、口语化,像朋友聊天");
+      break;
+  }
+  switch (style.detail) {
+    case "concise":
+      parts.push("回答尽量简洁,直给结论,不啰嗦");
+      break;
+    case "detailed":
+      parts.push("回答详细充分,展开说明思路与细节");
+      break;
+    case "balanced":
+    default:
+      parts.push("详略适中,先结论后补充");
+      break;
+  }
+  const humor = typeof style.humor === "number" ? style.humor : 2;
+  if (humor === 0) parts.push("保持完全严肃,不开玩笑");
+  else if (humor <= 2) parts.push("偶尔来一点恰到好处的幽默");
+  else if (humor <= 4) parts.push("幽默感较强,聊天更活泼");
+  else parts.push("非常爱开玩笑,幽默贯穿始终");
+  return `\n\n【本次回答风格】\n- ${parts.join(";")}。`;
 }
 
 function safeParseArgs(args: string): Record<string, unknown> {

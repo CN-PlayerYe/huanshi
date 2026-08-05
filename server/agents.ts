@@ -7,6 +7,7 @@ export const CORE_TOOLS = [
   "list_dir",
   "run_command",
   "fetch_url",
+  "search_web",
   "get_datetime",
   "memory_retain",
   "memory_recall",

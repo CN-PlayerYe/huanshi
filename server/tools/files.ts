@@ -87,7 +87,7 @@ function resolvePath(p: string, cwd: string): string {
 export const shellTool: Tool = {
   name: "run_command",
   description:
-    "在用户电脑上执行 shell 命令(Windows 为 cmd;macOS/Linux 为 sh)。输出合并 stdout/stderr。注意:命令以当前用户权限运行,请谨慎使用危险命令。",
+    "在用户电脑上执行 shell 命令(Windows 为 cmd;macOS/Linux 为 sh)。输出合并 stdout/stderr。注意:命令以当前用户权限运行,高危命令会被自动拦截。",
   parameters: {
     type: "object",
     properties: {
@@ -99,6 +99,11 @@ export const shellTool: Tool = {
   },
   run(input, ctx) {
     const command = String(input.command);
+    // 危险命令分级拦截:命中高危模式直接拒绝,避免误操作
+    const danger = detectDangerousCommand(command);
+    if (danger) {
+      return `⛔ 该命令被判定为高危操作,已自动拦截(${danger})。\n请告知用户,由用户手动确认后执行。`;
+    }
     const cwd = input.cwd ? resolvePath(String(input.cwd), ctx.cwd) : ctx.env.HOME || ctx.env.USERPROFILE || ctx.cwd;
     const timeoutMs = Number(input.timeoutMs) || 60_000;
     return new Promise((resolvePromise) => {
@@ -126,6 +131,29 @@ export const shellTool: Tool = {
   },
 };
 
+/** 危险命令模式(命中即拒绝执行) */
+const DANGEROUS_PATTERNS: { re: RegExp; reason: string }[] = [
+  { re: /\brm\s+-(r|f|rf|fr)+[^\w]*\s+\//i, reason: "删除根目录(rm -rf /)" },
+  { re: /\brm\s+-rf\b|\brm\s+-fr\b|\brm\s+-r\s+-f\b/i, reason: "递归强制删除(rm -rf)" },
+  { re: /\bdel\s+\/s\b|\bdeltree\b|\brmdir\s+\/s\b/i, reason: "Windows 递归删除" },
+  { re: /\bformat\s+[a-z]:/i, reason: "格式化磁盘" },
+  { re: /\bshutdown\b|\breboot\b|\binit\s+0\b|\bpoweroff\b/i, reason: "关机/重启系统" },
+  { re: /\bdd\s+if=.*\bof=\/dev\//i, reason: "覆写磁盘设备(dd)" },
+  { re: /\bchmod\s+-R\s+777\s+\//i, reason: "根目录全权限" },
+  { re: /\bdiskpart\b/i, reason: "磁盘分区操作" },
+  { re: /\bcipher\s+\/w\b/i, reason: "擦除磁盘剩余空间" },
+  { re: /\bformat\b.*\bquick\b/i, reason: "快速格式化" },
+  { re: /\bdel\s+[a-z]:\\\s*$/i, reason: "删除整个盘符内容" },
+  { re: /^\s*>\s*[a-z]:/i, reason: "重定向覆写盘符" },
+];
+
+function detectDangerousCommand(command: string): string | null {
+  for (const { re, reason } of DANGEROUS_PATTERNS) {
+    if (re.test(command)) return reason;
+  }
+  return null;
+}
+
 export const webTool: Tool = {
   name: "fetch_url",
   description: "抓取网页内容并转为纯文本(适合阅读文章、文档、API 页面)。",
@@ -141,7 +169,7 @@ export const webTool: Tool = {
     const url = String(input.url);
     if (!/^https?:\/\//i.test(url)) throw new ToolError("URL 必须以 http:// 或 https:// 开头");
     const maxBytes = Number(input.maxBytes) || 1024 * 1024;
-    const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": "HanaLite/0.1" } });
+    const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": "幻世/0.1" } });
     if (!res.ok) throw new ToolError(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > maxBytes) throw new ToolError(`内容超过 ${maxBytes} 字节限制`);
@@ -150,6 +178,68 @@ export const webTool: Tool = {
     return text.slice(0, 20000) || "(无可读文本)";
   },
 };
+
+/** 网页搜索(DuckDuckGo HTML 版,无需 API Key)。若网络不通可返回提示。 */
+export const searchTool: Tool = {
+  name: "search_web",
+  description: "实时搜索互联网(无需 API Key)。返回标题、链接与摘要,适合查最新信息。",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "搜索关键词" },
+      maxResults: { type: "number", description: "最多返回条数,默认 5" },
+    },
+    required: ["query"],
+  },
+  async run(input) {
+    const query = String(input.query).trim();
+    if (!query) throw new ToolError("搜索关键词不能为空");
+    const max = Math.min(8, Math.max(1, Number(input.maxResults) || 5));
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      const res = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`, {
+        redirect: "follow",
+        signal: ctrl.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" },
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new ToolError(`搜索服务返回 HTTP ${res.status}`);
+      const html = await res.text();
+      const results = parseDuckDuckGoLite(html).slice(0, max);
+      if (!results.length) return "(没有找到相关结果)";
+      return results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join("\n\n");
+    } catch (err) {
+      // 网络不可达/超时时给出友好提示(国内网络可能无法直连 DuckDuckGo)
+      const msg = (err as Error).message;
+      if (msg.includes("abort") || msg.includes("timeout") || msg.includes("fetch failed")) {
+        return "搜索服务连接失败(可能网络不可达)。可改用 fetch_url 直接抓取百度等搜索引擎页面:\nhttps://www.baidu.com/s?wd=<关键词>";
+      }
+      throw new ToolError(`搜索失败:${msg}`);
+    }
+  },
+};
+
+/** 解析 DuckDuckGo lite 结果页(表格布局) */
+function parseDuckDuckGoLite(html: string): { title: string; url: string; snippet: string }[] {
+  const out: { title: string; url: string; snippet: string }[] = [];
+  // lite 版结果在 <a rel="nofollow" href="...">标题</a>,摘要紧随其后
+  const linkRe = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  const snippetRe = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/g;
+  const links: { url: string; title: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html))) {
+    const url = m[1];
+    if (!url.startsWith("http")) continue;
+    links.push({ url, title: htmlToText(m[2]).slice(0, 200) });
+  }
+  const snippets: string[] = [];
+  while ((m = snippetRe.exec(html))) snippets.push(htmlToText(m[1]).slice(0, 300));
+  for (let i = 0; i < links.length; i++) {
+    out.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] ?? "" });
+  }
+  return out;
+}
 
 function htmlToText(html: string): string {
   return html
