@@ -75,10 +75,12 @@ const ChatInput = memo(function ChatInput({
   const [listening, setListening] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // store 请求聚焦(删除消息/弹窗关闭等)时,把光标放回输入框
+  const focusTick = useApp((s) => s.focusTick);
 
   useEffect(() => {
     taRef.current?.focus();
-  }, []);
+  }, [focusTick]);
 
   // 窗口重新激活(如 confirm/其他窗口切回)时,自动把焦点还给输入框
   useEffect(() => {
@@ -92,15 +94,34 @@ const ChatInput = memo(function ChatInput({
     return () => window.removeEventListener("focus", onWinFocus);
   }, []);
 
-  const startVoice = () => {
+  const startVoice = async () => {
+    if (listening) return;
+    // 首选:Windows 本地语音识别(SAPI,离线可用,中文系统自带引擎)
+    if (window.hanalite?.recognizeSpeech) {
+      setListening(true);
+      try {
+        const r = await window.hanalite.recognizeSpeech();
+        if (r.error) {
+          window.alert(`语音识别失败:${r.error}\n\n提示:需要 Windows 中文语音识别引擎(设置 → 时间和语言 → 语音,安装"语音识别"语言包)。`);
+          return;
+        }
+        if (r.text) setInput((prev) => (prev ? prev + r.text : r.text));
+        else window.alert("没有听清,请靠近麦克风再说一次。");
+      } catch (err) {
+        window.alert(`语音识别失败:${(err as Error).message}`);
+      } finally {
+        setListening(false);
+      }
+      return;
+    }
+    // 兜底:Web SpeechRecognition(Electron 下通常依赖 Google 服务,可能不可用)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
     const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SR) {
-      window.alert("当前环境不支持语音输入(需要 Chromium 语音服务)");
+      window.alert("当前环境不支持语音输入");
       return;
     }
-    if (listening) return;
     const rec = new SR();
     rec.lang = "zh-CN";
     rec.interimResults = true;
@@ -111,7 +132,7 @@ const ChatInput = memo(function ChatInput({
     rec.onend = () => setListening(false);
     rec.onerror = (e: any) => {
       setListening(false);
-      window.alert(`语音识别不可用:${e?.error ?? "未知错误"}(可能需要系统语音服务)`);
+      window.alert(`语音识别不可用:${e?.error ?? "未知错误"}(需要网络语音服务)`);
     };
     setListening(true);
     try {

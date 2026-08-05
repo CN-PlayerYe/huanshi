@@ -10,6 +10,8 @@ interface AppState {
   settings: Settings | null;
   agents: AgentDef[];
   sessions: SessionMeta[];
+  /** 递增触发输入框重新聚焦(删除消息/弹窗关闭等) */
+  focusTick: number;
   activeSessionId: string | null;
   messagesBySession: Record<string, ChatMessage[]>;
   sending: boolean;
@@ -27,6 +29,8 @@ interface AppState {
   archiveSession(id: string): Promise<void>;
   renameSession(id: string, title: string): Promise<void>;
   deleteMessage(sessionId: string, msgId: string): Promise<void>;
+  /** 请求把焦点还给输入框(删除消息/弹窗关闭等场景) */
+  focusInput(): void;
   setView(v: "chat" | "settings"): void;
   toggleSidebar(): void;
   toggleTheme(): void;
@@ -44,6 +48,7 @@ export const useApp = create<AppState>((set, get) => ({
   backendUrl: "",
   ready: false,
   error: null,
+  focusTick: 0,
   systemInfo: null,
   settings: null,
   agents: [],
@@ -126,7 +131,12 @@ export const useApp = create<AppState>((set, get) => ({
         ...s.messagesBySession,
         [sessionId]: (s.messagesBySession[sessionId] ?? []).filter((m) => m.id !== msgId),
       },
+      // 弹窗(confirm)关闭后焦点丢失,主动请求输入框重新聚焦
+      focusTick: Date.now(),
     }));
+  },
+  focusInput() {
+    set({ focusTick: Date.now() });
   },
 
   setView(v) {

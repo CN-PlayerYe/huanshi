@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer, type ServerHandle } from "../server";
@@ -162,6 +163,38 @@ async function bootstrap(): Promise<void> {
 
     ipcMain.handle("get-backend-url", () => backendUrl);
     ipcMain.handle("get-app-version", () => app.getVersion());
+
+    // Windows 本地语音识别(SAPI,离线):听一句话(约 8 秒),返回识别文本
+    ipcMain.handle("recognize-speech", async (): Promise<{ text: string; error?: string }> => {
+      const script = `
+Add-Type -AssemblyName System.Speech | Out-Null
+$ErrorActionPreference = "Stop"
+try {
+  $r = New-Object System.Speech.Recognition.SpeechRecognitionEngine("zh-CN")
+} catch {
+  $r = New-Object System.Speech.Recognition.SpeechRecognitionEngine
+}
+$r.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
+$r.SetInputToDefaultAudioDevice()
+$result = $r.Recognize([TimeSpan]::FromSeconds(8))
+if ($null -ne $result -and $result.Text) { Write-Output ("RESULT:" + $result.Text) } else { Write-Output "RESULT:" }
+$r.Dispose()`;
+      return await new Promise((resolve) => {
+        execFile(
+          "powershell",
+          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+          { timeout: 15_000, windowsHide: true },
+          (err, stdout) => {
+            if (err) {
+              resolve({ text: "", error: `语音识别引擎启动失败:${err.message}` });
+              return;
+            }
+            const m = /RESULT:(.*)/s.exec(stdout ?? "");
+            resolve({ text: m ? m[1].trim() : "" });
+          },
+        );
+      });
+    });
 
     // 主题切换时同步窗口背景色(暗色下边框不再是白色)
     ipcMain.on("set-theme-bg", (_e, theme: string) => {

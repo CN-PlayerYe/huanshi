@@ -15,4 +15,6 @@ contextBridge.exposeInMainWorld("hanalite", {
   setWindowOpacity: (opacity: number): void => {
     ipcRenderer.send("set-window-opacity", opacity);
   },
+  /** Windows 本地语音识别(SAPI,离线):听一句话返回文本 */
+  recognizeSpeech: (): Promise<{ text: string; error?: string }> => ipcRenderer.invoke("recognize-speech"),
 });

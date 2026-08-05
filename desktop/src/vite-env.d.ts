@@ -7,5 +7,6 @@ interface Window {
     onMenuEvent: (cb: (action: string) => void) => void;
     setThemeBg: (theme: string) => void;
     setWindowOpacity: (opacity: number) => void;
+    recognizeSpeech: () => Promise<{ text: string; error?: string }>;
   };
 }
