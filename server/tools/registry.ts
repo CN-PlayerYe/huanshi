@@ -11,6 +11,8 @@ export interface ToolContext {
   allowDangerousCommands?: boolean;
   /** 文件写入不受白名单限制(Agent 级全权限) */
   unrestrictedPaths?: boolean;
+  /** 独立记忆空间作用域:该 Agent 开启 isolatedMemory 时为其 id,否则为空 */
+  agentId?: string;
 }
 
 export interface Tool {

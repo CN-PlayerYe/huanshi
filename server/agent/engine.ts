@@ -64,13 +64,15 @@ export class AgentEngine {
     const history = agent.historyUnlimited ? allHistory : allHistory.slice(-MAX_HISTORY_MESSAGES);
 
     // 组装系统提示:人格 + 记忆 + 环境
-    const memories = agent.memoryEnabled ? await memory.recall(userContent, 6) : [];
+    // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库
+    const memScope = agent.isolatedMemory ? agent.id : undefined;
+    const memories = agent.memoryEnabled ? await memory.recall(userContent, 6, memScope) : [];
     let memoryBlock = memories.length
       ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
       : "";
     // 新会话(历史很少)时注入最近的对话经历,让"记忆不断片"
     if (agent.memoryEnabled && history.length <= 2 && memory.mode !== "hindsight") {
-      const recent = await memory.recentExperiences(5);
+      const recent = await memory.recentExperiences(5, memScope);
       if (recent.length) {
         memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
       }
@@ -114,6 +116,8 @@ export class AgentEngine {
       // Agent 级权限:全命令 / 全文件路径
       allowDangerousCommands: agent.allowDangerousCommands === true,
       unrestrictedPaths: agent.unrestrictedPaths === true,
+      // 独立记忆空间作用域
+      agentId: agent.isolatedMemory ? agent.id : undefined,
     };
 
     let textBuf = "";
@@ -196,7 +200,7 @@ export class AgentEngine {
       // 异步记住本次对话要点(过滤过短/无意义内容)
       if (agent.memoryEnabled) {
         const summary = summarize(userContent, textBuf);
-        if (summary.length > 20) void memory.retain(summary, "experience");
+        if (summary.length > 20) void memory.retain(summary, "experience", agent.isolatedMemory ? agent.id : undefined);
       }
 
       return assistant;

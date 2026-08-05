@@ -163,6 +163,21 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ stats: await deps.memory.stats() });
   });
 
+  /** 独立记忆空间的人格及其记忆统计 */
+  app.get("/api/memory/agents", async (c) => {
+    const agents = deps.db.listAgents().filter((a) => a.isolatedMemory);
+    const rows = await Promise.all(
+      agents.map(async (a) => ({ id: a.id, name: a.name, stats: await deps.memory.stats(a.id) })),
+    );
+    return c.json({ agents: rows });
+  });
+
+  /** 清空某人格的独立记忆 */
+  app.post("/api/memory/agents/:id/clear", (c) => {
+    deps.memory.clear(c.req.param("id"));
+    return c.json({ ok: true });
+  });
+
   app.post("/api/memory/clear", async (c) => {
     deps.memory.clear();
     return c.json({ ok: true });

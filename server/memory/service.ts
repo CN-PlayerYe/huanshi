@@ -17,7 +17,7 @@ export interface MemoryBackend {
   readonly label: string;
   recall(query: string, limit?: number): Promise<MemoryItem[]>;
   retain(content: string, kind: MemoryKind): Promise<void>;
-  reflect(bankId: string): Promise<string>;
+  reflect(bankId?: string): Promise<string>;
   isHealthy(): Promise<boolean>;
   stats(): Promise<{ facts: number; experiences: number }>;
   clear(): void;
@@ -26,9 +26,15 @@ export interface MemoryBackend {
 /**
  * 记忆服务:优先使用 Hindsight(向量语义记忆),未配置或不可用时回退到本地记忆。
  * 提供 retain(记住)/ recall(回忆)/ reflect(反思总结)三个操作。
+ *
+ * 支持"独立记忆空间":所有方法可传入 agentId,当传入时读写只作用于该人格自己的库
+ * (本地:memory/agents/<id>;Hindsight:独立 bank)。调用方仅在人格开启
+ * isolatedMemory 时才传 agentId。
  */
 export class MemoryService {
   private backend: MemoryBackend;
+  /** 独立记忆空间缓存:<agentId, backend> */
+  private agentBackends = new Map<string, MemoryBackend>();
 
   constructor(
     private cfg: MemoryConfig,
@@ -36,6 +42,24 @@ export class MemoryService {
   ) {
     const local = new LocalMemory(join(dataDir, "memory"), { experienceCap: cfg.experienceCap ?? 2000 });
     this.backend = cfg.mode === "hindsight" ? new HindsightMemory(cfg, local) : local;
+    this.dataDir = dataDir;
+  }
+
+  private dataDir: string;
+
+  /** 返回某人格的独立 backend(不存在则创建);agentId 为空时返回全局 backend */
+  private backendFor(agentId?: string): MemoryBackend {
+    if (!agentId) return this.backend;
+    let b = this.agentBackends.get(agentId);
+    if (!b) {
+      const safe = agentId.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const local = new LocalMemory(join(this.dataDir, "memory", "agents", safe), {
+        experienceCap: this.cfg.experienceCap ?? 2000,
+      });
+      b = this.cfg.mode === "hindsight" ? new HindsightMemory(this.cfg, local, safe) : local;
+      this.agentBackends.set(agentId, b);
+    }
+    return b;
   }
 
   get mode(): "local" | "hindsight" {
@@ -46,10 +70,10 @@ export class MemoryService {
     return this.backend.label;
   }
 
-  async recall(query: string, limit = 8): Promise<MemoryItem[]> {
+  async recall(query: string, limit = 8, agentId?: string): Promise<MemoryItem[]> {
     if (!this.cfg.localEnabled && this.cfg.mode === "local") return [];
     try {
-      return await this.backend.recall(query, limit);
+      return await this.backendFor(agentId).recall(query, limit);
     } catch (err) {
       console.error("[memory] recall 失败:", err);
       return [];
@@ -57,39 +81,39 @@ export class MemoryService {
   }
 
   /** 最近的经历回顾(供新会话注入,让"记忆不断片") */
-  async recentExperiences(limit = 5): Promise<MemoryItem[]> {
+  async recentExperiences(limit = 5, agentId?: string): Promise<MemoryItem[]> {
     try {
-      const items = await this.backend.recall("", limit);
+      const items = await this.backendFor(agentId).recall("", limit);
       return items;
     } catch {
       return [];
     }
   }
 
-  async retain(content: string, kind: MemoryKind = "experience"): Promise<void> {
+  async retain(content: string, kind: MemoryKind = "experience", agentId?: string): Promise<void> {
     if (!content?.trim()) return;
     try {
-      await this.backend.retain(content.slice(0, 8000), kind);
+      await this.backendFor(agentId).retain(content.slice(0, 8000), kind);
     } catch (err) {
       console.error("[memory] retain 失败:", err);
     }
   }
 
-  async reflect(): Promise<string> {
+  async reflect(agentId?: string): Promise<string> {
     try {
-      return await this.backend.reflect(this.cfg.hindsightBankId);
+      return await this.backendFor(agentId).reflect();
     } catch (err) {
       return `反思失败:${(err as Error).message}`;
     }
   }
 
   /** 本地记忆统计(条数)与清空 */
-  stats(): Promise<{ facts: number; experiences: number }> {
-    return this.backend.stats();
+  stats(agentId?: string): Promise<{ facts: number; experiences: number }> {
+    return this.backendFor(agentId).stats();
   }
 
-  clear(): void {
-    this.backend.clear();
+  clear(agentId?: string): void {
+    this.backendFor(agentId).clear();
   }
 
   async status(): Promise<{ mode: string; backend: string; healthy: boolean }> {

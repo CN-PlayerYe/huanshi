@@ -17,7 +17,7 @@ export function memoryTools(memory: MemoryService): Tool[] {
       },
       async run(input, ctx) {
         if (!ctx.memory) return "记忆服务不可用";
-        await ctx.memory.retain(String(input.content), input.kind === "experience" ? "experience" : "fact");
+        await ctx.memory.retain(String(input.content), input.kind === "experience" ? "experience" : "fact", ctx.agentId);
         return "已记住: " + String(input.content);
       },
     },
@@ -34,7 +34,7 @@ export function memoryTools(memory: MemoryService): Tool[] {
       },
       async run(input, ctx) {
         if (!ctx.memory) return "记忆服务不可用";
-        const items = await ctx.memory.recall(String(input.query), Number(input.limit) || 5);
+        const items = await ctx.memory.recall(String(input.query), Number(input.limit) || 5, ctx.agentId);
         if (!items.length) return "(没有找到相关记忆)";
         return items.map((m) => `- ${m.content}`).join("\n");
       },
@@ -45,7 +45,7 @@ export function memoryTools(memory: MemoryService): Tool[] {
       parameters: { type: "object", properties: {} },
       async run(_input, ctx) {
         if (!ctx.memory) return "记忆服务不可用";
-        return await ctx.memory.reflect();
+        return await ctx.memory.reflect(ctx.agentId);
       },
     },
   ];

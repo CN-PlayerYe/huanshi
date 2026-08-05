@@ -53,6 +53,8 @@ export interface AgentDef {
   unrestrictedPaths?: boolean;
   /** 历史上下文不限长度(默认 60 条) */
   historyUnlimited?: boolean;
+  /** 独立记忆空间:开启后记忆读写只走该人格自己的库,不与他人格共享 */
+  isolatedMemory?: boolean;
 }
 
 export type ProviderKind = "openai" | "anthropic" | "ollama";

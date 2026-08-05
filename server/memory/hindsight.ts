@@ -17,6 +17,7 @@ export class HindsightMemory implements MemoryBackend {
   constructor(
     private cfg: MemoryConfig,
     private fallback: LocalMemory,
+    private bankIdOverride?: string,
   ) {
     this.client = new HindsightClient({
       baseUrl: cfg.hindsightBaseUrl || "http://localhost:8888",
@@ -24,11 +25,16 @@ export class HindsightMemory implements MemoryBackend {
     });
   }
 
+  private get bankId(): string {
+    const base = this.cfg.hindsightBankId || "hanalite";
+    return this.bankIdOverride ?? base;
+  }
+
   private async ensureBank(): Promise<void> {
     if (this.bankReady) return;
     try {
-      await this.client.createBank(this.cfg.hindsightBankId || "hanalite", {
-        name: "HanaLite",
+      await this.client.createBank(this.bankId, {
+        name: this.bankIdOverride ? `HanaLite-${this.bankIdOverride}` : "HanaLite",
         mission:
           "You are a personal AI assistant's long-term memory. Track the user's preferences, facts, and conversation history so future interactions feel continuous and personal.",
       });
@@ -41,7 +47,7 @@ export class HindsightMemory implements MemoryBackend {
   async recall(query: string, limit = 8): Promise<MemoryItem[]> {
     try {
       await this.ensureBank();
-      const res = await this.client.recall(this.cfg.hindsightBankId || "hanalite", query, {
+      const res = await this.client.recall(this.bankId, query, {
         maxTokens: Math.min(limit * 200, 1600),
       });
       const results = (res?.results ?? []).slice(0, limit);
@@ -63,7 +69,7 @@ export class HindsightMemory implements MemoryBackend {
   async retain(content: string, kind: MemoryKind): Promise<void> {
     try {
       await this.ensureBank();
-      await this.client.retain(this.cfg.hindsightBankId || "hanalite", content, {
+      await this.client.retain(this.bankId, content, {
         context: kind === "fact" ? "user preference or fact" : "conversation experience",
         async: true,
       });
@@ -78,7 +84,7 @@ export class HindsightMemory implements MemoryBackend {
     try {
       await this.ensureBank();
       const answer = await this.client.reflect(
-        this.cfg.hindsightBankId || "hanalite",
+        this.bankId,
         "Summarize the most important things I should remember about the user, and reflect on recent experiences.",
         { budget: "mid" },
       );

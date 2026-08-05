@@ -56,6 +56,7 @@ export function SettingsView() {
     allowDangerousCommands?: boolean;
     unrestrictedPaths?: boolean;
     historyUnlimited?: boolean;
+    isolatedMemory?: boolean;
   } | null>(null);
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
@@ -98,10 +99,12 @@ export function SettingsView() {
   const [fetchingKey, setFetchingKey] = useState<string | null>(null);
   const [presetForm, setPresetForm] = useState<{ kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string } | null>(null);
   const [memStats, setMemStats] = useState<{ facts: number; experiences: number } | null>(null);
+  const [agentMems, setAgentMems] = useState<{ id: string; name: string; stats: { facts: number; experiences: number } }[]>([]);
 
   useEffect(() => {
     void api.providerPresets().then((r) => setPresets(r.presets)).catch(() => undefined);
     void api.memoryStats().then((r) => setMemStats(r.stats)).catch(() => undefined);
+    void api.memoryAgents().then((r) => setAgentMems(r.agents)).catch(() => undefined);
   }, []);
 
   const runTest = async (key: string, cfg: ModelConfig) => {
@@ -375,6 +378,32 @@ export function SettingsView() {
             清空记忆
           </button>
         </div>
+        {agentMems.length > 0 && (
+          <div className="field" style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+            <label>人格独立记忆(仅开启「独立记忆空间」的人格)</label>
+            {agentMems.map((am) => (
+              <div key={am.id} className="field-row" style={{ justifyContent: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                <span>{am.name}</span>
+                <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+                  {am.stats.facts} 条事实 / {am.stats.experiences} 条经历
+                </span>
+                <button
+                  className="btn danger sm"
+                  onClick={async () => {
+                    if (window.confirm(`确定清空「${am.name}」的独立记忆?此操作不可恢复。`)) {
+                      await api.clearAgentMemory(am.id);
+                      setAgentMems((prev) =>
+                        prev.map((x) => (x.id === am.id ? { ...x, stats: { facts: 0, experiences: 0 } } : x)),
+                      );
+                    }
+                  }}
+                >
+                  清空
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="field" style={{ marginTop: 10 }}>
           <label>本地经历保留上限(0 = 无限记忆)</label>
           <input
@@ -740,7 +769,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited })}>
+                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, isolatedMemory: a.isolatedMemory })}>
                   编辑
                 </button>
                 <button className="remove" onClick={() => void deleteAgent(a.id)}>
@@ -801,6 +830,14 @@ export function SettingsView() {
                   onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked })}
                 />
                 历史上下文不限长度(默认最近 60 条,开启后全部保留)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={agentForm.isolatedMemory === true}
+                  onChange={(e) => setAgentForm({ ...agentForm, isolatedMemory: e.target.checked })}
+                />
+                独立记忆空间(该人格的记忆与他人格隔离,自己成长)
               </label>
             </div>
             <div className="field-row">

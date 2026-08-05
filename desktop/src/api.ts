@@ -90,6 +90,10 @@ export const api = {
   deleteMessage: (sessionId: string, msgId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${msgId}`, { method: "DELETE" }),
 
   memoryStats: () => request<{ stats: { facts: number; experiences: number } }>("/api/memory/stats"),
+  memoryAgents: () =>
+    request<{ agents: { id: string; name: string; stats: { facts: number; experiences: number } }[] }>("/api/memory/agents"),
+  clearAgentMemory: (id: string) =>
+    request<{ ok: boolean }>(`/api/memory/agents/${id}/clear`, { method: "POST" }),
   memoryClear: () => request<{ ok: boolean }>("/api/memory/clear", { method: "POST" }),
 
   /** 流式聊天:逐事件回调,返回完整 assistant 消息 */
