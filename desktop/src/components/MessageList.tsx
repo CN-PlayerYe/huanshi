@@ -171,7 +171,7 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
     return (
       <div className="empty-chat">
         <div className="big">🌸</div>
-        <div>你好,我是 HanaLite</div>
+        <div>你好,这里是 幻世</div>
         <div style={{ fontSize: 13 }}>有记忆、有人格的私人 AI 助手。想聊点什么?</div>
       </div>
     );

@@ -419,7 +419,7 @@ export function SettingsView() {
       <div className="settings-section">
         <h3>📥 从 Cherry Studio 迁移对话</h3>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
-          读取 Cherry Studio(v1 架构)的 <code>Data/agents.db</code>,把 Agent、会话与全部对话内容(正文、思考、工具调用)迁入 HanaLite。
+          读取 Cherry Studio(v1 架构)的 <code>Data/agents.db</code>,把 Agent、会话与全部对话内容(正文、思考、工具调用)迁入幻世。
           只读迁移,不会改动 Cherry Studio 的数据,也无需关闭它。模型 Provider 配置不迁移,需重新设置。
         </p>
         <div className="field-row">

@@ -82,7 +82,7 @@ const ChatInput = memo(function ChatInput({ sending, onSend, onStop }: { sending
           ref={taRef}
           className="chat-input"
           rows={1}
-          placeholder={sending ? "助手正在思考…" : "给 HanaLite 发消息(Enter 发送, Shift+Enter 换行)"}
+          placeholder={sending ? "助手正在思考…" : "给幻世发消息(Enter 发送, Shift+Enter 换行)"}
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
