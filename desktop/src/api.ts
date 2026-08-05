@@ -13,6 +13,9 @@ import type {
 
 let base = "http://127.0.0.1:5178";
 
+/** 后端 base URL(供前端拼接静态资源地址) */
+export const apiBase = (): string => base;
+
 /** 初始化后端地址:Electron 里通过 preload 桥获取;浏览器调试用固定端口 */
 export async function initApi(): Promise<string> {
   const win = window.hanalite;
@@ -86,6 +89,14 @@ export const api = {
     request<{ ok: boolean }>(`/api/sessions/${id}/agent`, { method: "POST", body: JSON.stringify({ agentId }) }),
   search: (q: string) =>
     request<{ sessions: { session: SessionMeta; matches: number }[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+  /** 图片附件上传,返回相对数据目录的文件路径 */
+  async upload(file: File): Promise<{ file: string; mime: string }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(base + "/api/upload", { method: "POST", body: fd });
+    if (!res.ok) throw new Error((await res.text().catch(() => "上传失败")) || "上传失败");
+    return (await res.json()) as { file: string; mime: string };
+  },
   getMessages: (id: string) => request<{ messages: ChatMessage[] }>(`/api/sessions/${id}/messages`),
   deleteMessage: (sessionId: string, msgId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${msgId}`, { method: "DELETE" }),
 

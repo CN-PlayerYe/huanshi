@@ -1244,3 +1244,61 @@ select {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ---- 图片附件(发送预览 + 消息内图片) ---- */
+.chat-attachments {
+  display: flex;
+  gap: 8px;
+  padding: 0 2px 6px;
+  flex-wrap: wrap;
+}
+.chat-attachment {
+  position: relative;
+}
+.chat-attachment img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.chat-attachment .remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  border: none;
+  cursor: pointer;
+}
+.attach-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  opacity: 0.75;
+  align-self: flex-end;
+  margin-bottom: 4px;
+}
+.attach-btn:hover {
+  opacity: 1;
+}
+.msg-images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+.msg-image {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+}

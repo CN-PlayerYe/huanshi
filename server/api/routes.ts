@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
 import { newId, type AgentDef, type ChatRequest, type ModelConfig, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
 import { AgentEngine } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
 import { nextRunTime, parseCron } from "../cron";
+import { searchSessions } from "../storage/search";
 import { importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, type ImportStats } from "../import/cherrystudio";
 import { fetchModelList, PROVIDER_PRESETS, testProvider } from "../providers/test";
 import type { MemoryService } from "../memory/service";
@@ -129,6 +131,20 @@ export function createApp(deps: AppDeps): Hono {
       /* ignore */
     }
     return c.json({ ok: true, path: `appearance/${name}` });
+  });
+
+  /** 图片附件上传:存入数据目录 uploads/,返回相对路径(最大 15MB) */
+  app.post("/api/upload", bodyLimit({ maxSize: 15 * 1024 * 1024 }), async (c) => {
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    if (!file || typeof file === "string") return c.json({ error: "缺少文件" }, 400);
+    const f = file as File;
+    const ext = (f.type.match(/image\/(\w+)/)?.[1] ?? "png").replace("jpeg", "jpg").replace("svg+xml", "svg");
+    const dir = join(deps.paths.dataDir, "uploads");
+    mkdirSync(dir, { recursive: true });
+    const name = `${newId("up")}.${ext}`;
+    writeFileSync(join(dir, name), Buffer.from(await f.arrayBuffer()));
+    return c.json({ file: `uploads/${name}`, mime: f.type || "image/png" });
   });
 
   /** 静态文件服务(自定义背景图等) */
@@ -258,7 +274,7 @@ export function createApp(deps: AppDeps): Hono {
         deps.broadcast?.(e);
       };
 
-      await deps.engine.runChat(session!, agent, body.content, onEvent, c.req.raw.signal);
+      await deps.engine.runChat(session!, agent, body.content, onEvent, c.req.raw.signal, body.attachments);
     });
   });
 
@@ -273,28 +289,7 @@ export function createApp(deps: AppDeps): Hono {
   // ---- 搜索(会话标题 + 消息正文) ----
 
   app.get("/api/search", (c) => {
-    const q = (c.req.query("q") ?? "").trim().toLowerCase();
-    if (!q) return c.json({ sessions: [] });
-    const hits: { session: SessionMeta; matches: number }[] = [];
-    for (const s of deps.db.listSessions()) {
-      if (s.title.toLowerCase().includes(q)) {
-        hits.push({ session: s, matches: -1 }); // -1 = 标题命中
-        continue;
-      }
-      const messages = deps.db.getMessages(s.id);
-      let matches = 0;
-      for (const m of messages) {
-        for (const p of m.parts) {
-          if (p.type === "text" && (p.text ?? "").toLowerCase().includes(q)) {
-            matches++;
-            break;
-          }
-          if (p.type === "tool" && (p.tool?.output ?? "").toLowerCase().includes(q)) matches++;
-        }
-      }
-      if (matches > 0) hits.push({ session: s, matches });
-    }
-    return c.json({ sessions: hits.slice(0, 50) });
+    return c.json({ sessions: searchSessions(deps.db, c.req.query("q") ?? "") });
   });
 
   // ---- Cherry Studio 迁移导入 ----

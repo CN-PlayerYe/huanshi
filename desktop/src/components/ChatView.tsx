@@ -18,9 +18,9 @@ export function ChatView() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  const handleSend = (text: string) => {
-    if (!text.trim() || sending) return;
-    void sendMessage(text);
+  const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
+    if ((!text.trim() && !atts?.length) || sending) return;
+    void sendMessage(text, atts);
   };
 
   const activeModel = settings?.activeProvider ? settings.providers[settings.activeProvider]?.model : undefined;
@@ -52,7 +52,7 @@ export function ChatView() {
 
       <ChatInput
         sending={sending}
-        onSend={(text) => handleSend(text)}
+        onSend={(text, atts) => handleSend(text, atts)}
         onStop={() => stop()}
       />
     </div>
@@ -60,29 +60,73 @@ export function ChatView() {
 }
 
 /** 独立输入框组件:本地 state,打字只重渲染自身,不拖累消息列表 */
-const ChatInput = memo(function ChatInput({ sending, onSend, onStop }: { sending: boolean; onSend: (t: string) => void; onStop: () => void }) {
+const ChatInput = memo(function ChatInput({
+  sending,
+  onSend,
+  onStop,
+}: {
+  sending: boolean;
+  onSend: (t: string, atts?: { file: string; mime: string }[]) => void;
+  onStop: () => void;
+}) {
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<{ file: string; mime: string; preview: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     taRef.current?.focus();
   }, []);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && !attachments.length) || sending || uploading) return;
+    const atts = attachments.map((a) => ({ file: a.file, mime: a.mime }));
     setInput("");
-    onSend(text);
+    setAttachments([]);
+    onSend(text, atts);
+  };
+
+  const pickFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files)) {
+        const up = await api.upload(f);
+        setAttachments((prev) => [...prev, { ...up, preview: `${api.base}/files/${up.file}` }]);
+      }
+    } catch (err) {
+      window.alert(`上传失败:${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
     <div className="chat-input-wrap">
+      {attachments.length > 0 && (
+        <div className="chat-attachments">
+          {attachments.map((a, i) => (
+            <div key={i} className="chat-attachment">
+              <img src={a.preview} alt="" />
+              <button className="remove" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="chat-input-box">
+        <button className="attach-btn" onClick={() => fileRef.current?.click()} title="发送图片" disabled={sending}>
+          📎
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => void pickFiles(e.target.files)} />
         <textarea
           ref={taRef}
           className="chat-input"
           rows={1}
-          placeholder={sending ? "助手正在思考…" : "给幻世发消息(Enter 发送, Shift+Enter 换行)"}
+          placeholder={uploading ? "上传中…" : sending ? "助手正在思考…" : "给幻世发消息(Enter 发送, Shift+Enter 换行)"}
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
@@ -92,16 +136,21 @@ const ChatInput = memo(function ChatInput({ sending, onSend, onStop }: { sending
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
-              handleSend();
+              void handleSend();
             }
           }}
         />
-        <button className="send-btn" disabled={sending || !input.trim()} onClick={sending ? onStop : handleSend} title={sending ? "停止" : "发送"}>
+        <button
+          className="send-btn"
+          disabled={sending || (!input.trim() && !attachments.length) || uploading}
+          onClick={sending ? onStop : () => void handleSend()}
+          title={sending ? "停止" : "发送"}
+        >
           {sending ? "■" : "➤"}
         </button>
       </div>
       <div className="chat-hint">
-        {sending ? "正在生成,点击 ■ 停止" : "工具:文件 / 命令 / 网页 / 记忆 · 数据与记忆仅存本机"}
+        {sending ? "正在生成,点击 ■ 停止" : "工具:文件 / 命令 / 网页 / 记忆 · 可发送图片 · 数据与记忆仅存本机"}
       </div>
     </div>
   );

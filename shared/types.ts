@@ -13,9 +13,11 @@ export interface ToolCallPart {
 }
 
 export interface MessagePart {
-  type: "text" | "tool" | "thinking";
+  type: "text" | "tool" | "thinking" | "image";
   text?: string;
   tool?: ToolCallPart;
+  /** 图片附件:file 为相对数据目录的文件路径 */
+  image?: { file: string; mime: string };
 }
 
 export interface ChatMessage {
@@ -139,6 +141,8 @@ export interface ChatRequest {
   sessionId: string;
   content: string;
   agentId?: string;
+  /** 图片附件(相对数据目录的文件路径) */
+  attachments?: { file: string; mime: string }[];
 }
 
 export type StreamEvent =

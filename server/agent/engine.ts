@@ -1,9 +1,10 @@
 import { homedir, platform } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { newId, type AgentDef, type ChatMessage, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
 import type { MemoryService } from "../memory/service";
 import { createProvider } from "../providers";
-import type { ProviderMsg, ProviderToolCall } from "../providers/types";
+import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../providers/types";
 import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
@@ -28,6 +29,7 @@ export class AgentEngine {
     userContent: string,
     onEvent: (e: StreamEvent) => void | Promise<void>,
     signal?: AbortSignal,
+    attachments?: { file: string; mime: string }[],
   ): Promise<ChatMessage> {
     const { db, memory, registry, dataDir } = this.deps;
     const settings = this.deps.getSettings();
@@ -36,7 +38,10 @@ export class AgentEngine {
       id: newId("msg"),
       sessionId: session.id,
       role: "user",
-      parts: [{ type: "text", text: userContent }],
+      parts: [
+        { type: "text", text: userContent },
+        ...(attachments ?? []).map((a) => ({ type: "image" as const, image: a })),
+      ],
       createdAt: Date.now(),
     };
     db.appendMessage(userMsg);
@@ -88,8 +93,8 @@ export class AgentEngine {
     // 历史消息 → provider 消息
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
-      ...historyToProviderMessages(history),
-      { role: "user", content: userContent },
+      ...(await historyToProviderMessages(history, dataDir)),
+      { role: "user", content: userContent, vision: await imagePartsToVision(attachments ?? [], dataDir) },
     ];
 
     const tools = registry
@@ -234,17 +239,38 @@ function thinkingText(m: ChatMessage): string {
   return m2 ? m2[1].trim() : "";
 }
 
+/** 图片附件 → 多模态 content 块(dataURL)。文件缺失时跳过。 */
+export async function imagePartsToVision(attachments: { file: string; mime: string }[], dataDir: string): Promise<ProviderContent[] | undefined> {
+  const out: ProviderContent[] = [];
+  for (const a of attachments) {
+    try {
+      const p = join(dataDir, a.file);
+      if (!existsSync(p)) continue;
+      const b64 = readFileSync(p).toString("base64");
+      out.push({ type: "image_url", image_url: { url: `data:${a.mime || "image/png"};base64,${b64}` } });
+    } catch {
+      /* 忽略坏图片 */
+    }
+  }
+  return out.length ? out : undefined;
+}
+
 /** 历史消息 → Provider 消息序列。
  * 关键:assistant 带 tool_calls 时,必须为每个工具调用生成一条 role="tool" 的结果消息
  * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
  * 关键2:assistant 带思考时,把 reasoning_content 原样回传(DeepSeek thinking 模式要求)。
  */
-export function historyToProviderMessages(messages: ChatMessage[]): ProviderMsg[] {
+export async function historyToProviderMessages(messages: ChatMessage[], dataDir?: string): Promise<ProviderMsg[]> {
   const out: ProviderMsg[] = [];
   for (const m of messages) {
     const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
     if (m.role === "user") {
-      out.push({ role: "user", content: text });
+      const images = m.parts.filter((p) => p.type === "image" && p.image).map((p) => p.image!);
+      out.push({
+        role: "user",
+        content: text,
+        ...(dataDir && images.length ? { vision: await imagePartsToVision(images, dataDir) } : {}),
+      });
       continue;
     }
     const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool);

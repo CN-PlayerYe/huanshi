@@ -34,7 +34,7 @@ interface AppState {
   changeDataDir(path: string): Promise<void>;
   saveAgent(a: Partial<AgentDef>): Promise<void>;
   deleteAgent(id: string): Promise<void>;
-  sendMessage(content: string): Promise<void>;
+  sendMessage(content: string, attachments?: { file: string; mime: string }[]): Promise<void>;
   stop(): void;
 }
 
@@ -171,9 +171,9 @@ export const useApp = create<AppState>((set, get) => ({
     set({ sending: false });
   },
 
-  async sendMessage(content) {
+  async sendMessage(content, attachments?: { file: string; mime: string }[]) {
     const text = content.trim();
-    if (!text || get().sending) return;
+    if ((!text && !attachments?.length) || get().sending) return;
 
     let sessionId = get().activeSessionId ?? "";
     const agentId = get().agents[0]?.id;
@@ -183,7 +183,10 @@ export const useApp = create<AppState>((set, get) => ({
       id: newId("msg"),
       sessionId,
       role: "user",
-      parts: [{ type: "text", text }],
+      parts: [
+        { type: "text", text },
+        ...(attachments ?? []).map((a) => ({ type: "image" as const, image: a })),
+      ],
       createdAt: Date.now(),
     };
     const asstMsg: ChatMessage = {
@@ -207,7 +210,7 @@ export const useApp = create<AppState>((set, get) => ({
 
     try {
       await api.chatStream(
-        { sessionId, content: text, agentId },
+        { sessionId, content: text, agentId, attachments },
         (e: StreamEvent) => {
           if (e.type === "session_created") {
             sessionId = e.session.id;

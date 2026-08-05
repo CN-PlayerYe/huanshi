@@ -2,6 +2,7 @@ import { memo, useEffect, useReducer, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCallPart } from "@shared/types";
+import { api, apiBase } from "../api";
 import { useApp } from "../store";
 import logo from "../assets/icon.png";
 
@@ -33,6 +34,15 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
             {tools.map((t) => (
               <ToolCallBlock key={t.id} tool={t} />
             ))}
+          </div>
+        )}
+        {msg.parts.filter((p) => p.type === "image" && p.image).length > 0 && (
+          <div className="msg-images">
+            {msg.parts
+              .filter((p) => p.type === "image" && p.image)
+              .map((p, i) => (
+                <img key={i} src={`${apiBase()}/files/${p.image!.file}`} alt="图片" className="msg-image" />
+              ))}
           </div>
         )}
         {text ? (

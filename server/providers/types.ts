@@ -42,6 +42,25 @@ export interface ChatRequest {
   maxTokens?: number;
 }
 
+/** 多模态内容块(OpenAI 兼容格式;Anthropic 序列化时转换) */
+export type ProviderContent =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export interface ProviderMsg {
+  role: ProviderRole;
+  content: string;
+  toolCalls?: ProviderToolCall[]; // 仅 role=assistant
+  toolCallId?: string; // 仅 role=tool
+  /**
+   * 思考原文(reasoning)。DeepSeek 等模型开启 thinking 模式后,后续请求必须
+   * 把历史 assistant 的 reasoning_content 原样回传,否则 API 报 400。
+   */
+  reasoningContent?: string;
+  /** 多模态内容(图片等)。存在时优先于 content 字符串。 */
+  vision?: ProviderContent[];
+}
+
 export interface ChatProvider {
   readonly kind: ModelConfig["kind"];
   readonly model: string;

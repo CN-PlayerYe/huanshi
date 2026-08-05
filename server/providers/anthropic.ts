@@ -148,7 +148,19 @@ export function toAnthropicMessages(msgs: ProviderMsg[]): any[] {
       continue;
     } else if (m.role === "user") {
       flushTools();
-      out.push({ role: "user", content: m.content || "" });
+      const images = (m.vision ?? []).filter((v) => v.type === "image_url");
+      if (images.length) {
+        const content: any[] = [];
+        if (m.content) content.push({ type: "text", text: m.content });
+        // 多模态:dataURL → base64 + media_type(Anthropic 图片格式)
+        for (const v of images) {
+          const m2 = /^data:(image\/[\w+.-]+);base64,(.*)$/s.exec(v.image_url.url);
+          if (m2) content.push({ type: "image", source: { type: "base64", media_type: m2[1], data: m2[2] } });
+        }
+        out.push({ role: "user", content });
+      } else {
+        out.push({ role: "user", content: m.content || "" });
+      }
     } else if (m.role === "tool") {
       pendingTools.push({ toolCallId: m.toolCallId ?? "", output: m.content });
     } else if (m.role === "assistant") {

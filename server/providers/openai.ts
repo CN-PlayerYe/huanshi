@@ -113,7 +113,16 @@ function toOpenAIMessage(m: ProviderMsg) {
   if (m.role === "tool") {
     return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
   }
-  const base: any = { role: m.role, content: m.content || null };
+  const base: any = { role: m.role };
+  // 多模态:vision 块优先(图片 + 文本);否则纯文本
+  if (m.vision?.length) {
+    base.content = [
+      ...(m.content ? [{ type: "text", text: m.content }] : []),
+      ...m.vision.map((v) => (v.type === "image_url" ? { type: "image_url", image_url: { url: v.image_url.url } } : { type: "text", text: v.text })),
+    ];
+  } else {
+    base.content = m.content || null;
+  }
   if (m.role === "assistant" && m.toolCalls?.length) {
     base.tool_calls = m.toolCalls.map((tc) => ({
       id: tc.id,

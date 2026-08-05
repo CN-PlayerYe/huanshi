@@ -62,7 +62,7 @@ describe("defaultAgents", () => {
 });
 
 describe("historyToProviderMessages(工具调用历史回放)", () => {
-  it("assistant 带 tool_calls 后生成对应的 tool 结果消息", () => {
+  it("assistant 带 tool_calls 后生成对应的 tool 结果消息", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "现在几点?" }], createdAt: 0 },
       {
@@ -77,7 +77,7 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
       },
       { id: "3", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "现在是 2026-08-04" }], createdAt: 0 },
     ];
-    const out = historyToProviderMessages(msgs);
+    const out = await historyToProviderMessages(msgs);
     expect(out).toHaveLength(4);
     expect(out[0]).toEqual({ role: "user", content: "现在几点?" });
     expect(out[1].role).toBe("assistant");
@@ -87,18 +87,18 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
     expect(out[3]).toEqual({ role: "assistant", content: "现在是 2026-08-04" });
   });
 
-  it("纯文本历史不受影响", () => {
+  it("纯文本历史不受影响", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "hi" }], createdAt: 0 },
       { id: "2", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "hello" }], createdAt: 0 },
     ];
-    const out = historyToProviderMessages(msgs);
+    const out = await historyToProviderMessages(msgs);
     expect(out).toHaveLength(2);
     expect(out[1].toolCalls).toBeUndefined();
     expect(out[1].reasoningContent).toBeUndefined();
   });
 
-  it("assistant 带思考 part 时回传 reasoningContent", () => {
+  it("assistant 带思考 part 时回传 reasoningContent", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "推理题" }], createdAt: 0 },
       {
@@ -112,12 +112,12 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
         createdAt: 0,
       },
     ];
-    const out = historyToProviderMessages(msgs);
+    const out = await historyToProviderMessages(msgs);
     expect(out[1].reasoningContent).toBe("让我一步步想…");
     expect(out[1].content).toBe("答案是 42");
   });
 
-  it("兼容存量数据:正文内嵌 <thinking> 块也提取为 reasoningContent", () => {
+  it("兼容存量数据:正文内嵌 <thinking> 块也提取为 reasoningContent", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "问题" }], createdAt: 0 },
       {
@@ -128,17 +128,17 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
         createdAt: 0,
       },
     ];
-    const out = historyToProviderMessages(msgs);
+    const out = await historyToProviderMessages(msgs);
     expect(out[1].reasoningContent).toBe("内嵌思考");
   });
 
-  it("空 assistant 消息被跳过(避免 content or tool_calls must be set)", () => {
+  it("空 assistant 消息被跳过(避免 content or tool_calls must be set)", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "hi" }], createdAt: 0 },
       { id: "2", sessionId: "s", role: "assistant", parts: [], createdAt: 0 }, // 空占位
       { id: "3", sessionId: "s", role: "assistant", parts: [{ type: "text", text: "hello" }], createdAt: 0 },
     ];
-    const out = historyToProviderMessages(msgs);
+    const out = await historyToProviderMessages(msgs);
     expect(out).toHaveLength(2); // 空 assistant 被跳过
     expect(out[1].content).toBe("hello");
   });
