@@ -168,6 +168,19 @@ async function bootstrap(): Promise<void> {
     ipcMain.handle("get-backend-url", () => backendUrl);
     ipcMain.handle("get-app-version", () => app.getVersion());
 
+    // 原生确认对话框(避免 window.confirm 的焦点 bug)
+    ipcMain.handle("confirm-dialog", async (_e, message: string): Promise<boolean> => {
+      if (!mainWindow) return false;
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: "question",
+        buttons: ["取消", "确定"],
+        defaultId: 1,
+        cancelId: 0,
+        message,
+      });
+      return response === 1;
+    });
+
     // Windows 本地语音识别(SAPI,离线):听一句话(约 8 秒),返回识别文本
     ipcMain.handle("recognize-speech", async (): Promise<{ text: string; error?: string }> => {
       const script = `

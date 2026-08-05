@@ -8,5 +8,6 @@ interface Window {
     setThemeBg: (theme: string) => void;
     setWindowOpacity: (opacity: number) => void;
     recognizeSpeech: () => Promise<{ text: string; error?: string }>;
+    confirmDialog: (message: string) => Promise<boolean>;
   };
 }

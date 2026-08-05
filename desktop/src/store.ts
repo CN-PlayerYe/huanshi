@@ -12,6 +12,10 @@ interface AppState {
   sessions: SessionMeta[];
   /** 递增触发输入框重新聚焦(删除消息/弹窗关闭等) */
   focusTick: number;
+  /** 非模态提示(避免 window.alert 在 Electron 的焦点 bug) */
+  toast: string | null;
+  showToast(msg: string): void;
+  clearToast(): void;
   activeSessionId: string | null;
   messagesBySession: Record<string, ChatMessage[]>;
   sending: boolean;
@@ -43,12 +47,14 @@ interface AppState {
 }
 
 let abortController: AbortController | null = null;
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useApp = create<AppState>((set, get) => ({
   backendUrl: "",
   ready: false,
   error: null,
   focusTick: 0,
+  toast: null,
   systemInfo: null,
   settings: null,
   agents: [],
@@ -137,6 +143,15 @@ export const useApp = create<AppState>((set, get) => ({
   },
   focusInput() {
     set({ focusTick: Date.now() });
+  },
+  showToast(msg) {
+    set({ toast: msg });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => set({ toast: null }), 3200);
+  },
+  clearToast() {
+    if (toastTimer) clearTimeout(toastTimer);
+    set({ toast: null });
   },
 
   setView(v) {

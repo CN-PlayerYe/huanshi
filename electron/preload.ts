@@ -17,4 +17,6 @@ contextBridge.exposeInMainWorld("hanalite", {
   },
   /** Windows 本地语音识别(SAPI,离线):听一句话返回文本 */
   recognizeSpeech: (): Promise<{ text: string; error?: string }> => ipcRenderer.invoke("recognize-speech"),
+  /** 原生确认对话框(避免 window.confirm 在 Electron 的焦点 bug) */
+  confirmDialog: (message: string): Promise<boolean> => ipcRenderer.invoke("confirm-dialog", message),
 });

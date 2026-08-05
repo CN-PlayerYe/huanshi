@@ -377,7 +377,12 @@ export function SettingsView() {
             className="btn danger sm"
             style={{ marginLeft: "auto" }}
             onClick={async () => {
-              if (window.confirm("确定清空本地记忆?此操作不可恢复。")) {
+              if (window.hanalite?.confirmDialog) {
+                if (await window.hanalite.confirmDialog("确定清空本地记忆?此操作不可恢复。")) {
+                  await api.memoryClear();
+                  setMemStats({ facts: 0, experiences: 0 });
+                }
+              } else if (window.confirm("确定清空本地记忆?此操作不可恢复。")) {
                 await api.memoryClear();
                 setMemStats({ facts: 0, experiences: 0 });
               }
@@ -398,7 +403,14 @@ export function SettingsView() {
                 <button
                   className="btn danger sm"
                   onClick={async () => {
-                    if (window.confirm(`确定清空「${am.name}」的独立记忆?此操作不可恢复。`)) {
+                    if (window.hanalite?.confirmDialog) {
+                      if (await window.hanalite.confirmDialog(`确定清空「${am.name}」的独立记忆?此操作不可恢复。`)) {
+                        await api.clearAgentMemory(am.id);
+                        setAgentMems((prev) =>
+                          prev.map((x) => (x.id === am.id ? { ...x, stats: { facts: 0, experiences: 0 } } : x)),
+                        );
+                      }
+                    } else if (window.confirm(`确定清空「${am.name}」的独立记忆?此操作不可恢复。`)) {
                       await api.clearAgentMemory(am.id);
                       setAgentMems((prev) =>
                         prev.map((x) => (x.id === am.id ? { ...x, stats: { facts: 0, experiences: 0 } } : x)),

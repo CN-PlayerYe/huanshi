@@ -78,9 +78,12 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
         <button
           className="msg-delete"
           title="删除这条消息(压缩上下文)"
-          onClick={() => {
-            if (window.confirm("删除这条消息?它将从本会话移除,用于压缩上下文。")) {
-              void deleteMessage(msg.sessionId, msg.id); // store 内部会触发输入框重新聚焦
+          onClick={async () => {
+            if (window.hanalite?.confirmDialog) {
+              const ok = await window.hanalite.confirmDialog("删除这条消息?它将从本会话移除,用于压缩上下文。");
+              if (ok) void deleteMessage(msg.sessionId, msg.id); // store 内部会触发输入框重新聚焦
+            } else if (window.confirm("删除这条消息?它将从本会话移除,用于压缩上下文。")) {
+              void deleteMessage(msg.sessionId, msg.id);
             }
           }}
         >

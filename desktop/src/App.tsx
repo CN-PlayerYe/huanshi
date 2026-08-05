@@ -11,6 +11,7 @@ const EMPTY_APPEARANCE: Record<string, never> = {};
 export default function App() {
   const ready = useApp((s) => s.ready);
   const error = useApp((s) => s.error);
+  const toast = useApp((s) => s.toast);
   const view = useApp((s) => s.view);
   const theme = useApp((s) => s.settings?.theme ?? "ink");
   // 注意:必须用模块级常量,避免 ?? 每次返回新引用导致 React 无限重渲染
@@ -96,6 +97,7 @@ export default function App() {
           {error}
         </div>
       )}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

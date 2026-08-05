@@ -102,13 +102,13 @@ const ChatInput = memo(function ChatInput({
       try {
         const r = await window.hanalite.recognizeSpeech();
         if (r.error) {
-          window.alert(`语音识别失败:${r.error}\n\n提示:需要 Windows 中文语音识别引擎(设置 → 时间和语言 → 语音,安装"语音识别"语言包)。`);
+          useApp.getState().showToast(`语音识别失败:${r.error}`);
           return;
         }
         if (r.text) setInput((prev) => (prev ? prev + r.text : r.text));
-        else window.alert("没有听清,请靠近麦克风再说一次。");
+        else useApp.getState().showToast("没有听清,请靠近麦克风再说一次。");
       } catch (err) {
-        window.alert(`语音识别失败:${(err as Error).message}`);
+        useApp.getState().showToast(`语音识别失败:${(err as Error).message}`);
       } finally {
         setListening(false);
         // 识别期间窗口焦点可能被系统抢走,完成后把光标还给输入框
@@ -121,7 +121,7 @@ const ChatInput = memo(function ChatInput({
     const w = window as any;
     const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!SR) {
-      window.alert("当前环境不支持语音输入");
+      useApp.getState().showToast("当前环境不支持语音输入");
       return;
     }
     const rec = new SR();
@@ -134,7 +134,7 @@ const ChatInput = memo(function ChatInput({
     rec.onend = () => setListening(false);
     rec.onerror = (e: any) => {
       setListening(false);
-      window.alert(`语音识别不可用:${e?.error ?? "未知错误"}(需要网络语音服务)`);
+      useApp.getState().showToast(`语音识别不可用:${e?.error ?? "未知错误"}(需要网络语音服务)`);
     };
     setListening(true);
     try {
@@ -162,7 +162,7 @@ const ChatInput = memo(function ChatInput({
         setAttachments((prev) => [...prev, { ...up, preview: `${api.base}/files/${up.file}` }]);
       }
     } catch (err) {
-      window.alert(`上传失败:${(err as Error).message}`);
+      useApp.getState().showToast(`上传失败:${(err as Error).message}`);
     } finally {
       setUploading(false);
     }
