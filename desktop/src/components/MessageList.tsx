@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCallPart } from "@shared/types";
 import { useApp } from "../store";
+import logo from "../assets/icon.png";
 
 export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === "user";
@@ -170,7 +171,7 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   if (!messages.length) {
     return (
       <div className="empty-chat">
-        <div className="big">🌸</div>
+        <img src={logo} className="empty-chat-logo" alt="幻世" />
         <div>你好,这里是 幻世</div>
         <div style={{ fontSize: 13 }}>有记忆、有人格的私人 AI 助手。想聊点什么?</div>
       </div>

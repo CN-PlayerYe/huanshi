@@ -949,6 +949,13 @@ select {
 .empty-chat .big {
   font-size: 44px;
 }
+.empty-chat-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: cover;
+  opacity: 0.85;
+}
 
 /* ---- 设置页 ---- */
 
