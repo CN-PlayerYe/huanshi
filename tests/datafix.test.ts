@@ -24,6 +24,6 @@ describe("fixEmbeddedThinking 存量数据修复", () => {
     expect(c2).toBe(0);
     const msgs = db.getMessages(s.id);
     expect(msgs[0].parts.some((p) => p.type === "thinking" && p.text === "深层思考内容")).toBe(true);
-    expect(msgs[0].parts.filter((p) => p.type === "text").map((p) => p.text).join()).toBe("先思考再回答");
+    expect(msgs[0].parts.filter((p) => p.type === "text").map((p) => p.text).join()).toBe("先思考\n再回答");
   });
 });
