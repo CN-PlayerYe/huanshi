@@ -18,6 +18,7 @@ import { ToolRegistry } from "./tools/registry";
 export interface ServerHandle {
   port: number;
   paths: ResolvedPaths;
+  dataFix?: { cleanedEmpty: number; fixedThinking: number };
   getSettings: () => Settings;
   broadcast: (e: StreamEvent) => void;
   close: () => Promise<void>;
@@ -36,9 +37,10 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   if (cleaned > 0) console.log(`[hanalite] 清理了 ${cleaned} 条空消息`);
 
   // 存量数据修复:把内嵌 <thinking> 从正文提取为独立 part(DeepSeek reasoning_content 回传需要)
+  let fixedThinking = 0;
   try {
-    const fixed = fixEmbeddedThinking(db);
-    if (fixed > 0) console.log(`[hanalite] 修复了 ${fixed} 条消息的思考内容`);
+    fixedThinking = fixEmbeddedThinking(db);
+    if (fixedThinking > 0) console.log(`[hanalite] 修复了 ${fixedThinking} 条消息的思考内容`);
   } catch (err) {
     console.error("[hanalite] 数据修复失败(不影响启动):", (err as Error).message);
   }
@@ -116,6 +118,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   return {
     port,
     paths,
+    /** 本次启动的数据修复计数(空消息清理 / 思考内容归位) */
+    dataFix: { cleanedEmpty: cleaned, fixedThinking },
     getSettings: () => settings,
     broadcast,
     close: () =>

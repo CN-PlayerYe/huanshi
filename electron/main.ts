@@ -156,6 +156,9 @@ async function bootstrap(): Promise<void> {
     });
     backendUrl = `http://127.0.0.1:${serverHandle.port}`;
     log(`backend at ${backendUrl}`);
+    if (serverHandle.dataFix) {
+      log(`dataFix: 清理空消息 ${serverHandle.dataFix.cleanedEmpty} 条,思考归位 ${serverHandle.dataFix.fixedThinking} 条`);
+    }
 
     ipcMain.handle("get-backend-url", () => backendUrl);
     ipcMain.handle("get-app-version", () => app.getVersion());
