@@ -182,7 +182,19 @@ const ChatInput = memo(function ChatInput({
           ))}
         </div>
       )}
-      <div className="chat-input-box" onMouseDown={() => taRef.current?.focus()}>
+      <div
+        className="chat-input-box"
+        onMouseDown={(e) => {
+          // 可靠聚焦:阻止默认焦点转移,显式聚焦并放置光标(避免部分环境点击后 caret 不出现)
+          const ta = taRef.current;
+          if (ta && document.activeElement !== ta && !(e.target as HTMLElement).closest("button")) {
+            e.preventDefault();
+            ta.focus();
+            const len = ta.value.length;
+            ta.setSelectionRange(len, len);
+          }
+        }}
+      >
         <button className="attach-btn" onClick={() => fileRef.current?.click()} title="发送图片" disabled={sending}>
           📎
         </button>

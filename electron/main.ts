@@ -130,6 +130,10 @@ function createWindow(bgColor: string): void {
   mainWindow.on("close", () => {
     log("window close event");
   });
+  // 窗口获得系统焦点时,确保键盘事件进入页面(避免点击后 caret 不出现/打字无效)
+  mainWindow.on("focus", () => {
+    mainWindow?.webContents.focus();
+  });
   const win = mainWindow;
 
   const dev = process.env.NODE_ENV === "development";
