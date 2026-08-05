@@ -363,11 +363,16 @@ export function SettingsView() {
             </button>
           </div>
           {reflectText && (
-            <textarea
-              readOnly
-              value={reflectText}
-              style={{ marginTop: 10, minHeight: 120, background: "var(--tool-bg)" }}
-            />
+            <div style={{ position: "relative" }}>
+              <textarea
+                readOnly
+                value={reflectText}
+                style={{ marginTop: 10, minHeight: 120, background: "var(--tool-bg)" }}
+              />
+              <button className="btn secondary sm" style={{ position: "absolute", top: 14, right: 8 }} onClick={() => setReflectText("")}>
+                ✕ 关闭
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -444,6 +449,10 @@ export function SettingsView() {
         <h3>🎨 界面</h3>
         <div className="radio-row">
           <label>
+            <input type="radio" checked={settings.theme === "ink"} onChange={() => void updateSettings({ theme: "ink" })} />
+            🏔 水墨(默认)
+          </label>
+          <label>
             <input type="radio" checked={settings.theme === "dark"} onChange={() => void updateSettings({ theme: "dark" })} />
             🌙 暗色
           </label>
@@ -458,6 +467,95 @@ export function SettingsView() {
             对话中显示思考过程(思考内容始终存档,随时可打开)
           </label>
         </div>
+
+        <h3 style={{ marginTop: 18 }}>🖌 皮肤自定义</h3>
+        <div className="field-row">
+          <div className="field">
+            <label>强调色(按钮/高亮)</label>
+            <input
+              type="color"
+              value={settings.appearance?.accent ?? "#5b7cfa"}
+              onChange={(e) => void updateSettings({ appearance: { ...settings.appearance, accent: e.target.value } })}
+              style={{ width: 80, height: 34, padding: 2, background: "var(--bg)" }}
+            />
+            <button
+              className="btn secondary sm"
+              style={{ marginLeft: 8 }}
+              onClick={() => {
+                const a = { ...settings.appearance };
+                delete a.accent;
+                void updateSettings({ appearance: a });
+              }}
+            >
+              重置
+            </button>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>背景图片(支持 jpg/png,选完即时生效)</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    try {
+                      const res = await api.uploadBackground(String(reader.result));
+                      void updateSettings({ appearance: { ...settings.appearance, bgImage: res.path } });
+                    } catch (err) {
+                      setCsInfo(`背景图上传失败:${(err as Error).message}`);
+                    }
+                  };
+                  reader.readAsDataURL(f);
+                  e.target.value = "";
+                }}
+              />
+              {settings.appearance?.bgImage && (
+                <button
+                  className="btn secondary sm"
+                  onClick={() => {
+                    const a = { ...settings.appearance };
+                    delete a.bgImage;
+                    void updateSettings({ appearance: a });
+                  }}
+                >
+                  ✕ 移除
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>侧栏不透明度:{Math.round((settings.appearance?.sidebarOpacity ?? 1) * 100)}%</label>
+            <input
+              type="range"
+              min="40"
+              max="100"
+              value={Math.round((settings.appearance?.sidebarOpacity ?? 1) * 100)}
+              onChange={(e) => void updateSettings({ appearance: { ...settings.appearance, sidebarOpacity: Number(e.target.value) / 100 } })}
+              style={{ width: "100%" }}
+            />
+          </div>
+          <div className="field">
+            <label>聊天区不透明度:{Math.round((settings.appearance?.chatOpacity ?? 1) * 100)}%</label>
+            <input
+              type="range"
+              min="60"
+              max="100"
+              value={Math.round((settings.appearance?.chatOpacity ?? 1) * 100)}
+              onChange={(e) => void updateSettings({ appearance: { ...settings.appearance, chatOpacity: Number(e.target.value) / 100 } })}
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
+          提示:配合背景图片降低不透明度,界面会透出背景,形成"沉浸式皮肤"。
+        </p>
       </div>
 
       {/* ---- 定时任务 ---- */}

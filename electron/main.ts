@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer, type ServerHandle } from "../server";
@@ -39,15 +39,82 @@ let serverHandle: ServerHandle | null = null;
 
 // 窗口引用必须保持模块级,否则可能被 GC 回收导致窗口自动关闭
 let mainWindow: BrowserWindow | null = null;
+let lastThemeBg = "#f2eddf";
 
-function createWindow(): void {
+// 各主题对应的窗口背景色(避免加载白闪 / 边框与主题一致)
+const THEME_BG: Record<string, string> = {
+  dark: "#17181c",
+  light: "#f3f5fa",
+  ink: "#f2eddf",
+};
+
+function themeBg(theme: string): string {
+  return THEME_BG[theme] ?? "#17181c";
+}
+
+/** 中文应用菜单(文件/编辑/视图/帮助),菜单行为为系统标准:点击弹出、再次点击收起 */
+function installMenu(win: BrowserWindow): void {
+  const send = (action: string) => () => win.webContents.send("menu", action);
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: "文件(&F)",
+      submenu: [
+        { label: "新建会话", accelerator: "CmdOrCtrl+N", click: send("new-session") },
+        { label: "设置", accelerator: "CmdOrCtrl+,", click: send("open-settings") },
+        { type: "separator" },
+        { label: "退出", role: "quit" },
+      ],
+    },
+    {
+      label: "编辑(&E)",
+      submenu: [
+        { role: "undo", label: "撤销" },
+        { role: "redo", label: "重做" },
+        { type: "separator" },
+        { role: "cut", label: "剪切" },
+        { role: "copy", label: "复制" },
+        { role: "paste", label: "粘贴" },
+        { role: "selectAll", label: "全选" },
+      ],
+    },
+    {
+      label: "视图(&V)",
+      submenu: [
+        { label: "切换主题(暗色/亮色/水墨)", accelerator: "CmdOrCtrl+Shift+L", click: send("toggle-theme") },
+        { label: "折叠/展开侧栏", accelerator: "CmdOrCtrl+B", click: send("toggle-sidebar") },
+        { type: "separator" },
+        { role: "reload", label: "重新加载" },
+        { role: "toggleDevTools", label: "开发者工具" },
+      ],
+    },
+    {
+      label: "帮助(&H)",
+      submenu: [
+        {
+          label: "关于 幻世",
+          click: () => {
+            void dialog.showMessageBox(win, {
+              type: "info",
+              title: "幻世",
+              message: "幻世 · 有记忆、有人格的私人 AI 助手",
+              detail: `版本 ${app.getVersion()}\n数据与记忆仅存本机,可通过设置页修改数据目录。`,
+            });
+          },
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function createWindow(bgColor: string): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 820,
     minWidth: 860,
     minHeight: 600,
-    backgroundColor: "#17181c",
-    title: "HanaLite",
+    backgroundColor: bgColor,
+    title: "幻世",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -93,7 +160,15 @@ async function bootstrap(): Promise<void> {
     ipcMain.handle("get-backend-url", () => backendUrl);
     ipcMain.handle("get-app-version", () => app.getVersion());
 
-    createWindow();
+    // 主题切换时同步窗口背景色(暗色下边框不再是白色)
+    ipcMain.on("set-theme-bg", (_e, theme: string) => {
+      mainWindow?.setBackgroundColor(themeBg(theme));
+    });
+
+    const settings = serverHandle.getSettings();
+    lastThemeBg = themeBg(settings.theme ?? "ink");
+    createWindow(lastThemeBg);
+    installMenu(mainWindow!);
     log("window created");
   } catch (err) {
     log(`bootstrap failed: ${(err as Error).stack ?? String(err)}`);
@@ -104,7 +179,10 @@ log("module loaded");
 void app.whenReady().then(bootstrap);
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow(lastThemeBg);
+    installMenu(mainWindow!);
+  }
 });
 
 app.on("window-all-closed", () => {

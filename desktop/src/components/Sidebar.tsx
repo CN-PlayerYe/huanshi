@@ -18,6 +18,8 @@ export function Sidebar() {
   const activeSessionId = useApp((s) => s.activeSessionId);
   const systemInfo = useApp((s) => s.systemInfo);
   const view = useApp((s) => s.view);
+  const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
+  const toggleSidebar = useApp((s) => s.toggleSidebar);
   const newSession = useApp((s) => s.newSession);
   const selectSession = useApp((s) => s.selectSession);
   const deleteSession = useApp((s) => s.deleteSession);
@@ -86,10 +88,21 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
+      <div className="sidebar-collapse-wrap">
+        <button className="sidebar-collapse-btn" onClick={toggleSidebar} title="展开侧栏(Ctrl+B)">
+          ☰
+        </button>
+        <button className="sidebar-collapse-btn" onClick={() => setView("settings")} title="设置">
+          ⚙️
+        </button>
+      </div>
       <div className="sidebar-head">
-        <span className="sidebar-logo">🌸</span>
-        <span className="sidebar-title">HanaLite</span>
+        <button className="sidebar-collapse-btn" onClick={toggleSidebar} title="折叠侧栏(Ctrl+B)">
+          ☰
+        </button>
+        <span className="sidebar-logo">🏔</span>
+        <span className="sidebar-title">幻世</span>
         <button className="new-session-btn" onClick={() => void newSession()} title="新建会话">
           ＋
         </button>

@@ -1,4 +1,5 @@
-// 生成应用图标:樱花主题 256x256 PNG → 打包为 ICO(供 electron-builder 使用)
+// 生成应用图标:水墨风 256x256 PNG → 打包为 ICO(供 electron-builder 使用)
+// 宣纸底 + 墨色远山近山 + 朱砂印,中国风水墨
 import { deflateSync } from "node:zlib";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,39 +13,26 @@ const SIZE = 256;
 
 // ---- 像素绘制 ----
 function drawPixel(x, y) {
-  // 背景:对角渐变(深紫 → 深蓝)
-  const t = (x + y) / (2 * (SIZE - 1));
-  const bg = [
-    lerp(0x2a, 0x17, t),
-    lerp(0x2f, 0x1c, t),
-    lerp(0x58, 0x3a, t),
-  ];
-  // 中心与花瓣
-  const cx = 128;
-  const cy = 124;
-  const colors = { petal: [255, 190, 205], heart: [255, 235, 240], ring: [255, 158, 181] };
+  // 宣纸底(带极淡的竖向渐变)
+  const t = y / SIZE;
+  const paper = [lerp(0xf6, 0xec, t * 0.8), lerp(0xf1, 0xe5, t * 0.8), lerp(0xe4, 0xd6, t * 0.8)];
 
-  // 5 片花瓣:围绕中心分布
-  let best = 1e9;
-  for (let i = 0; i < 5; i++) {
-    const ang = (i / 5) * Math.PI * 2 - Math.PI / 2;
-    const px = cx + Math.cos(ang) * 44;
-    const py = cy + Math.sin(ang) * 44;
-    const d = Math.hypot(x - px, y - py);
-    if (d < best) best = d;
-  }
-  const heartD = Math.hypot(x - cx, y - cy);
-  const ringD = Math.abs(Math.hypot(x - cx, y - cy) - 66);
+  // 远山(浅墨):正弦山脊
+  const farRidge = 168 - 46 * Math.abs(Math.sin((x + 20) / 88));
+  // 近山(深墨)
+  const nearRidge = 196 - 72 * Math.abs(Math.sin((x + 55) / 118));
 
-  let color = bg;
-  if (best < 24) color = colors.petal; // 花瓣
-  if (heartD < 15) color = colors.heart; // 花心
-  if (ringD < 7 && ringD < 1e9) color = colors.ring; // 外环
-  if (heartD < 5) color = [255, 255, 255];
+  // 朱砂印(右上角)
+  const sealD = Math.hypot(x - 200, y - 54);
 
-  // 简易抗锯齿:把花瓣边缘与背景混合
-  if (best < 26 && best >= 24) color = mix(bg, colors.petal, (26 - best) / 2);
-  if (ringD < 9 && ringD >= 7) color = mix(bg, colors.ring, (9 - ringD) / 2);
+  let color = paper;
+  if (y >= farRidge) color = [0x8a, 0x82, 0x6c];
+  if (y >= nearRidge) color = [0x45, 0x41, 0x34];
+  if (sealD < 16) color = [0xb0, 0x3a, 0x2e];
+  if (sealD < 8) color = [0xf2, 0xed, 0xdf]; // 印心留白
+  // 山与纸的柔和过渡(简易抗锯齿)
+  if (Math.abs(y - farRidge) < 2) color = mix(paper, [0x8a, 0x82, 0x6c], (2 - Math.abs(y - farRidge)) / 2);
+  if (Math.abs(y - nearRidge) < 2 && y >= nearRidge - 2) color = mix([0x8a, 0x82, 0x6c], [0x45, 0x41, 0x34], (2 - Math.abs(y - nearRidge)) / 2);
 
   return [Math.round(color[0]), Math.round(color[1]), Math.round(color[2]), 255];
 }

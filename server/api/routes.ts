@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { extname, join } from "node:path";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { newId, type AgentDef, type ChatRequest, type ModelConfig, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
@@ -103,6 +105,41 @@ export function createApp(deps: AppDeps): Hono {
     settings.dataDir = path;
     saveSettings(deps.paths.dataDir, settings);
     return c.json({ ok: true, restartRequired: true, path });
+  });
+
+  /** 上传自定义背景图(存数据目录,返回相对路径) */
+  app.post("/api/appearance/background", async (c) => {
+    const { dataUrl } = (await c.req.json().catch(() => ({}))) as { dataUrl?: string };
+    if (!dataUrl?.startsWith("data:image/")) return c.json({ error: "仅支持图片(base64 data URL)" }, 400);
+    const m = dataUrl.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!m) return c.json({ error: "图片格式无法识别" }, 400);
+    const [, ext, b64] = m;
+    const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "png";
+    const dir = join(deps.paths.dataDir, "appearance");
+    mkdirSync(dir, { recursive: true });
+    const name = `bg.${safeExt}`;
+    writeFileSync(join(dir, name), Buffer.from(b64, "base64"));
+    return c.json({ ok: true, path: `appearance/${name}` });
+  });
+
+  /** 静态文件服务(自定义背景图等) */
+  app.get("/files/*", (c) => {
+    const rel = c.req.path.replace(/^\/files\//, "");
+    const file = join(deps.paths.dataDir, rel);
+    if (!file.startsWith(deps.paths.dataDir) || !existsSync(file)) {
+      return c.text("not found", 404);
+    }
+    const mime: Record<string, string> = {
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".svg": "image/svg+xml",
+      ".json": "application/json",
+      ".txt": "text/plain; charset=utf-8",
+    };
+    return c.body(readFileSync(file), 200, { "Content-Type": mime[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-cache" });
   });
 
   // ---- 记忆 ----

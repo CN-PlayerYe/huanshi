@@ -74,11 +74,18 @@ export interface Settings {
   smallModel: string;
   dataDir: string;
   memory: MemoryConfig;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "ink";
   language: "zh-CN" | "en" | "ja" | "ko" | "zh-TW";
   toolWhitelistDir: string;
   /** 对话中是否显示思考过程(思考内容始终存档在消息里) */
   showThinking: boolean;
+  /** 外观自定义(皮肤):强调色 / 背景图 / 界面透明度 */
+  appearance?: {
+    accent?: string;
+    bgImage?: string;
+    chatOpacity?: number;
+    sidebarOpacity?: number;
+  };
 }
 
 export interface SystemInfo {
@@ -138,10 +145,11 @@ export const DEFAULT_SETTINGS: Settings = {
     hindsightLlmApiKey: "",
     localEnabled: true,
   },
-  theme: "dark",
+  theme: "ink",
   language: "zh-CN",
   toolWhitelistDir: "",
   showThinking: true,
+  appearance: {},
 };
 
 export function newId(prefix = "id"): string {

@@ -19,6 +19,33 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
+/* ---- 水墨主题(默认) ---- */
+[data-theme="ink"] {
+  --bg: #f2eddf;
+  --bg-side: #eae3d0;
+  --bg-elev: #faf7ee;
+  --bg-hover: #e7dfc9;
+  --border: #d5ccb4;
+  --text: #2e2c26;
+  --text-dim: #7a7261;
+  --accent: #b03a2e;
+  --accent-dim: #8f2f26;
+  --user-bubble: #e3d9bf;
+  --assistant-bubble: #faf7ee;
+  --tool-bg: #f0ead8;
+  --code-bg: #ece4cd;
+  --danger: #b03a2e;
+  --ok: #4a7a4f;
+  --shadow: 0 1px 3px rgba(80, 70, 50, 0.18);
+}
+
+/* 宣纸质感:极淡的纵横纹理 */
+[data-theme="ink"] body {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(120, 100, 60, 0.025) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(120, 100, 60, 0.02) 0 1px, transparent 1px 4px);
+}
+
 /* ---- 亮色主题 ---- */
 [data-theme="light"] {
   --bg: #f3f5fa;
@@ -52,7 +79,10 @@ body,
 
 body {
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--text);
   font-size: 14px;
   overflow: hidden;
@@ -119,7 +149,6 @@ select {
   flex-direction: column;
   position: relative;
 }
-
 .toast {
   position: fixed;
   bottom: 24px;
@@ -140,10 +169,56 @@ select {
 .sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: var(--bg-side);
+  background: color-mix(in srgb, var(--bg-side) var(--side-opacity, 100%), transparent);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  transition: width 0.18s ease;
+}
+
+/* ---- 侧栏折叠 ---- */
+
+.sidebar.collapsed {
+  width: 46px;
+}
+
+.sidebar.collapsed .sidebar-head,
+.sidebar.collapsed .sidebar-search,
+.sidebar.collapsed .session-list,
+.sidebar.collapsed .sidebar-foot {
+  display: none;
+}
+
+.sidebar-collapse-btn {
+  padding: 8px;
+  font-size: 15px;
+  color: var(--text-dim);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.sidebar.collapsed .sidebar-collapse-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.sidebar:not(.collapsed) .sidebar-collapse-wrap {
+  display: none;
+}
+
+/* 主区背景(支持透明度透出背景图) */
+.main {
+  background: color-mix(in srgb, var(--bg) var(--chat-opacity, 100%), transparent);
 }
 
 .sidebar-head {

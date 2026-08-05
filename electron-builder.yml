@@ -1,6 +1,6 @@
 appId: com.hanalite.app
-productName: HanaLite
-copyright: Copyright © 2026 HanaLite
+productName: 幻世
+copyright: Copyright © 2026 幻世
 directories:
   output: release
   buildResources: build

@@ -14,6 +14,7 @@ interface AppState {
   messagesBySession: Record<string, ChatMessage[]>;
   sending: boolean;
   view: "chat" | "settings";
+  sidebarCollapsed: boolean;
 
   init(): Promise<void>;
   refreshSystemInfo(): Promise<void>;
@@ -27,6 +28,8 @@ interface AppState {
   renameSession(id: string, title: string): Promise<void>;
   deleteMessage(sessionId: string, msgId: string): Promise<void>;
   setView(v: "chat" | "settings"): void;
+  toggleSidebar(): void;
+  toggleTheme(): void;
   updateSettings(patch: Partial<Settings>): Promise<void>;
   changeDataDir(path: string): Promise<void>;
   saveAgent(a: Partial<AgentDef>): Promise<void>;
@@ -49,6 +52,7 @@ export const useApp = create<AppState>((set, get) => ({
   messagesBySession: {},
   sending: false,
   view: "chat",
+  sidebarCollapsed: false,
 
   async init() {
     try {
@@ -127,6 +131,17 @@ export const useApp = create<AppState>((set, get) => ({
 
   setView(v) {
     set({ view: v });
+  },
+
+  toggleSidebar() {
+    set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+  },
+
+  toggleTheme() {
+    const order = ["dark", "light", "ink"] as const;
+    const cur = get().settings?.theme ?? "dark";
+    const next = order[(order.indexOf(cur as any) + 1) % order.length];
+    void get().updateSettings({ theme: next });
   },
 
   async updateSettings(patch) {

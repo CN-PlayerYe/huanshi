@@ -47,6 +47,8 @@ export const api = {
   putSettings: (s: Partial<Settings>) => request<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(s) }),
   setDataDir: (path: string) =>
     request<{ ok: boolean; restartRequired: boolean; path: string }>("/api/settings/data-dir", { method: "POST", body: JSON.stringify({ path }) }),
+  uploadBackground: (dataUrl: string) =>
+    request<{ ok: boolean; path: string }>("/api/appearance/background", { method: "POST", body: JSON.stringify({ dataUrl }) }),
 
   providerPresets: () => request<{ presets: { key: string; label: string; kind: ProviderKind; baseUrl: string; defaultModel: string; hint?: string }[] }>("/api/providers/presets"),
   testProvider: (cfg: ModelConfig) => request<{ ok: boolean; detail?: string; error?: string }>("/api/providers/test", { method: "POST", body: JSON.stringify(cfg) }),
