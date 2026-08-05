@@ -168,6 +168,14 @@ export function SettingsView() {
               <button className="btn secondary sm" onClick={() => void updateSettings({ activeProvider: key })}>
                 设为当前
               </button>
+              <button
+                className="btn secondary sm"
+                style={settings.visionProvider === key ? { color: "var(--ok)" } : {}}
+                onClick={() => void updateSettings({ visionProvider: settings.visionProvider === key ? undefined : key })}
+                title="纯文本主模型时,图片交给这个多模态模型转成文字描述"
+              >
+                {settings.visionProvider === key ? "✓ 视觉辅助" : "🔍 设为视觉辅助"}
+              </button>
               <button className="btn secondary sm" disabled={testingKey === key} onClick={() => void runTest(key, cfg)}>
                 {testingKey === key ? "测试中…" : "🔌 测试连接"}
               </button>

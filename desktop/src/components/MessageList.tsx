@@ -81,6 +81,10 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
           onClick={() => {
             if (window.confirm("删除这条消息?它将从本会话移除,用于压缩上下文。")) {
               void deleteMessage(msg.sessionId, msg.id);
+              // confirm 弹窗关闭后焦点丢失:把焦点还给输入框
+              setTimeout(() => {
+                (document.querySelector<HTMLTextAreaElement>(".chat-input") ?? document.querySelector<HTMLButtonElement>(".send-btn"))?.focus?.();
+              }, 0);
             }
           }}
         >

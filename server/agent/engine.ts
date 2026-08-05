@@ -1,7 +1,7 @@
 import { homedir, platform } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { newId, type AgentDef, type ChatMessage, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
+import { newId, type AgentDef, type ChatMessage, type ModelConfig, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
 import type { MemoryService } from "../memory/service";
 import { createProvider } from "../providers";
 import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../providers/types";
@@ -16,7 +16,14 @@ export interface EngineDeps {
   memory: MemoryService;
   registry: ToolRegistry;
   dataDir: string;
-  getSettings: () => { providers: Record<string, any>; activeProvider: string; mainModel: string; toolWhitelistDir: string; style?: Settings["style"] };
+  getSettings: () => {
+    providers: Record<string, any>;
+    activeProvider: string;
+    mainModel: string;
+    toolWhitelistDir: string;
+    visionProvider?: string;
+    style?: Settings["style"];
+  };
 }
 
 export class AgentEngine {
@@ -90,12 +97,43 @@ export class AgentEngine {
       agent.useGlobalStyle === false ? undefined : settings.style,
     );
 
-    // 历史消息 → provider 消息
+    // 视觉辅助模型:主模型纯文本时,图片先交给辅助多模态模型转成文字描述
+    // (配置了 settings.visionProvider 且存在图片附件时才启用;否则直接传图给主模型)
+    const visionProviderCfg = settings.visionProvider ? settings.providers[settings.visionProvider] : undefined;
+    let finalUserContent = userContent;
+    let userMsgDesc = "";
+    if (visionProviderCfg && (attachments ?? []).length > 0) {
+      try {
+        userMsgDesc = await describeImages(visionProviderCfg, attachments ?? [], dataDir);
+        finalUserContent = userContent
+          ? `${userContent}\n\n[图片内容:${userMsgDesc}]`
+          : `[图片内容:${userMsgDesc}]`;
+      } catch (err) {
+        console.error("[vision] 辅助模型描述失败:", (err as Error).message);
+        finalUserContent = userContent ? `${userContent}\n\n[图片无法识别]` : "[图片无法识别]";
+      }
+    }
+
+    // 历史消息 → provider 消息(历史中的图片同样按配置处理)
+    const historyForProvider = visionProviderCfg
+      ? await describeHistoryImages(history, visionProviderCfg, dataDir, db)
+      : history;
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
-      ...(await historyToProviderMessages(history, dataDir)),
-      { role: "user", content: userContent, vision: await imagePartsToVision(attachments ?? [], dataDir) },
+      ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg))),
+      {
+        role: "user",
+        content: finalUserContent,
+        vision: visionProviderCfg ? undefined : await imagePartsToVision(attachments ?? [], dataDir),
+      },
     ];
+    // 把当前附件图片的辅助描述写回消息(缓存,历史回放直接复用)
+    if (userMsgDesc && attachments?.length) {
+      userMsg.parts = userMsg.parts.map((p) =>
+        p.type === "image" && p.image ? { ...p, image: { ...p.image, desc: userMsgDesc } } : p,
+      );
+      db.updateMessage(userMsg);
+    }
 
     const tools = registry
       .list()
@@ -255,21 +293,95 @@ export async function imagePartsToVision(attachments: { file: string; mime: stri
   return out.length ? out : undefined;
 }
 
+/** 用视觉辅助模型(多模态)描述图片,返回文字描述(供纯文本主模型使用) */
+export async function describeImages(
+  providerCfg: ModelConfig,
+  attachments: { file: string; mime: string }[],
+  dataDir: string,
+): Promise<string> {
+  const vision = await imagePartsToVision(attachments, dataDir);
+  if (!vision?.length) return "";
+  const provider = createProvider(providerCfg);
+  let desc = "";
+  for await (const chunk of provider.chatStream({
+    messages: [
+      {
+        role: "user",
+        content: "请用中文详细描述这张图片:画面内容、人物/物体、文字、氛围。只输出描述本身,不要客套。",
+        vision,
+      },
+    ],
+    tools: [],
+    maxTokens: 1024,
+  })) {
+    if (chunk.delta) desc += chunk.delta;
+  }
+  return desc.trim();
+}
+
+/** 历史消息中的图片:用辅助模型补上描述并持久化缓存(后续回放不再重复调用) */
+async function describeHistoryImages(
+  history: ChatMessage[],
+  providerCfg: ModelConfig,
+  dataDir: string,
+  db: Db,
+): Promise<ChatMessage[]> {
+  const out: ChatMessage[] = [];
+  for (const m of history) {
+    if (m.role !== "user") {
+      out.push(m);
+      continue;
+    }
+    const imgParts = m.parts.filter((p) => p.type === "image" && p.image);
+    if (!imgParts.length) {
+      out.push(m);
+      continue;
+    }
+    const missing = imgParts.filter((p) => !p.image?.desc);
+    if (missing.length) {
+      const desc = await describeImages(
+        providerCfg,
+        missing.map((p) => ({ file: p.image!.file, mime: p.image!.mime })),
+        dataDir,
+      ).catch(() => "");
+      if (desc) {
+        const updated: ChatMessage = {
+          ...m,
+          parts: m.parts.map((p) => (p.type === "image" && p.image && !p.image.desc ? { ...p, image: { ...p.image, desc } } : p)),
+        };
+        db.updateMessage(updated);
+        out.push(updated);
+        continue;
+      }
+    }
+    out.push(m);
+  }
+  return out;
+}
+
 /** 历史消息 → Provider 消息序列。
  * 关键:assistant 带 tool_calls 时,必须为每个工具调用生成一条 role="tool" 的结果消息
  * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
  * 关键2:assistant 带思考时,把 reasoning_content 原样回传(DeepSeek thinking 模式要求)。
  */
-export async function historyToProviderMessages(messages: ChatMessage[], dataDir?: string): Promise<ProviderMsg[]> {
+export async function historyToProviderMessages(messages: ChatMessage[], dataDir?: string, describeAsText = false): Promise<ProviderMsg[]> {
   const out: ProviderMsg[] = [];
   for (const m of messages) {
     const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
     if (m.role === "user") {
       const images = m.parts.filter((p) => p.type === "image" && p.image).map((p) => p.image!);
+      const descs = images.map((p) => p.desc).filter((d): d is string => Boolean(d));
+      const content2 = descs.length
+        ? text
+          ? `${text}\n\n${descs.map((d) => `[图片内容:${d}]`).join("\n")}`
+          : descs.map((d) => `[图片内容:${d}]`).join("\n")
+        : text;
+      // 有描述或强制文本化时不传图;否则原样传图给多模态主模型
+      const sendVision = images.length > 0 && !(describeAsText || descs.length);
       out.push({
         role: "user",
-        content: text,
-        ...(dataDir && images.length ? { vision: await imagePartsToVision(images, dataDir) } : {}),
+        content: content2,
+        ...(sendVision && dataDir ? { vision: await imagePartsToVision(images, dataDir) } : {}),
       });
       continue;
     }

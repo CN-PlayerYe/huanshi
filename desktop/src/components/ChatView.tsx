@@ -80,6 +80,18 @@ const ChatInput = memo(function ChatInput({
     taRef.current?.focus();
   }, []);
 
+  // 窗口重新激活(如 confirm/其他窗口切回)时,自动把焦点还给输入框
+  useEffect(() => {
+    const onWinFocus = () => {
+      // 焦点不在输入框/按钮上时才抢焦点,避免打断选中文本
+      const el = document.activeElement;
+      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.tagName === "SELECT")) return;
+      taRef.current?.focus();
+    };
+    window.addEventListener("focus", onWinFocus);
+    return () => window.removeEventListener("focus", onWinFocus);
+  }, []);
+
   const startVoice = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;

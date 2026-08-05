@@ -16,8 +16,8 @@ export interface MessagePart {
   type: "text" | "tool" | "thinking" | "image";
   text?: string;
   tool?: ToolCallPart;
-  /** 图片附件:file 为相对数据目录的文件路径 */
-  image?: { file: string; mime: string };
+  /** 图片附件:file 为相对数据目录的文件路径;desc 为辅助视觉模型生成的描述(缓存) */
+  image?: { file: string; mime: string; desc?: string };
 }
 
 export interface ChatMessage {
@@ -93,6 +93,8 @@ export interface Settings {
   toolWhitelistDir: string;
   /** 对话中是否显示思考过程(思考内容始终存档在消息里) */
   showThinking: boolean;
+  /** 视觉辅助模型:纯文本主模型时,把图片交给这个多模态 provider 转成文字描述(空=直接传图给主模型) */
+  visionProvider?: string;
   /** 人格风格参数(语气/详略/幽默度) */
   style?: {
     tone?: "formal" | "casual" | "professional";
