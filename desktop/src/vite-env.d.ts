@@ -6,5 +6,6 @@ interface Window {
     getAppVersion: () => Promise<string>;
     onMenuEvent: (cb: (action: string) => void) => void;
     setThemeBg: (theme: string) => void;
+    setWindowOpacity: (opacity: number) => void;
   };
 }

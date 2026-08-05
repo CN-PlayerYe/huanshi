@@ -522,12 +522,12 @@ select {
 }
 
 .message-row.user .message-bubble {
-  background: var(--user-bubble);
+  background: color-mix(in srgb, var(--user-bubble) var(--bubble-opacity, 100%), transparent);
   border-bottom-right-radius: 4px;
 }
 
 .message-row.assistant .message-bubble {
-  background: var(--assistant-bubble);
+  background: color-mix(in srgb, var(--assistant-bubble) var(--bubble-opacity, 100%), transparent);
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
   width: 100%;

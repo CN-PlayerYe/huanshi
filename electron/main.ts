@@ -165,6 +165,12 @@ async function bootstrap(): Promise<void> {
       mainWindow?.setBackgroundColor(themeBg(theme));
     });
 
+    // 窗口整体透明度(可看到桌面)
+    ipcMain.on("set-window-opacity", (_e, opacity: number) => {
+      const v = Math.min(1, Math.max(0.1, Number(opacity) || 1));
+      mainWindow?.setOpacity(v);
+    });
+
     const settings = serverHandle.getSettings();
     lastThemeBg = themeBg(settings.theme ?? "ink");
     createWindow(lastThemeBg);

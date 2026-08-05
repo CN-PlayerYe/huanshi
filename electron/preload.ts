@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld("hanalite", {
   setThemeBg: (theme: string): void => {
     ipcRenderer.send("set-theme-bg", theme);
   },
+  /** 调整整个窗口透明度(0.1-1,可看到桌面) */
+  setWindowOpacity: (opacity: number): void => {
+    ipcRenderer.send("set-window-opacity", opacity);
+  },
 });

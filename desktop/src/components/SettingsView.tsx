@@ -493,27 +493,31 @@ export function SettingsView() {
         </div>
         <div className="field-row">
           <div className="field">
-            <label>背景图片(支持 jpg/png,选完即时生效)</label>
+            <label>背景图片(支持 jpg/png,选完即时生效,默认直接显示)</label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    try {
-                      const res = await api.uploadBackground(String(reader.result));
-                      void updateSettings({ appearance: { ...settings.appearance, bgImage: res.path } });
-                    } catch (err) {
-                      setCsInfo(`背景图上传失败:${(err as Error).message}`);
-                    }
-                  };
-                  reader.readAsDataURL(f);
-                  e.target.value = "";
-                }}
-              />
+              <label className="btn secondary sm file-btn">
+                📁 选择背景图
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                      try {
+                        const res = await api.uploadBackground(String(reader.result));
+                        void updateSettings({ appearance: { ...settings.appearance, bgImage: res.path } });
+                      } catch (err) {
+                        setCsInfo(`背景图上传失败:${(err as Error).message}`);
+                      }
+                    };
+                    reader.readAsDataURL(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
               {settings.appearance?.bgImage && (
                 <button
                   className="btn secondary sm"
@@ -529,32 +533,36 @@ export function SettingsView() {
             </div>
           </div>
         </div>
-        <div className="field-row">
-          <div className="field">
-            <label>侧栏不透明度:{Math.round((settings.appearance?.sidebarOpacity ?? 1) * 100)}%</label>
-            <input
-              type="range"
-              min="40"
-              max="100"
-              value={Math.round((settings.appearance?.sidebarOpacity ?? 1) * 100)}
-              onChange={(e) => void updateSettings({ appearance: { ...settings.appearance, sidebarOpacity: Number(e.target.value) / 100 } })}
-              style={{ width: "100%" }}
-            />
-          </div>
-          <div className="field">
-            <label>聊天区不透明度:{Math.round((settings.appearance?.chatOpacity ?? 1) * 100)}%</label>
-            <input
-              type="range"
-              min="60"
-              max="100"
-              value={Math.round((settings.appearance?.chatOpacity ?? 1) * 100)}
-              onChange={(e) => void updateSettings({ appearance: { ...settings.appearance, chatOpacity: Number(e.target.value) / 100 } })}
-              style={{ width: "100%" }}
-            />
-          </div>
-        </div>
+        <OpacitySlider
+          label="窗口透明度(可看到桌面)"
+          value={settings.appearance?.windowOpacity ?? 1}
+          min={10}
+          max={100}
+          onChange={(v) => void updateSettings({ appearance: { ...settings.appearance, windowOpacity: v } })}
+        />
+        <OpacitySlider
+          label="侧栏不透明度"
+          value={settings.appearance?.sidebarOpacity ?? 1}
+          min={0}
+          max={100}
+          onChange={(v) => void updateSettings({ appearance: { ...settings.appearance, sidebarOpacity: v } })}
+        />
+        <OpacitySlider
+          label="聊天区不透明度"
+          value={settings.appearance?.chatOpacity ?? 1}
+          min={0}
+          max={100}
+          onChange={(v) => void updateSettings({ appearance: { ...settings.appearance, chatOpacity: v } })}
+        />
+        <OpacitySlider
+          label="聊天气泡不透明度"
+          value={settings.appearance?.bubbleOpacity ?? 1}
+          min={30}
+          max={100}
+          onChange={(v) => void updateSettings({ appearance: { ...settings.appearance, bubbleOpacity: v } })}
+        />
         <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
-          提示:配合背景图片降低不透明度,界面会透出背景,形成"沉浸式皮肤"。
+          提示:选好背景图后,聊天区默认透明直接显示背景;窗口透明度拉低可看到桌面。侧栏/聊天区滑条控制面板底色浓度。
         </p>
       </div>
 
@@ -704,6 +712,24 @@ export function SettingsView() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function OpacitySlider({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <div className="field">
+      <label>
+        {label}:{Math.round(value * 100)}%
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={Math.round(value * 100)}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        style={{ width: "100%" }}
+      />
     </div>
   );
 }

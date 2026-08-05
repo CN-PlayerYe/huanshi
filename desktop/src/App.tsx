@@ -46,12 +46,17 @@ export default function App() {
     if (appearance.accent) root.setProperty("--accent", appearance.accent);
     else root.removeProperty("--accent");
     // color-mix 需要百分比单位(如 50%),不能传 0.5
-    if (appearance.chatOpacity != null) root.setProperty("--chat-opacity", `${Math.round(appearance.chatOpacity * 100)}%`);
-    else root.removeProperty("--chat-opacity");
-    if (appearance.sidebarOpacity != null) root.setProperty("--side-opacity", `${Math.round(appearance.sidebarOpacity * 100)}%`);
-    else root.removeProperty("--side-opacity");
+    const setPct = (name: string, v: number | undefined, def: string) => {
+      if (v != null) root.setProperty(name, `${Math.round(v * 100)}%`);
+      else root.removeProperty(name);
+    };
+    setPct("--chat-opacity", appearance.chatOpacity, "100%");
+    setPct("--side-opacity", appearance.sidebarOpacity, "100%");
+    setPct("--bubble-opacity", appearance.bubbleOpacity, "100%");
     const body = document.body;
     if (appearance.bgImage) {
+      // 有背景图时:若未手动调聊天区透明度,则默认聊天区透明,让背景图直接可见
+      if (appearance.chatOpacity == null) root.setProperty("--chat-opacity", "0%");
       const base = useApp.getState().backendUrl;
       // 加时间戳,防止浏览器复用同名旧缓存图
       body.style.backgroundImage = `url(${base}/files/${appearance.bgImage}?v=${Date.now()})`;
@@ -61,6 +66,12 @@ export default function App() {
       body.style.backgroundImage = "";
     }
   }, [appearance]);
+
+  // 窗口整体透明度(看到桌面)
+  const windowOpacity = useApp((s) => s.settings?.appearance?.windowOpacity ?? 1);
+  useEffect(() => {
+    window.hanalite?.setWindowOpacity(windowOpacity);
+  }, [windowOpacity]);
 
   useEffect(() => {
     void init();

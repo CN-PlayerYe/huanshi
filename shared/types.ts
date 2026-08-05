@@ -85,6 +85,10 @@ export interface Settings {
     bgImage?: string;
     chatOpacity?: number;
     sidebarOpacity?: number;
+    /** 整个窗口的透明度(0.1-1,可看到桌面) */
+    windowOpacity?: number;
+    /** 聊天气泡不透明度(0.3-1) */
+    bubbleOpacity?: number;
   };
 }
 
