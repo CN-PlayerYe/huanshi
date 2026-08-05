@@ -167,6 +167,7 @@ async function bootstrap(): Promise<void> {
     // Windows 本地语音识别(SAPI,离线):听一句话(约 8 秒),返回识别文本
     ipcMain.handle("recognize-speech", async (): Promise<{ text: string; error?: string }> => {
       const script = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech | Out-Null
 $ErrorActionPreference = "Stop"
 try {
@@ -218,7 +219,19 @@ $r.Dispose()`;
 }
 
 log("module loaded");
-void app.whenReady().then(bootstrap);
+// 单实例锁:防止双击打开多个实例导致窗口叠加、点击错乱
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+  void app.whenReady().then(bootstrap);
+}
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {

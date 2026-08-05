@@ -111,6 +111,8 @@ const ChatInput = memo(function ChatInput({
         window.alert(`语音识别失败:${(err as Error).message}`);
       } finally {
         setListening(false);
+        // 识别期间窗口焦点可能被系统抢走,完成后把光标还给输入框
+        setTimeout(() => taRef.current?.focus(), 50);
       }
       return;
     }
@@ -180,7 +182,7 @@ const ChatInput = memo(function ChatInput({
           ))}
         </div>
       )}
-      <div className="chat-input-box">
+      <div className="chat-input-box" onMouseDown={() => taRef.current?.focus()}>
         <button className="attach-btn" onClick={() => fileRef.current?.click()} title="发送图片" disabled={sending}>
           📎
         </button>
