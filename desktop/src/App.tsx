@@ -3,6 +3,7 @@ import { useApp } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { SettingsView } from "./components/SettingsView";
+import logo from "./assets/icon.png";
 
 // 模块级常量:避免 selector 每次返回新对象引用导致 React 无限重渲染
 const EMPTY_APPEARANCE: Record<string, never> = {};
@@ -80,7 +81,7 @@ export default function App() {
   if (!ready) {
     return (
       <div className="boot">
-        <div className="boot-logo">🏔</div>
+        <img src={logo} className="boot-logo" alt="幻世" />
         <div className="boot-text">幻世 正在启动…</div>
       </div>
     );

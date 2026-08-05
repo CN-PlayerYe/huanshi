@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../store";
 import type { SessionMeta } from "@shared/types";
+import logo from "../assets/icon.png";
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);
@@ -101,7 +102,7 @@ export function Sidebar() {
         <button className="sidebar-collapse-btn" onClick={toggleSidebar} title="折叠侧栏(Ctrl+B)">
           ☰
         </button>
-        <span className="sidebar-logo">🏔</span>
+        <img src={logo} className="sidebar-logo" alt="幻世" />
         <span className="sidebar-title">幻世</span>
         <button className="new-session-btn" onClick={() => void newSession()} title="新建会话">
           ＋
