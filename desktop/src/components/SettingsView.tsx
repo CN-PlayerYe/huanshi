@@ -47,7 +47,16 @@ export function SettingsView() {
   const [newProviderOpen, setNewProviderOpen] = useState(false);
   const [dataDirInput, setDataDirInput] = useState(systemInfo?.dataDir ?? "");
   const [reflectText, setReflectText] = useState("");
-  const [agentForm, setAgentForm] = useState<{ id?: string; name: string; description: string; systemPrompt: string } | null>(null);
+  const [agentForm, setAgentForm] = useState<{
+    id?: string;
+    name: string;
+    description: string;
+    systemPrompt: string;
+    useGlobalStyle?: boolean;
+    allowDangerousCommands?: boolean;
+    unrestrictedPaths?: boolean;
+    historyUnlimited?: boolean;
+  } | null>(null);
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
@@ -366,6 +375,17 @@ export function SettingsView() {
             清空记忆
           </button>
         </div>
+        <div className="field" style={{ marginTop: 10 }}>
+          <label>本地经历保留上限(0 = 无限记忆)</label>
+          <input
+            type="number"
+            min={0}
+            step={500}
+            value={settings.memory.experienceCap ?? 2000}
+            onChange={(e) => void updateSettings({ memory: { ...settings.memory, experienceCap: Math.max(0, Number(e.target.value) || 0) } })}
+            style={{ maxWidth: 220 }}
+          />
+        </div>
 
         <div className="field">
           <label>反思(Reflect):让记忆系统总结最重要的信息</label>
@@ -622,7 +642,7 @@ export function SettingsView() {
             />
           </div>
         </div>
-        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>调整后立即生效,影响所有后续回复。</p>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>全局风格对所有"跟随全局风格"的人格生效;编辑单个 Agent 可关闭(原生态人格)。</p>
       </div>
 
       {/* ---- 定时任务 ---- */}
@@ -720,7 +740,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt })}>
+                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited })}>
                   编辑
                 </button>
                 <button className="remove" onClick={() => void deleteAgent(a.id)}>
@@ -748,6 +768,40 @@ export function SettingsView() {
                 value={agentForm.systemPrompt}
                 onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })}
               />
+            </div>
+            <div className="agent-opts">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={agentForm.useGlobalStyle !== false}
+                  onChange={(e) => setAgentForm({ ...agentForm, useGlobalStyle: e.target.checked })}
+                />
+                跟随全局风格(语气/详略/幽默);关闭=原生态人格,自由生长
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={agentForm.allowDangerousCommands === true}
+                  onChange={(e) => setAgentForm({ ...agentForm, allowDangerousCommands: e.target.checked })}
+                />
+                允许执行高危命令(该人格拥有完整命令权限,请谨慎)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={agentForm.unrestrictedPaths === true}
+                  onChange={(e) => setAgentForm({ ...agentForm, unrestrictedPaths: e.target.checked })}
+                />
+                文件读写不受白名单限制(该人格拥有完整文件权限)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={agentForm.historyUnlimited === true}
+                  onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked })}
+                />
+                历史上下文不限长度(默认最近 60 条,开启后全部保留)
+              </label>
             </div>
             <div className="field-row">
               <button

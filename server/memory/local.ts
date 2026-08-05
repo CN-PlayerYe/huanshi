@@ -13,7 +13,10 @@ export class LocalMemory implements MemoryBackend {
   private facts: MemoryItem[] = [];
   private experiences: MemoryItem[] = [];
 
-  constructor(private dir: string) {
+  constructor(
+    private dir: string,
+    private caps?: { experienceCap?: number; factCap?: number },
+  ) {
     mkdirSync(dir, { recursive: true });
     this.facts = this.load(FACTS_FILE);
     this.experiences = this.load(EXPERIENCES_FILE);
@@ -74,9 +77,9 @@ export class LocalMemory implements MemoryBackend {
     } else {
       target.push({ id: newId("mem"), content, kind, createdAt: Date.now(), updatedAt: Date.now() });
     }
-    // 控制上限
-    const cap = kind === "fact" ? 500 : 2000;
-    if (target.length > cap) target.splice(0, target.length - cap);
+    // 控制上限(0 = 无限)
+    const cap = kind === "fact" ? (this.caps?.factCap ?? 500) : (this.caps?.experienceCap ?? 2000);
+    if (cap > 0 && target.length > cap) target.splice(0, target.length - cap);
     this.save(kind === "fact" ? FACTS_FILE : EXPERIENCES_FILE, target);
   }
 

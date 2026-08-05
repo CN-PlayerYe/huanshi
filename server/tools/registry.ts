@@ -7,6 +7,10 @@ export interface ToolContext {
   dataDir: string;
   env: NodeJS.ProcessEnv;
   memory: MemoryService | null;
+  /** 允许执行高危命令(Agent 级全权限) */
+  allowDangerousCommands?: boolean;
+  /** 文件写入不受白名单限制(Agent 级全权限) */
+  unrestrictedPaths?: boolean;
 }
 
 export interface Tool {

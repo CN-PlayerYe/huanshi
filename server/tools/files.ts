@@ -41,7 +41,10 @@ export const fileTools: Tool[] = [
       required: ["path", "content"],
     },
     async run(input, ctx) {
-      const p = guardWritePath(String(input.path), ctx.cwd, ctx.allowedWriteDirs);
+      // Agent 开启全文件权限时不受白名单限制
+      const p = ctx.unrestrictedPaths
+        ? (isAbsolute(String(input.path)) ? resolve(String(input.path)) : resolve(ctx.cwd, String(input.path)))
+        : guardWritePath(String(input.path), ctx.cwd, ctx.allowedWriteDirs);
       await mkdir(resolve(p, ".."), { recursive: true });
       await writeFile(p, String(input.content ?? ""), "utf-8");
       return `已写入 ${p}(${String(input.content ?? "").length} 字符)`;
@@ -99,10 +102,12 @@ export const shellTool: Tool = {
   },
   run(input, ctx) {
     const command = String(input.command);
-    // 危险命令分级拦截:命中高危模式直接拒绝,避免误操作
-    const danger = detectDangerousCommand(command);
-    if (danger) {
-      return `⛔ 该命令被判定为高危操作,已自动拦截(${danger})。\n请告知用户,由用户手动确认后执行。`;
+    // 危险命令分级拦截(Agent 若开启全权限则放行)
+    if (!ctx.allowDangerousCommands) {
+      const danger = detectDangerousCommand(command);
+      if (danger) {
+        return `⛔ 该命令被判定为高危操作,已自动拦截(${danger})。\n请告知用户,由用户手动确认后执行。`;
+      }
     }
     const cwd = input.cwd ? resolvePath(String(input.cwd), ctx.cwd) : ctx.env.HOME || ctx.env.USERPROFILE || ctx.cwd;
     const timeoutMs = Number(input.timeoutMs) || 60_000;

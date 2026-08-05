@@ -45,6 +45,14 @@ export interface AgentDef {
   memoryEnabled: boolean;
   tools: string[];
   createdAt: number;
+  /** 是否跟随全局风格设置;关闭=原生态人格,不使用风格注入 */
+  useGlobalStyle?: boolean;
+  /** 允许执行高危命令(该 Agent 拥有完整命令权限) */
+  allowDangerousCommands?: boolean;
+  /** 文件写入不受白名单限制(该 Agent 拥有完整文件权限) */
+  unrestrictedPaths?: boolean;
+  /** 历史上下文不限长度(默认 60 条) */
+  historyUnlimited?: boolean;
 }
 
 export type ProviderKind = "openai" | "anthropic" | "ollama";
@@ -65,6 +73,8 @@ export interface MemoryConfig {
   hindsightLlmProvider?: string;
   hindsightLlmApiKey?: string;
   localEnabled: boolean;
+  /** 本地经历保留上限(0 = 无限) */
+  experienceCap?: number;
 }
 
 export interface Settings {
@@ -154,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
     hindsightLlmProvider: "anthropic",
     hindsightLlmApiKey: "",
     localEnabled: true,
+    experienceCap: 2000,
   },
   theme: "ink",
   language: "zh-CN",

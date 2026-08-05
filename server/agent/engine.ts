@@ -59,8 +59,9 @@ export class AgentEngine {
     }
     const provider = createProvider(providerCfg);
 
-    // 历史消息(供记忆注入与 provider 回放)
-    const history = db.getMessages(session.id).slice(-MAX_HISTORY_MESSAGES);
+    // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
+    const allHistory = db.getMessages(session.id);
+    const history = agent.historyUnlimited ? allHistory : allHistory.slice(-MAX_HISTORY_MESSAGES);
 
     // 组装系统提示:人格 + 记忆 + 环境
     const memories = agent.memoryEnabled ? await memory.recall(userContent, 6) : [];
@@ -74,7 +75,13 @@ export class AgentEngine {
         memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
       }
     }
-    const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock, settings.style);
+    const systemPrompt = buildSystemPrompt(
+      agent,
+      dataDir,
+      settings.toolWhitelistDir,
+      memoryBlock,
+      agent.useGlobalStyle === false ? undefined : settings.style,
+    );
 
     // 历史消息 → provider 消息
     const providerMessages: ProviderMsg[] = [
@@ -104,6 +111,9 @@ export class AgentEngine {
       dataDir,
       env: process.env,
       memory: agent.memoryEnabled ? memory : null,
+      // Agent 级权限:全命令 / 全文件路径
+      allowDangerousCommands: agent.allowDangerousCommands === true,
+      unrestrictedPaths: agent.unrestrictedPaths === true,
     };
 
     let textBuf = "";

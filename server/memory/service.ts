@@ -34,7 +34,7 @@ export class MemoryService {
     private cfg: MemoryConfig,
     dataDir: string,
   ) {
-    const local = new LocalMemory(join(dataDir, "memory"));
+    const local = new LocalMemory(join(dataDir, "memory"), { experienceCap: cfg.experienceCap ?? 2000 });
     this.backend = cfg.mode === "hindsight" ? new HindsightMemory(cfg, local) : local;
   }
 
