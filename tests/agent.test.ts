@@ -37,7 +37,7 @@ describe("buildSystemPrompt", () => {
   it("包含人格、环境与记忆块", () => {
     const agent = defaultAgents()[0];
     const prompt = buildSystemPrompt(agent, "C:\\data", "C:\\work", "\n\n【长期记忆】\n- 用户喜欢咖啡");
-    expect(prompt).toContain("小和");
+    expect(prompt).toContain("小盏");
     expect(prompt).toContain("C:\\work");
     expect(prompt).toContain("用户喜欢咖啡");
   });
