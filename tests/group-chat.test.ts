@@ -100,11 +100,11 @@ describe("群聊 groupChat", () => {
     expect(starts[0].agentId).toBe(a1.id);
     expect(starts[1].agentId).toBe(a2.id);
 
-    // 2. delta 包含人格名前缀与正文
+    // 2. delta 为模型输出本身,不含【名字】前缀(前缀由前端按 agentId 显示人格名)
     const deltas = events.filter((e) => e.type === "delta").map((e) => e.content ?? "");
-    expect(deltas[0]).toContain("【小盏】");
     expect(deltas.join("")).toContain("我");
     expect(deltas.join("")).toContain("来");
+    expect(deltas.join("")).not.toContain("【");
 
     // 3. done 指向最后一条 assistant = 小尺
     const done = events.find((e) => e.type === "done");

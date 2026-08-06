@@ -184,7 +184,6 @@ export class AgentEngine {
       };
       db.appendMessage(assistant);
       await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
-      await onEvent({ type: "delta", content: `【${agent.name}】` });
       let textBuf = "";
       try {
         for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048 }, signal)) {

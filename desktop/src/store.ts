@@ -285,15 +285,20 @@ export const useApp = create<AppState>((set, get) => ({
                   ...s.messagesBySession,
                   [sessionId]: [
                     ...list,
-                    { id: mid, sessionId, role: "assistant" as const, parts: [], agentId: e.message.agentId, createdAt: Date.now() },
+                    { id: mid, sessionId, role: "assistant" as const, parts: [{ type: "text", text: "" }], agentId: e.message.agentId, createdAt: Date.now() },
                   ],
                 },
               };
             });
           } else if (e.type === "delta") {
             set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
-              const textPart = m.parts.find((p) => p.type === "text");
-              if (textPart) textPart.text = (textPart.text ?? "") + e.content;
+              // 找不到 text part(如群聊追加的新消息)时自建,避免文本丢失
+              let textPart = m.parts.find((p) => p.type === "text");
+              if (!textPart) {
+                textPart = { type: "text", text: "" };
+                m.parts.push(textPart);
+              }
+              textPart.text = (textPart.text ?? "") + e.content;
             }));
           } else if (e.type === "thinking") {
             set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
