@@ -241,16 +241,16 @@ export function SettingsView() {
               <label>API Key(留空则使用无鉴权的本地服务,如 Ollama)</label>
               <input type="password" value={cfg.apiKey ?? ""} onChange={(e) => patchProvider(key, { apiKey: e.target.value })} />
             </div>
-          </div>
-          <div className="field-row" style={{ marginTop: 6 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              <input
-                type="checkbox"
-                checked={cfg.disableThinking === true}
-                onChange={(e) => patchProvider(key, { disableThinking: e.target.checked })}
-              />
-              关闭思考模式(DeepSeek V3.2+/V4;回复更快但无思考过程;不支持的接口会报错时请关闭此项)
-            </label>
+            <div className="field-row" style={{ marginTop: 6 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={cfg.disableThinking === true}
+                  onChange={(e) => patchProvider(key, { disableThinking: e.target.checked })}
+                />
+                关闭思考模式(DeepSeek V3.2+/V4;回复更快但无思考过程;不支持的接口会报错时请关闭此项)
+              </label>
+            </div>
           </div>
         ))}
 
