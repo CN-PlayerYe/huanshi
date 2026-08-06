@@ -65,8 +65,13 @@ export interface AgentDef {
   allowDangerousCommands?: boolean;
   /** 文件写入不受白名单限制(该 Agent 拥有完整文件权限) */
   unrestrictedPaths?: boolean;
-  /** 历史上下文不限长度(默认 60 条) */
+  /** 历史上下文不限长度(默认 60 条,已并入 historyContextPct=100) */
   historyUnlimited?: boolean;
+  /**
+   * 历史上下文保留百分比(0-100):按估算 token 从最近的消息往回截取。
+   * 100 = 全部历史(由 200 条 + 80KB 请求体兜底);null/undefined = 用 historyUnlimited 兼容旧配置。
+   */
+  historyContextPct?: number;
   /** 独立记忆空间:开启后记忆读写只走该人格自己的库,不与他人格共享 */
   isolatedMemory?: boolean;
 }

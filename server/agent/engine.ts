@@ -22,6 +22,46 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "…[已截断]" : s;
 }
 
+/** 估算一条消息的 token 数(中文约 1 token/字,保守按 2 字符/token;含正文/思考/工具输出) */
+function estimateTokens(m: ChatMessage): number {
+  let chars = 0;
+  for (const p of m.parts) {
+    if (p.type === "text" || p.type === "thinking") chars += (p.text || "").length;
+    else if (p.type === "tool" && p.tool) {
+      chars += (p.tool.output || "").length;
+      chars += typeof p.tool.input === "string" ? p.tool.input.length : JSON.stringify(p.tool.input || {}).length;
+    }
+  }
+  return Math.ceil(chars / 2);
+}
+
+/**
+ * 按历史上下文百分比截取:historyContextPct 为 0-100 时,按估算 token 从最近的
+ * 消息往回保留约 pct% 的历史(消息整体保留,不切半条);100 = 全部。返回的数组
+ * 仍受 MAX_HISTORY_UNLIMITED(200 条)兜底。
+ */
+export function sliceHistoryByPct(messages: ChatMessage[], agent: AgentDef): ChatMessage[] {
+  const pct = agent.historyContextPct;
+  const unlimited = agent.historyUnlimited === true;
+  if (pct == null) {
+    // 兼容旧配置:historyUnlimited=true 等效 100%;否则用默认窗口
+    return unlimited ? messages.slice(-MAX_HISTORY_UNLIMITED) : messages.slice(-MAX_HISTORY_MESSAGES);
+  }
+  if (pct >= 100) return messages.slice(-MAX_HISTORY_UNLIMITED);
+  if (messages.length <= 1) return messages;
+  const total = messages.reduce((n, m) => n + estimateTokens(m), 0);
+  if (total === 0) return messages.slice(-MAX_HISTORY_UNLIMITED);
+  const target = Math.floor((total * Math.max(0, pct)) / 100);
+  let acc = 0;
+  const kept: ChatMessage[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    kept.unshift(messages[i]);
+    acc += estimateTokens(messages[i]);
+    if (acc >= target) break;
+  }
+  return kept.slice(-MAX_HISTORY_UNLIMITED);
+}
+
 /** 正在生成摘要的会话(防止并发重复生成) */
 const summaryLocks = new Set<string>();
 
@@ -163,7 +203,7 @@ export class AgentEngine {
 
     for (const agent of agents) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
-      const history = agent.historyUnlimited ? historyAll.slice(-200) : historyAll.slice(-MAX_HISTORY_MESSAGES);
+      const history = sliceHistoryByPct(historyAll, agent);
       const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
@@ -248,7 +288,7 @@ export class AgentEngine {
     // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
     // 注意:必须排除刚 append 的当前 user 消息,否则会发给 API 两次(重复输入 bug)
     const allHistory = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
-    const history = agent.historyUnlimited ? allHistory.slice(-MAX_HISTORY_UNLIMITED) : allHistory.slice(-MAX_HISTORY_MESSAGES);
+    const history = sliceHistoryByPct(allHistory, agent);
 
     // 组装系统提示:人格 + 记忆 + 环境
     // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库

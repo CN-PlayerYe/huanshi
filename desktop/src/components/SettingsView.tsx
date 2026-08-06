@@ -56,6 +56,7 @@ export function SettingsView() {
     allowDangerousCommands?: boolean;
     unrestrictedPaths?: boolean;
     historyUnlimited?: boolean;
+    historyContextPct?: number;
     isolatedMemory?: boolean;
   } | null>(null);
   const [csDir, setCsDir] = useState("");
@@ -1075,7 +1076,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, isolatedMemory: a.isolatedMemory })}>
+                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory })}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1135,10 +1136,31 @@ export function SettingsView() {
               <label>
                 <input
                   type="checkbox"
-                  checked={agentForm.historyUnlimited === true}
-                  onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked })}
+                  checked={agentForm.historyUnlimited === true || (agentForm.historyContextPct ?? 100) >= 100}
+                  onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked, historyContextPct: e.target.checked ? 100 : undefined })}
                 />
-                历史上下文不限长度(开启后保留最近 200 条,更完整但仍受模型上下文限制;超长会话会明显变慢)
+                历史上下文全部保留(等效滑块 100%;由 200 条 + 请求体 80KB 兑底)
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "stretch" }}>
+                <span style={{ fontSize: 12.5 }}>
+                  历史上下文保留度:{agentForm.historyContextPct == null ? 100 : agentForm.historyContextPct}%
+                  <span style={{ color: "var(--text-dim)", marginLeft: 6 }}>
+                    {agentForm.historyContextPct == null || agentForm.historyContextPct >= 100
+                      ? "全部(按 token 估算截取,感觉卡就拉低)"
+                      : "只保留最近约该比例的历史(按 token 估算)"}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={agentForm.historyContextPct == null ? 100 : agentForm.historyContextPct}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setAgentForm({ ...agentForm, historyContextPct: v, historyUnlimited: v >= 100 });
+                  }}
+                />
               </label>
               <label>
                 <input
