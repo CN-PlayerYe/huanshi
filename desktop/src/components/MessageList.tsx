@@ -236,7 +236,9 @@ function stripImages(text: string): string {
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const activeSessionId = useApp((s) => s.activeSessionId);
-  const options = activeSessionId ? useApp((s) => s.sessionOptions[activeSessionId] ?? EMPTY_OPTIONS) : EMPTY_OPTIONS;
+  // hook 必须无条件调用(条件调用会在 activeSessionId 变化时导致 React "more hooks" 崩溃);
+  // 模块级常量 EMPTY_OPTIONS 保证无选项时引用稳定,避免无限重渲染
+  const options = useApp((s) => (activeSessionId ? (s.sessionOptions[activeSessionId] ?? EMPTY_OPTIONS) : EMPTY_OPTIONS));
   const clearOptions = useApp((s) => s.clearOptions);
   const sendMessage = useApp((s) => s.sendMessage);
 

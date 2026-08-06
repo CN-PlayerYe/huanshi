@@ -10,6 +10,8 @@ interface AppState {
   settings: Settings | null;
   agents: AgentDef[];
   sessions: SessionMeta[];
+  /** 归档会话(主列表隐藏,可恢复) */
+  archivedSessions: SessionMeta[];
   /** 递增触发输入框重新聚焦(删除消息/弹窗关闭等) */
   focusTick: number;
   /** 剧情选项:每个会话最近一次的 AI 选项 */
@@ -34,6 +36,9 @@ interface AppState {
   newSession(): Promise<SessionMeta>;
   deleteSession(id: string): Promise<void>;
   archiveSession(id: string): Promise<void>;
+  unarchiveSession(id: string): Promise<void>;
+  /** 刷新归档列表(含恢复/删除后) */
+  refreshArchived(): Promise<void>;
   renameSession(id: string, title: string): Promise<void>;
   deleteMessage(sessionId: string, msgId: string): Promise<void>;
   /** 请求把焦点还给输入框(删除消息/弹窗关闭等场景) */
@@ -63,6 +68,8 @@ export const useApp = create<AppState>((set, get) => ({
   settings: null,
   agents: [],
   sessions: [],
+  /** 归档会话(主列表隐藏,可恢复) */
+  archivedSessions: [],
   activeSessionId: null,
   messagesBySession: {},
   sending: false,
@@ -82,7 +89,7 @@ export const useApp = create<AppState>((set, get) => ({
     try {
       const url = await initApi();
       set({ backendUrl: url });
-      await Promise.all([get().refreshSystemInfo(), get().refreshSettings(), get().refreshAgents(), get().refreshSessions()]);
+      await Promise.all([get().refreshSystemInfo(), get().refreshSettings(), get().refreshAgents(), get().refreshSessions(), get().refreshArchived()]);
       // 默认选中最新会话
       const { sessions } = get();
       if (sessions.length && !get().activeSessionId) {
@@ -107,6 +114,10 @@ export const useApp = create<AppState>((set, get) => ({
   },
   async refreshSessions() {
     set({ sessions: (await api.listSessions()).sessions });
+  },
+
+  async refreshArchived() {
+    set({ archivedSessions: (await api.listSessions(true)).sessions.filter((s) => s.archived) });
   },
 
   async selectSession(id) {
@@ -137,7 +148,12 @@ export const useApp = create<AppState>((set, get) => ({
   async archiveSession(id) {
     await api.archiveSession(id);
     if (get().activeSessionId === id) set({ activeSessionId: null });
-    await get().refreshSessions();
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
+  },
+
+  async unarchiveSession(id) {
+    await api.unarchiveSession(id);
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
   },
 
   async renameSession(id, title) {

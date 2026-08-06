@@ -15,6 +15,7 @@ function fmtTime(ts: number): string {
 
 export function Sidebar() {
   const sessions = useApp((s) => s.sessions);
+  const archivedSessions = useApp((s) => s.archivedSessions);
   const agents = useApp((s) => s.agents);
   const activeSessionId = useApp((s) => s.activeSessionId);
   const systemInfo = useApp((s) => s.systemInfo);
@@ -25,12 +26,14 @@ export function Sidebar() {
   const selectSession = useApp((s) => s.selectSession);
   const deleteSession = useApp((s) => s.deleteSession);
   const archiveSession = useApp((s) => s.archiveSession);
+  const unarchiveSession = useApp((s) => s.unarchiveSession);
   const renameSession = useApp((s) => s.renameSession);
   const setView = useApp((s) => s.setView);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [moveFor, setMoveFor] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchHits, setSearchHits] = useState<{ session: SessionMeta; matches: number }[]>([]);
   const [searching, setSearching] = useState(false);
@@ -249,6 +252,50 @@ export function Sidebar() {
               ))}
           </div>
         )))}
+
+        {/* 归档区:已归档会话(数据保留,可恢复) */}
+        {archivedSessions.length > 0 && (
+          <div className="archive-section">
+            <div className="archive-toggle" onClick={() => setShowArchived((v) => !v)}>
+              <span>🗂 归档({archivedSessions.length})</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>{showArchived ? "▾" : "▸"}</span>
+            </div>
+            {showArchived && (
+              <div>
+                {archivedSessions.map((s) => (
+                  <div key={s.id} className="session-item" style={{ opacity: 0.75 }}>
+                    <button
+                      className="session-btn"
+                      onClick={() => void selectSession(s.id)}
+                      title={s.title}
+                    >
+                      <span className="session-title2">{s.title || "未命名会话"}</span>
+                      <span className="session-time">{fmtTime(s.updatedAt)}</span>
+                    </button>
+                    <div className="session-actions">
+                      <button title="恢复" onClick={() => void unarchiveSession(s.id)}>↩</button>
+                      <button
+                        title="彻底删除"
+                        className="danger"
+                        onClick={() => {
+                          if (window.hanalite?.confirmDialog) {
+                            void window.hanalite.confirmDialog(`彻底删除会话「${s.title || "未命名"}」?归档内容将无法恢复。`).then((ok) => {
+                              if (ok) void deleteSession(s.id);
+                            });
+                          } else if (confirm(`彻底删除会话「${s.title || "未命名"}」?`)) {
+                            void deleteSession(s.id);
+                          }
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="sidebar-foot">

@@ -78,11 +78,12 @@ export const api = {
   saveAgent: (a: Partial<AgentDef>) => request<{ agent: AgentDef }>("/api/agents", { method: "POST", body: JSON.stringify(a) }),
   deleteAgent: (id: string) => request<{ ok: boolean }>(`/api/agents/${id}`, { method: "DELETE" }),
 
-  listSessions: () => request<{ sessions: SessionMeta[] }>("/api/sessions"),
+  listSessions: (includeArchived?: boolean) => request<{ sessions: SessionMeta[] }>(`/api/sessions${includeArchived ? "?includeArchived=1" : ""}`),
   createSession: (title?: string, agentId?: string) =>
     request<{ session: SessionMeta }>("/api/sessions", { method: "POST", body: JSON.stringify({ title, agentId }) }),
   deleteSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}`, { method: "DELETE" }),
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
+  unarchiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unarchive`, { method: "POST" }),
   renameSession: (id: string, title: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/rename`, { method: "POST", body: JSON.stringify({ title }) }),
   /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */

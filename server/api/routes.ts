@@ -328,7 +328,10 @@ export function createApp(deps: AppDeps): Hono {
 
   // ---- 会话 ----
 
-  app.get("/api/sessions", (c) => c.json({ sessions: deps.db.listSessions() }));
+  app.get("/api/sessions", (c) => {
+    const includeArchived = c.req.query("includeArchived") === "1";
+    return c.json({ sessions: deps.db.listSessions(includeArchived) });
+  });
 
   app.post("/api/sessions", async (c) => {
     const { title, agentId } = (await c.req.json().catch(() => ({}))) as { title?: string; agentId?: string };
@@ -343,6 +346,12 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/sessions/:id/archive", (c) => {
     const s = deps.db.updateSession(c.req.param("id"), { archived: true });
+    return c.json({ ok: Boolean(s) });
+  });
+
+  /** 从归档恢复 */
+  app.post("/api/sessions/:id/unarchive", (c) => {
+    const s = deps.db.updateSession(c.req.param("id"), { archived: false });
     return c.json({ ok: Boolean(s) });
   });
 
