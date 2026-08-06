@@ -47,7 +47,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
       });
 
     // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩
-    let msgs = req.messages;
+    let msgs = sanitizeToolMessages(req.messages);
     let body = buildBody(msgs);
     if (Buffer.byteLength(body) > 80 * 1024) {
       msgs = shrinkMessages(msgs);
@@ -146,6 +146,24 @@ export function hardenEscape(text: string): string {
  * 导致传输截断或模型端解析失败(HTTP 400 "unexpected end of hex escape")。
  * 策略:先压缩思考回传(500 字符足够),再截断正文,最后从最旧开始丢消息(保留最近 8 条)。
  */
+/**
+ * 兜底清理:删除"前面没有带 tool_calls 的 assistant"的孤立 tool 消息。
+ * 无论历史结构多乱(迁移数据、压缩丢消息),都能保证 tool 消息永远有前置 assistant(tool_calls)。
+ */
+export function sanitizeToolMessages(msgs: ProviderMsg[]): ProviderMsg[] {
+  const out: ProviderMsg[] = [];
+  let lastHadToolCalls = false;
+  for (const m of msgs) {
+    if (m.role === "tool") {
+      if (lastHadToolCalls) out.push(m);
+      continue;
+    }
+    out.push(m);
+    lastHadToolCalls = m.role === "assistant" && !!m.toolCalls?.length;
+  }
+  return out;
+}
+
 export function shrinkMessages(msgs: ProviderMsg[]): ProviderMsg[] {
   let m: ProviderMsg[] = msgs.map((x) =>
     x.reasoningContent ? { ...x, reasoningContent: x.reasoningContent.slice(0, 300) } : x,
@@ -159,12 +177,15 @@ export function shrinkMessages(msgs: ProviderMsg[]): ProviderMsg[] {
   }
   let dropped = 0;
   while (len > 80 * 1024 && m.length > 6 && dropped < 200) {
-    // 从最旧开始成对丢(user+assistant),保持会话结构完整
-    m = m.slice(2);
+    // 从最旧开始丢,但必须以 user 消息为边界(user 及其之前全部丢掉),
+    // 避免 assistant(tool_calls)+tool 组被拆散留下孤立 tool 消息
+    const firstUser = m.findIndex((x) => x.role === "user");
+    if (firstUser < 0) break;
+    m = m.slice(firstUser + 1);
     len = Buffer.byteLength(JSON.stringify(m));
-    dropped += 2;
+    dropped += firstUser + 1;
   }
-  return m;
+  return sanitizeToolMessages(m);
 }
 
 function toOpenAIMessage(m: ProviderMsg) {
