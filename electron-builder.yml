@@ -26,7 +26,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: HanaLite
+  shortcutName: 幻世
+  installDirectoryName: 幻世
 
 # 绿色版:解压即用,数据目录跟随 exe 旁 data/(portable 模式)
 portable:
