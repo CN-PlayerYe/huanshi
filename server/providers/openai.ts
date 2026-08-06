@@ -33,10 +33,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
 
   async *chatStream(req: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatStreamChunk> {
     const url = `${this.baseUrl.replace(/\/$/, "")}/chat/completions`;
-    const buildBody = () =>
+    const buildBody = (msgs: ProviderMsg[]) =>
       JSON.stringify({
         model: this.model,
-        messages: req.messages.map(toOpenAIMessage),
+        messages: msgs.map(toOpenAIMessage),
         tools: req.tools.length ? req.tools.map(toOpenAITool) : undefined,
         stream: true,
         stream_options: { include_usage: true },
@@ -45,6 +45,14 @@ export class OpenAICompatibleProvider implements ChatProvider {
         // 关闭思考模式(DeepSeek V3.2+/V4):模型不再“先想后答”,首字大幅提速
         ...(this.disableThinking ? { thinking: { type: "disabled" } } : {}),
       });
+
+    // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩
+    let msgs = req.messages;
+    let body = buildBody(msgs);
+    if (Buffer.byteLength(body) > 80 * 1024) {
+      msgs = shrinkMessages(msgs);
+      body = buildBody(msgs);
+    }
 
     // 400 偶发重试一次(模型端偶发解析失败/传输损坏时,重试往往成功)
     for (let attempt = 0; ; attempt++) {
@@ -56,7 +64,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
           ...(this._apiKey ? { Authorization: `Bearer ${this._apiKey}` } : {}),
           ...this.extraHeaders,
         },
-        body: buildBody(),
+        body,
       });
 
       if (!res.ok) {
@@ -129,8 +137,34 @@ export class OpenAICompatibleProvider implements ChatProvider {
  * 迁移的报错残留)时,模型端若对 content 二次 JSON 解析会报 "unexpected end of hex escape"。
  * 把这类反斜杠翻倍(`\u` → `\\u`),经过 JSON 两次解析后仍显示为单个 `\`,但不再触发解析错误。
  */
-function hardenEscape(text: string): string {
-  return text.replace(/\\(?=u(?![\da-fA-F]{4}))/g, "\\\\");
+export function hardenEscape(text: string): string {
+  return text.replace(/(^|[^\\])((?:\\\\)*)\\(?=u(?![\da-fA-F]{4}))/g, (_m, pre, pairs) => pre + pairs + "\\\\");
+}
+
+/**
+ * 请求体压缩:超长会话(historyUnlimited 全量历史 + 思考全量回传)会生成 >100KB 的请求体,
+ * 导致传输截断或模型端解析失败(HTTP 400 "unexpected end of hex escape")。
+ * 策略:先压缩思考回传(500 字符足够),再截断正文,最后从最旧开始丢消息(保留最近 8 条)。
+ */
+export function shrinkMessages(msgs: ProviderMsg[]): ProviderMsg[] {
+  let m: ProviderMsg[] = msgs.map((x) =>
+    x.reasoningContent ? { ...x, reasoningContent: x.reasoningContent.slice(0, 300) } : x,
+  );
+  let len = Buffer.byteLength(JSON.stringify(m));
+  if (len > 80 * 1024) {
+    m = m.map((x) =>
+      x.content && x.content.length > 2000 ? { ...x, content: `${x.content.slice(0, 2000)}…(已截断)` } : x,
+    );
+    len = Buffer.byteLength(JSON.stringify(m));
+  }
+  let dropped = 0;
+  while (len > 80 * 1024 && m.length > 6 && dropped < 200) {
+    // 从最旧开始成对丢(user+assistant),保持会话结构完整
+    m = m.slice(2);
+    len = Buffer.byteLength(JSON.stringify(m));
+    dropped += 2;
+  }
+  return m;
 }
 
 function toOpenAIMessage(m: ProviderMsg) {
