@@ -34,27 +34,33 @@ describe("hardenEscape(残缺 \\u 字面加固)", () => {
 });
 
 describe("shrinkMessages(请求体压缩)", () => {
-  it(">80KB 的请求体压缩到 <80KB,且 role 顺序合法", () => {
-    // 构造超长消息:大 content + 大 thinking(模拟 historyUnlimited 会话)
-    const bigText = "长".repeat(20000);
-    const bigThink = "思".repeat(20000);
+  it("超限时优先砍思考/工具,正文(记忆)保留到上限,role 顺序合法", () => {
+    // 构造:小正文 + 巨大思考(模拟长会话)
     const msgs: ProviderMsg[] = [];
     for (let i = 0; i < 40; i++) {
-      msgs.push({ role: "user", content: bigText });
-      msgs.push({ role: "assistant", content: bigText, reasoningContent: bigThink });
+      msgs.push({ role: "user", content: "问题" });
+      msgs.push({ role: "assistant", content: "回答", reasoningContent: "思".repeat(20000) });
     }
     const before = Buffer.byteLength(JSON.stringify(msgs));
-    expect(before).toBeGreaterThan(80 * 1024);
+    expect(before).toBeGreaterThan(96 * 1024);
 
     const shrunk = shrinkMessages(msgs);
     const after = Buffer.byteLength(JSON.stringify(shrunk));
-    expect(after).toBeLessThanOrEqual(80 * 1024);
+    expect(after).toBeLessThanOrEqual(96 * 1024);
 
-    // role 顺序合法:不能以 tool 开头,user/assistant 交替完整
-    const roles = shrunk.map((m) => m.role);
-    expect(roles[0]).not.toBe("tool");
-    expect(roles.filter((r) => r === "tool").length).toBe(0);
-    expect(shrunk.length).toBeGreaterThan(4);
+    // 思考被删(最多 3 条 500 字符)
+    const keptThinking = shrunk.filter((m) => m.reasoningContent);
+    expect(keptThinking.length).toBeLessThanOrEqual(3);
+    keptThinking.forEach((m) => expect((m.reasoningContent || "").length).toBeLessThanOrEqual(500));
+    // 正文消息保留完整("回答"未被截断)
+    const keptText = shrunk.filter((m) => m.role === "assistant" && m.content === "回答");
+    expect(keptText.length).toBeGreaterThan(0);
+    // 无孤立 tool
+    let lastHad = false;
+    for (const m of shrunk) {
+      if (m.role === "tool") expect(lastHad).toBe(true);
+      lastHad = m.role === "assistant" && !!m.toolCalls?.length;
+    }
   });
 
   it("双反斜杠 + 残缺 \\u 也能安全加固(偶数反斜杠)", () => {

@@ -10,7 +10,7 @@ import { ToolRegistry, type ToolContext } from "../tools/registry";
 
 const MAX_HISTORY_MESSAGES = 30;
 /** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(夜玲珑等野生人格遇到过 1.4MB/88 秒) */
-const MAX_HISTORY_UNLIMITED = 200;
+const MAX_HISTORY_UNLIMITED = 400;
 /** 单条 assistant 最多回放的工具结果数(迁移会话可能出现上百个工具调用,全量回放会撑爆 payload) */
 const MAX_TOOL_RESULTS = 15;
 /** 每条工具输出回放截断长度 */

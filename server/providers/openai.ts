@@ -49,7 +49,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
     // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩
     let msgs = sanitizeToolMessages(req.messages);
     let body = buildBody(msgs);
-    if (Buffer.byteLength(body) > 80 * 1024) {
+    if (Buffer.byteLength(body) > 96 * 1024) {
       msgs = shrinkMessages(msgs);
       body = buildBody(msgs);
     }
@@ -165,20 +165,26 @@ export function sanitizeToolMessages(msgs: ProviderMsg[]): ProviderMsg[] {
 }
 
 export function shrinkMessages(msgs: ProviderMsg[]): ProviderMsg[] {
-  let m: ProviderMsg[] = msgs.map((x) =>
-    x.reasoningContent ? { ...x, reasoningContent: x.reasoningContent.slice(0, 300) } : x,
-  );
+  // 压缩策略:思考回传(纯开销、非记忆,通常占请求体大半)优先删除 → 正文保持完整(记忆本体)
+  let m = msgs;
   let len = Buffer.byteLength(JSON.stringify(m));
-  if (len > 80 * 1024) {
-    m = m.map((x) =>
-      x.content && x.content.length > 2000 ? { ...x, content: `${x.content.slice(0, 2000)}…(已截断)` } : x,
-    );
+  if (len > 96 * 1024) {
+    // 思考回传是大头且非记忆:最近 3 条保留(截断 500 字符),更早全删;正文不动
+    m = m.map((x, i) => {
+      if (!x.reasoningContent) return x;
+      const rankFromEnd = m.length - i;
+      return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 500) } : { ...x, reasoningContent: undefined };
+    });
+    len = Buffer.byteLength(JSON.stringify(m));
+  }
+  if (len > 96 * 1024) {
+    // 工具输出同样非记忆:截断到 300 字符
+    m = m.map((x) => (x.role === "tool" && x.content.length > 300 ? { ...x, content: `${x.content.slice(0, 300)}…` } : x));
     len = Buffer.byteLength(JSON.stringify(m));
   }
   let dropped = 0;
-  while (len > 80 * 1024 && m.length > 6 && dropped < 200) {
-    // 从最旧开始丢,但必须以 user 消息为边界(user 及其之前全部丢掉),
-    // 避免 assistant(tool_calls)+tool 组被拆散留下孤立 tool 消息
+  while (len > 96 * 1024 && m.length > 30 && dropped < 400) {
+    // 从最旧开始丢,以 user 消息为边界(user 及其之前全部丢掉),避免孤立 tool
     const firstUser = m.findIndex((x) => x.role === "user");
     if (firstUser < 0) break;
     m = m.slice(firstUser + 1);

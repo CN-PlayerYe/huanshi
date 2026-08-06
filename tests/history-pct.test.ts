@@ -30,7 +30,7 @@ describe("sliceHistoryByPct(历史上下文百分比)", () => {
 
   it("兼容旧配置:historyUnlimited=true 等效 100,未设置用默认窗口", () => {
     const msgs = Array.from({ length: 500 }, (_, i) => msg(i % 2 ? "assistant" : "user", "字"));
-    expect(sliceHistoryByPct(msgs, agent({ historyUnlimited: true })).length).toBe(200);
+    expect(sliceHistoryByPct(msgs, agent({ historyUnlimited: true })).length).toBe(400);
     expect(sliceHistoryByPct(msgs, agent({})).length).toBe(30);
   });
 });
