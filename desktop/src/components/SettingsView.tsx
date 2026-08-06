@@ -566,6 +566,21 @@ export function SettingsView() {
             <input type="checkbox" checked={settings.showThinking} onChange={(e) => void updateSettings({ showThinking: e.target.checked })} />
             对话中显示思考过程(思考内容始终存档,随时可打开)
           </label>
+          <div className="field">
+            <label>历史思考回传(影响回复速度)</label>
+            <select
+              value={settings.thinkingEcho ?? "all"}
+              onChange={(e) => void updateSettings({ thinkingEcho: e.target.value as "all" | "recent5" | "off" })}
+              title="DeepSeek thinking 要求把历史思考回传给 API;全量最慢但最稳;压缩更快;不回传最快但可能报 400"
+            >
+              <option value="all">全量(最稳,慢)</option>
+              <option value="recent5">仅最近 5 条完整(快,可能报错)</option>
+              <option value="off">不回传(最快,可能报错)</option>
+            </select>
+            <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
+              上下文越长越慢的主因是历史思考全量回传;压缩后明显提速,若报错请改回「全量」
+            </div>
+          </div>
         </div>
 
         <h3 style={{ marginTop: 18 }}>🖌 皮肤自定义</h3>

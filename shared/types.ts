@@ -104,6 +104,8 @@ export interface Settings {
     model?: string;
     voice?: string;
   };
+  /** 历史思考回传策略:DeepSeek thinking 要求回传 reasoning_content;all=全量,recent5=仅最近 5 条完整(更快,可能报错),off=不回传(最快,可能报错) */
+  thinkingEcho?: "all" | "recent5" | "off";
   /** 人格风格参数(语气/详略/幽默度) */
   style?: {
     tone?: "formal" | "casual" | "professional";

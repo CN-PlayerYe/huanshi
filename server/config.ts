@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS, type Settings } from "../shared/types";
  *   2. 启动参数 --data-dir <path>
  *   3. portable 模式:可执行文件旁的 data-dir.txt 指向的目录,或 exe 旁 data/ 目录
  *   4. 重定向文件 %APPDATA%/HanaLite/data-dir.txt(设置页修改数据目录时写入)
- *   5. 默认 ~/.hanalite
+ *   5. 默认 ~/.huanshi
  */
 
 const REDIRECT_FILE = "data-dir.txt";
@@ -74,7 +74,7 @@ export function resolveDataDir(opts: {
   }
 
   // 5. 默认
-  return buildPaths(join(homedir(), ".hanalite"), false, redirectFile);
+  return buildPaths(join(homedir(), ".huanshi"), false, redirectFile);
 }
 
 function buildPaths(dataDir: string, portable: boolean, redirectFile: string): ResolvedPaths {

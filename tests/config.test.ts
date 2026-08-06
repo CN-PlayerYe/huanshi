@@ -56,7 +56,7 @@ describe("resolveDataDir 数据目录解析优先级", () => {
 
   it("默认目录", () => {
     const r = resolveDataDir({ env: {}, argv: [] });
-    expect(r.dataDir.endsWith(".hanalite")).toBe(true);
+    expect(r.dataDir.endsWith(".huanshi")).toBe(true);
   });
 });
 

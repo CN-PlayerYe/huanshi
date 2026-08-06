@@ -8,7 +8,7 @@ import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../provider
 import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
-const MAX_HISTORY_MESSAGES = 60;
+const MAX_HISTORY_MESSAGES = 30;
 const MAX_TOOL_ITERATIONS = 15;
 
 export interface EngineDeps {
@@ -22,6 +22,7 @@ export interface EngineDeps {
     mainModel: string;
     toolWhitelistDir: string;
     visionProvider?: string;
+    thinkingEcho?: "all" | "recent5" | "off";
     style?: Settings["style"];
   };
 }
@@ -122,7 +123,7 @@ export class AgentEngine {
       : history;
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
-      ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg))),
+      ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all")),
       {
         role: "user",
         content: finalUserContent,
@@ -366,8 +367,18 @@ async function describeHistoryImages(
  * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
  * 关键2:assistant 带思考时,把 reasoning_content 原样回传(DeepSeek thinking 模式要求)。
  */
-export async function historyToProviderMessages(messages: ChatMessage[], dataDir?: string, describeAsText = false): Promise<ProviderMsg[]> {
+export async function historyToProviderMessages(
+  messages: ChatMessage[],
+  dataDir?: string,
+  describeAsText = false,
+  thinkingEcho: "all" | "recent5" | "off" = "all",
+): Promise<ProviderMsg[]> {
   const out: ProviderMsg[] = [];
+  // assistant 序号(从后往前),用于思考回传压缩
+  const assistantIdx: number[] = [];
+  messages.forEach((m, i) => {
+    if (m.role === "assistant") assistantIdx.push(i);
+  });
   for (const m of messages) {
     const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
     if (m.role === "user") {
@@ -388,6 +399,18 @@ export async function historyToProviderMessages(messages: ChatMessage[], dataDir
       continue;
     }
     const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool);
+    // 思考回传策略:all=全量;recent5=仅最近 5 条 assistant 完整、更早截断;off=不回传(实验,可能 400)
+    let reasoning: string | undefined;
+    if (m.role === "assistant") {
+      const thinking = thinkingText(m);
+      if (thinking) {
+        if (thinkingEcho === "off") reasoning = undefined;
+        else if (thinkingEcho === "recent5") {
+          const rankFromEnd = assistantIdx.length - assistantIdx.indexOf(messages.indexOf(m));
+          reasoning = rankFromEnd <= 5 ? thinking : thinking.slice(0, 300);
+        } else reasoning = thinking;
+      }
+    }
     if (m.role === "assistant" && toolParts.length) {
       out.push({
         role: "assistant",
@@ -397,19 +420,19 @@ export async function historyToProviderMessages(messages: ChatMessage[], dataDir
           name: p.tool!.name,
           arguments: p.tool!.input || "{}",
         })),
-        reasoningContent: thinkingText(m) || undefined,
+        reasoningContent: reasoning || undefined,
       });
       for (const p of toolParts) {
         out.push({ role: "tool", content: p.tool!.output ?? "(无输出)", toolCallId: p.tool!.id });
       }
-    } else if (m.role === "assistant" && !text.trim() && !thinkingText(m)) {
+    } else if (m.role === "assistant" && !text.trim() && !reasoning) {
       // 防御:跳过既无文本、无思考、也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")
       continue;
-    } else {
+    } else if (m.role === "assistant") {
       out.push({
         role: "assistant",
         content: text,
-        reasoningContent: thinkingText(m) || undefined,
+        reasoningContent: reasoning || undefined,
       });
     }
   }
