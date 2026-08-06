@@ -180,6 +180,8 @@ export interface ChatRequest {
 
 export type StreamEvent =
   | { type: "session_created"; session: SessionMeta }
+  /** 一条 assistant 消息开始流式输出(带真实消息 id;群聊时每条人格消息各发一次) */
+  | { type: "message_start"; message: { id: string; agentId?: string } }
   | { type: "delta"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_start"; tool: ToolCallPart }

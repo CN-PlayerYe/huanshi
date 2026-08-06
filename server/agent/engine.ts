@@ -183,6 +183,7 @@ export class AgentEngine {
         createdAt: Date.now(),
       };
       db.appendMessage(assistant);
+      await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
       await onEvent({ type: "delta", content: `【${agent.name}】` });
       let textBuf = "";
       try {
@@ -347,6 +348,7 @@ export class AgentEngine {
       model: provider.model,
     };
     db.appendMessage(assistant);
+    await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
 
     const toolCtx: ToolContext = {
       cwd: settings.toolWhitelistDir || join(dataDir, "workspace"),

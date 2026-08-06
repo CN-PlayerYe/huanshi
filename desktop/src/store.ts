@@ -248,6 +248,9 @@ export const useApp = create<AppState>((set, get) => ({
     abortController = new AbortController();
     const signal = abortController.signal;
 
+    // 当前流式目标消息 id:message_start 认领前端占位消息或追加群聊人格消息后,delta/thinking/tool 都定位到它
+    let curAsstId = asstMsg.id;
+
     try {
       await api.chatStream(
         { sessionId, content: text, agentId, attachments },
@@ -261,13 +264,39 @@ export const useApp = create<AppState>((set, get) => ({
               sessions: [e.session, ...s.sessions.filter((x) => x.id !== e.session.id)],
               messagesBySession: { ...s.messagesBySession, [sessionId]: s.messagesBySession[sessionId] ?? [userMsg, asstMsg] },
             }));
+          } else if (e.type === "message_start") {
+            const mid = e.message.id;
+            curAsstId = mid;
+            set((s) => {
+              const list = s.messagesBySession[sessionId] ?? [];
+              // 若最后一条 assistant 是刚插入的占位消息(前端预建),直接认领更新为后端真实 id
+              const lastIdx = [...list].reverse().findIndex((m) => m.role === "assistant");
+              if (lastIdx >= 0) {
+                const i = list.length - 1 - lastIdx;
+                if (list[i].id === asstMsg.id) {
+                  const updated = [...list];
+                  updated[i] = { ...list[i], id: mid, ...(e.message.agentId ? { agentId: e.message.agentId } : {}) };
+                  return { messagesBySession: { ...s.messagesBySession, [sessionId]: updated } };
+                }
+              }
+              // 群聊:追加新的人格消息
+              return {
+                messagesBySession: {
+                  ...s.messagesBySession,
+                  [sessionId]: [
+                    ...list,
+                    { id: mid, sessionId, role: "assistant" as const, parts: [], agentId: e.message.agentId, createdAt: Date.now() },
+                  ],
+                },
+              };
+            });
           } else if (e.type === "delta") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               const textPart = m.parts.find((p) => p.type === "text");
               if (textPart) textPart.text = (textPart.text ?? "") + e.content;
             }));
           } else if (e.type === "thinking") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               let tp = m.parts.find((p) => p.type === "thinking");
               if (!tp) {
                 tp = { type: "thinking", text: "" };
@@ -276,22 +305,22 @@ export const useApp = create<AppState>((set, get) => ({
               tp.text = (tp.text ?? "") + e.content;
             }));
           } else if (e.type === "tool_start") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               m.parts.push({ type: "tool", tool: e.tool });
             }));
           } else if (e.type === "tool_end") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               const p = m.parts.find((p) => p.type === "tool" && p.tool?.id === e.tool.id);
               if (p?.tool) p.tool = e.tool;
             }));
           } else if (e.type === "done") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               m.parts = e.message.parts;
               m.model = e.message.model;
             }));
             set((s) => ({ sessions: s.sessions.map((x) => (x.id === e.session.id ? e.session : x)) }));
           } else if (e.type === "error") {
-            set((s) => updateMsg(s, sessionId, asstMsg.id, (m) => {
+            set((s) => updateMsg(s, sessionId, curAsstId, (m) => {
               const textPart = m.parts.find((p) => p.type === "text");
               if (textPart) textPart.text = (textPart.text ?? "") + `\n\n⚠️ ${e.message}`;
             }));
