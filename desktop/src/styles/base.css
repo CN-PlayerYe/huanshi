@@ -173,7 +173,7 @@ select {
 .sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--bg-side) var(--side-opacity, 100%), transparent);
+  background: var(--side-bg, var(--bg-side));
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -220,9 +220,9 @@ select {
   display: none;
 }
 
-/* 主区背景(支持透明度透出背景图) */
+/* 主区背景(支持透明度透出背景图;rgba 由 JS 计算,避免 color-mix 兼容问题) */
 .main {
-  background: color-mix(in srgb, var(--bg) var(--chat-opacity, 100%), transparent);
+  background: var(--chat-bg, var(--bg));
 }
 
 .sidebar-head {
@@ -529,12 +529,12 @@ select {
 }
 
 .message-row.user .message-bubble {
-  background: color-mix(in srgb, var(--user-bubble) var(--bubble-opacity, 100%), transparent);
+  background: var(--bubble-user, var(--user-bubble));
   border-bottom-right-radius: 4px;
 }
 
 .message-row.assistant .message-bubble {
-  background: color-mix(in srgb, var(--assistant-bubble) var(--bubble-opacity, 100%), transparent);
+  background: var(--bubble-assistant, var(--assistant-bubble));
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
   width: 100%;
