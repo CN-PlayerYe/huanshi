@@ -273,8 +273,9 @@ export function createApp(deps: AppDeps): Hono {
       },
       memory,
     };
-    const fname = `幻世人格-${(a.name || "card").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.json`;
+    const fname = `agent-${a.id.slice(0, 16)}.json`;
     return c.json(card, 200, {
+      // 文件名含中文会导致 Hono Header 报错;实际下载名由前端 a.download 指定(中文)
       "Content-Disposition": `attachment; filename="${fname}"`,
     });
   });
@@ -422,6 +423,7 @@ export function createApp(deps: AppDeps): Hono {
     lines.push(`人格:${agent?.name ?? s.agentId}`);
     lines.push(`导出时间:${new Date().toLocaleString("zh-CN")}`);
     if (s.summary) lines.push(`\n## 早期对话摘要(AI)\n${s.summary}`);
+    if (s.lore) lines.push(`\n## 世界观设定文档(AI)\n${s.lore}`);
     lines.push(`\n## 对话记录(共 ${msgs.length} 条)\n`);
     for (const m of msgs) {
       const role = m.role === "user" ? "👤 用户" : "🤖 助手";
@@ -434,9 +436,10 @@ export function createApp(deps: AppDeps): Hono {
       for (const t of tools) lines.push(`[🔧 ${t.tool!.name}] ${(t.tool!.output ?? "").slice(0, 300)}`);
       lines.push("");
     }
-    const fname = `幻世会话-${(s.title || s.id).replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.txt`;
+    const fname = `session-${s.id.slice(0, 20)}.txt`;
     return c.text(lines.join("\n"), 200, {
       "Content-Type": "text/plain; charset=utf-8",
+      // 文件名含中文会导致 Hono Header 报错;实际下载名由前端 a.download 指定(中文)
       "Content-Disposition": `attachment; filename="${fname}"`,
     });
   });
