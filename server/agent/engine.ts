@@ -180,6 +180,10 @@ export class AgentEngine {
     let thinkingBuf = "";
     let iteration = 0;
     let stop = false;
+    // 请求性能日志(诊断慢会话用):记录 payload 大小 / 首 token 耗时 / 总耗时
+    const reqLogPath = join(dataDir, "logs", "requests.log");
+    const reqStart = Date.now();
+    let firstTokenMs = 0;
 
     try {
       while (!stop && iteration < MAX_TOOL_ITERATIONS) {
@@ -193,6 +197,7 @@ export class AgentEngine {
           { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096 },
           signal,
         )) {
+          if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;
           if (chunk.delta) {
             textBuf += chunk.delta;
             iterText += chunk.delta;
@@ -265,6 +270,25 @@ export class AgentEngine {
         if (summary.length > 20) void memory.retain(summary, "experience", agent.isolatedMemory ? agent.id : undefined);
       }
 
+      // 成功路径:记录请求性能(诊断慢会话)
+      try {
+        const { mkdirSync: mk, writeFileSync: wr } = require("node:fs") as typeof import("node:fs");
+        mk(join(dataDir, "logs"), { recursive: true });
+        wr(
+          reqLogPath,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            agent: agent.name,
+            payloadKB: Math.round(JSON.stringify(providerMessages).length / 1024),
+            firstTokenMs,
+            totalMs: Date.now() - reqStart,
+          }) + "\n",
+          { flag: "a" },
+        );
+      } catch {
+        /* ignore */
+      }
+
       return assistant;
     } catch (err: any) {
       // 失败:把错误合并进占位消息(不新增空消息,避免历史里出现 parts:[] 的空 assistant 触发 API 400)
@@ -273,6 +297,13 @@ export class AgentEngine {
       db.updateMessage(assistant);
       db.updateSession(session.id, { updatedAt: Date.now() });
       await onEvent({ type: "error", message: err.message });
+      try {
+        const { mkdirSync: mk, writeFileSync: wr } = require("node:fs") as typeof import("node:fs");
+        mk(join(dataDir, "logs"), { recursive: true });
+        wr(reqLogPath, JSON.stringify({ at: new Date().toISOString(), agent: agent.name, payloadKB: Math.round(JSON.stringify(providerMessages).length / 1024), firstTokenMs, error: String(err.message).slice(0, 200) }) + "\n", { flag: "a" });
+      } catch {
+        /* ignore */
+      }
       return assistant;
     }
   }
