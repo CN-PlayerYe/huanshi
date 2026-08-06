@@ -19,6 +19,6 @@ export function createProvider(cfg: ModelConfig): ChatProvider {
       return new OpenAICompatibleProvider(baseUrl, cfg.apiKey || undefined, cfg.model);
     case "openai":
     default:
-      return new OpenAICompatibleProvider(baseUrl, cfg.apiKey, cfg.model);
+      return new OpenAICompatibleProvider(baseUrl, cfg.apiKey, cfg.model, {}, cfg.disableThinking === true);
   }
 }

@@ -24,6 +24,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
     apiKey: string | undefined,
     model: string,
     private readonly extraHeaders: Record<string, string> = {},
+    private readonly disableThinking = false,
   ) {
     this.model = model;
     this._apiKey = apiKey ?? "";
@@ -48,6 +49,8 @@ export class OpenAICompatibleProvider implements ChatProvider {
         stream_options: { include_usage: true },
         temperature: req.temperature ?? 0.7,
         ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+        // 关闭思考模式(DeepSeek V3.2+/V4):模型不再“先想后答”,首字大幅提速
+        ...(this.disableThinking ? { thinking: { type: "disabled" } } : {}),
       }),
     });
 

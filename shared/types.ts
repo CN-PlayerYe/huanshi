@@ -67,6 +67,8 @@ export interface ModelConfig {
   apiKey?: string;
   model: string;
   label?: string;
+  /** 关闭模型思考模式(DeepSeek V3.2+/V4 等支持;开启后首字更快,但无思考过程) */
+  disableThinking?: boolean;
 }
 
 export interface MemoryConfig {
