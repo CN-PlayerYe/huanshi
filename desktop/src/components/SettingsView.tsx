@@ -273,7 +273,7 @@ export function SettingsView() {
           {systemInfo?.portable && <span style={{ color: "var(--ok)" }}>便携模式</span>}
         </div>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
-          所有会话、人格、记忆、工作文件都存在这里。优先级:环境变量 HANA_HOME / HANALITE_HOME &gt; 启动参数 --data-dir &gt; 便携模式 &gt; 此处设置 &gt; 默认 ~/.hanalite
+          所有会话、人格、记忆、工作文件都存在这里。优先级:环境变量 HANA_HOME / HANALITE_HOME &gt; 启动参数 --data-dir &gt; 便携模式 &gt; 此处设置 &gt; 默认 ~/.huanshi
         </p>
         <div className="field-row">
           <div className="field">
@@ -306,6 +306,21 @@ export function SettingsView() {
       {/* ---- 记忆 ---- */}
       <div className="settings-section">
         <h3>🧠 记忆</h3>
+        <div className="field" style={{ marginBottom: 10 }}>
+          <label>历史思考回传(影响长会话回复速度)</label>
+          <select
+            value={settings.thinkingEcho ?? "all"}
+            onChange={(e) => void updateSettings({ thinkingEcho: e.target.value as "all" | "recent5" | "off" })}
+            title="DeepSeek thinking 要求把历史思考回传给 API;全量最稳但慢;压缩更快;不回传最快但可能报 400"
+          >
+            <option value="all">全量(最稳,慢)</option>
+            <option value="recent5">仅最近 5 条完整(快,可能报错)</option>
+            <option value="off">不回传(最快,可能报错)</option>
+          </select>
+          <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
+            长会话变慢的主因是历史思考全量回传;压缩后通常明显提速,若报错请改回「全量」
+          </div>
+        </div>
         <div className="radio-row">
           <label>
             <input
@@ -567,20 +582,8 @@ export function SettingsView() {
             对话中显示思考过程(思考内容始终存档,随时可打开)
           </label>
           <div className="field">
-            <label>历史思考回传(影响回复速度)</label>
-            <select
-              value={settings.thinkingEcho ?? "all"}
-              onChange={(e) => void updateSettings({ thinkingEcho: e.target.value as "all" | "recent5" | "off" })}
-              title="DeepSeek thinking 要求把历史思考回传给 API;全量最慢但最稳;压缩更快;不回传最快但可能报 400"
-            >
-              <option value="all">全量(最稳,慢)</option>
-              <option value="recent5">仅最近 5 条完整(快,可能报错)</option>
-              <option value="off">不回传(最快,可能报错)</option>
-            </select>
-            <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
-              上下文越长越慢的主因是历史思考全量回传;压缩后明显提速,若报错请改回「全量」
-            </div>
-          </div>
+            <label>界面显示</label>
+        </div>
         </div>
 
         <h3 style={{ marginTop: 18 }}>🖌 皮肤自定义</h3>
