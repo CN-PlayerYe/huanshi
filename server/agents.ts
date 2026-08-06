@@ -104,6 +104,11 @@ export function createCustomAgent(partial: Partial<AgentDef>): AgentDef {
     systemPrompt: partial.systemPrompt ?? "你是一个乐于助人的私人 AI 助手。",
     memoryEnabled: partial.memoryEnabled ?? true,
     tools: partial.tools ?? [...CORE_TOOLS],
+    ...(partial.useGlobalStyle !== undefined ? { useGlobalStyle: partial.useGlobalStyle } : {}),
+    ...(partial.allowDangerousCommands !== undefined ? { allowDangerousCommands: partial.allowDangerousCommands } : {}),
+    ...(partial.unrestrictedPaths !== undefined ? { unrestrictedPaths: partial.unrestrictedPaths } : {}),
+    ...(partial.historyUnlimited !== undefined ? { historyUnlimited: partial.historyUnlimited } : {}),
+    ...(partial.isolatedMemory !== undefined ? { isolatedMemory: partial.isolatedMemory } : {}),
     createdAt: Date.now(),
   };
 }

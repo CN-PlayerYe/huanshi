@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
 import { newId, type AgentDef, type ChatRequest, type ModelConfig, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
-import { AgentEngine, generateSummary } from "../agent/engine";
+import { AgentEngine, generateLore, generateSummary } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
 import { nextRunTime, parseCron } from "../cron";
@@ -250,6 +250,69 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true });
   });
 
+  /** 人格卡片导出:人格定义 + 独立记忆 → JSON 文件 */
+  app.get("/api/agents/:id/export", async (c) => {
+    const a = deps.db.getAgent(c.req.param("id"));
+    if (!a) return c.json({ error: "人格不存在" }, 404);
+    const memory = a.isolatedMemory ? await deps.memory.list(a.id) : [];
+    const card = {
+      format: "huanshi-agent",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      agent: {
+        name: a.name,
+        description: a.description,
+        systemPrompt: a.systemPrompt,
+        memoryEnabled: a.memoryEnabled,
+        tools: a.tools,
+        useGlobalStyle: a.useGlobalStyle,
+        allowDangerousCommands: a.allowDangerousCommands,
+        unrestrictedPaths: a.unrestrictedPaths,
+        historyUnlimited: a.historyUnlimited,
+        isolatedMemory: a.isolatedMemory,
+      },
+      memory,
+    };
+    const fname = `幻世人格-${(a.name || "card").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.json`;
+    return c.json(card, 200, {
+      "Content-Disposition": `attachment; filename="${fname}"`,
+    });
+  });
+
+  /** 人格卡片导入:JSON 文件 → 新人格(+独立记忆) */
+  app.post("/api/agents/import", async (c) => {
+    const card = (await c.req.json().catch(() => null)) as {
+      format?: string;
+      agent?: Record<string, unknown>;
+      memory?: { id?: string; content?: string; kind?: string; createdAt?: number }[];
+    } | null;
+    if (!card || card.format !== "huanshi-agent" || !card.agent?.name || !card.agent?.systemPrompt) {
+      return c.json({ error: "不是有效的幻世人格卡片文件" }, 400);
+    }
+    const agent = createCustomAgent({
+      name: String(card.agent.name),
+      description: String(card.agent.description ?? ""),
+      systemPrompt: String(card.agent.systemPrompt),
+      memoryEnabled: card.agent.memoryEnabled !== false,
+      tools: Array.isArray(card.agent.tools) ? (card.agent.tools as string[]) : undefined,
+      useGlobalStyle: card.agent.useGlobalStyle as boolean | undefined,
+      allowDangerousCommands: card.agent.allowDangerousCommands as boolean | undefined,
+      unrestrictedPaths: card.agent.unrestrictedPaths as boolean | undefined,
+      historyUnlimited: card.agent.historyUnlimited as boolean | undefined,
+      isolatedMemory: card.agent.isolatedMemory as boolean | undefined,
+    });
+    deps.db.saveAgent(agent);
+    // 导入独立记忆
+    if (agent.isolatedMemory && Array.isArray(card.memory) && card.memory.length) {
+      for (const item of card.memory.slice(0, 500)) {
+        if (item?.content) {
+          void deps.memory.retain(String(item.content), item.kind === "experience" ? "experience" : "fact", agent.id);
+        }
+      }
+    }
+    return c.json({ agent });
+  });
+
   // ---- 会话 ----
 
   app.get("/api/sessions", (c) => c.json({ sessions: deps.db.listSessions() }));
@@ -332,6 +395,50 @@ export function createApp(deps: AppDeps): Hono {
     if (!summary) return c.json({ error: "摘要生成失败,请稍后重试" }, 500);
     deps.db.updateSession(id, { summary, summaryCount: msgs.length });
     return c.json({ ok: true, summary, compressed: early.length, kept: msgs.length - early.length });
+  });
+
+  /** 世界观设定文档:生成/更新(手动档,AI 综合摘要+最近对话维护设定) */
+  app.post("/api/sessions/:id/lore", async (c) => {
+    const id = c.req.param("id");
+    const session = deps.db.getSession(id);
+    if (!session) return c.json({ error: "会话不存在" }, 404);
+    const msgs = deps.db.getMessages(id);
+    if (msgs.length < 5) return c.json({ error: "对话太少,暂无法提炼世界观" }, 400);
+    const cfg = deps.getSettings().providers[deps.getSettings().activeProvider];
+    const lore = await generateLore(cfg, msgs.slice(-200), session.lore, deps.paths.dataDir);
+    if (!lore) return c.json({ error: "世界观生成失败,请稍后重试" }, 500);
+    deps.db.updateSession(id, { lore });
+    return c.json({ ok: true, lore });
+  });
+
+  /** 会话导出:对话全文 + 摘要 → 纯文本(下载) */
+  app.get("/api/sessions/:id/export", (c) => {
+    const s = deps.db.getSession(c.req.param("id"));
+    if (!s) return c.json({ error: "会话不存在" }, 404);
+    const agent = deps.db.getAgent(s.agentId);
+    const msgs = deps.db.getMessages(s.id);
+    const lines: string[] = [];
+    lines.push(`# ${s.title}`);
+    lines.push(`人格:${agent?.name ?? s.agentId}`);
+    lines.push(`导出时间:${new Date().toLocaleString("zh-CN")}`);
+    if (s.summary) lines.push(`\n## 早期对话摘要(AI)\n${s.summary}`);
+    lines.push(`\n## 对话记录(共 ${msgs.length} 条)\n`);
+    for (const m of msgs) {
+      const role = m.role === "user" ? "👤 用户" : "🤖 助手";
+      const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
+      const thinking = m.parts.filter((p) => p.type === "thinking").map((p) => p.text ?? "").join("\n");
+      const tools = m.parts.filter((p) => p.type === "tool" && p.tool);
+      lines.push(`### ${role} · ${new Date(m.createdAt).toLocaleString("zh-CN")}`);
+      if (thinking) lines.push(`> 🖊 思考:${thinking}`);
+      if (text) lines.push(text);
+      for (const t of tools) lines.push(`[🔧 ${t.tool!.name}] ${(t.tool!.output ?? "").slice(0, 300)}`);
+      lines.push("");
+    }
+    const fname = `幻世会话-${(s.title || s.id).replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.txt`;
+    return c.text(lines.join("\n"), 200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${fname}"`,
+    });
   });
 
   // ---- 搜索(会话标题 + 消息正文) ----

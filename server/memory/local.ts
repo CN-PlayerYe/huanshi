@@ -97,6 +97,10 @@ export class LocalMemory implements MemoryBackend {
     return { facts: this.facts.length, experiences: this.experiences.length };
   }
 
+  async list(): Promise<MemoryItem[]> {
+    return [...this.facts, ...this.experiences];
+  }
+
   clear(): void {
     this.facts = [];
     this.experiences = [];

@@ -66,6 +66,29 @@ export function ChatView() {
             {summarizing ? "压缩中…" : "🧹 压缩上下文"}
           </button>
         )}
+        {activeSessionId && (
+          <button
+            className="btn secondary sm"
+            title="导出本会话(对话全文+摘要)为文本文件"
+            onClick={() => void api.exportSession(activeSessionId, activeSession?.title ?? "").catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}
+          >
+            📤 导出
+          </button>
+        )}
+        {activeSessionId && (
+          <button
+            className="btn secondary sm"
+            title="生成/更新世界观设定文档:AI 把剧情提炼成权威设定(人物/世界/规则),不随上下文滚动丢失"
+            onClick={() =>
+              void api
+                .loreSession(activeSessionId)
+                .then((r) => useApp.getState().showToast(`世界观已${activeSession?.lore ? "更新" : "生成"}:${r.lore.slice(0, 60)}…`))
+                .catch((e) => useApp.getState().showToast(`生成失败:${(e as Error).message}`))
+            }
+          >
+            📖 世界观
+          </button>
+        )}
         {activeModel && <span className="model-tag">{activeModel}</span>}
       </div>
 

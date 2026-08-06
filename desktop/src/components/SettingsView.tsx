@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ModelConfig, ProviderKind, TaskDef } from "@shared/types";
 import { api } from "../api";
 import { useApp } from "../store";
@@ -66,6 +66,7 @@ export function SettingsView() {
   const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
   const [systemVoices, setSystemVoices] = useState<{ name: string; lang: string }[]>([]);
   const [ttsTesting, setTtsTesting] = useState(false);
+  const cardFileRef = useRef<HTMLInputElement>(null);
   const [taskMsg, setTaskMsg] = useState("");
 
   const refreshTasks = async () => {
@@ -921,6 +922,27 @@ export function SettingsView() {
             >
               ➕ 创建定时任务
             </button>
+            <button
+              className="btn secondary"
+              title="一键添加:每天 23:00 让该人格回顾当天对话,把重要剧情/设定/偏好写入长期记忆"
+              onClick={async () => {
+                try {
+                  await api.createTask({
+                    name: "每日剧情复盘",
+                    prompt:
+                      "请回顾本会话最近的对话(以及记忆库),把今天新发生的重要剧情进展、人物关系变化、用户偏好与承诺、设定补充,用 memory_retain 工具逐条写入长期记忆。如果今天没有新进展,回复'今日无新进展'即可。",
+                    schedule: "0 23 * * *",
+                    agentId: taskForm.agentId || agents[0]?.id || "",
+                  });
+                  setTaskMsg("已添加「每日剧情复盘」任务(每天 23:00 执行)");
+                  await refreshTasks();
+                } catch (err) {
+                  setTaskMsg(`添加失败:${(err as Error).message}`);
+                }
+              }}
+            >
+              ⏰ 添加每日复盘模板
+            </button>
             {taskMsg && <span style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>{taskMsg}</span>}
           </div>
         </div>
@@ -944,6 +966,9 @@ export function SettingsView() {
                 </label>
                 <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, isolatedMemory: a.isolatedMemory })}>
                   编辑
+                </button>
+                <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
+                  📦 导出
                 </button>
                 <button className="remove" onClick={() => void deleteAgent(a.id)}>
                   ✕ 删除
@@ -1034,6 +1059,30 @@ export function SettingsView() {
             ＋ 新建人格
           </button>
         )}
+        {!agentForm && (
+          <button className="btn secondary" style={{ marginTop: 12, marginLeft: 8 }} onClick={() => cardFileRef.current?.click()}>
+            📦 导入人格卡片(JSON)
+          </button>
+        )}
+        <input
+          ref={cardFileRef}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            try {
+              const card = JSON.parse(await f.text());
+              const r = await api.importAgent(card);
+              useApp.getState().showToast(`已导入人格「${r.agent.name}」`);
+              await useApp.getState().refreshAgents();
+            } catch (err) {
+              useApp.getState().showToast(`导入失败:${(err as Error).message}`);
+            }
+            e.target.value = "";
+          }}
+        />
       </div>
     </div>
   );

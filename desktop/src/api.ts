@@ -88,8 +88,40 @@ export const api = {
   /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */
   summarizeSession: (id: string) =>
     request<{ ok: boolean; summary: string; compressed: number; kept: number }>(`/api/sessions/${id}/summarize`, { method: "POST" }),
+  /** 世界观设定文档:生成/更新(AI 维护的长篇设定) */
+  loreSession: (id: string) =>
+    request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore`, { method: "POST" }),
+  /** 导出会话为文本(下载) */
+  async exportSession(id: string, title: string): Promise<void> {
+    const res = await fetch(base + `/api/sessions/${id}/export`);
+    if (!res.ok) throw new Error("导出失败");
+    const text = await res.text();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `幻世会话-${(title || id).replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   setSessionAgent: (id: string, agentId: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/agent`, { method: "POST", body: JSON.stringify({ agentId }) }),
+  /** 人格卡片导出:下载 JSON 文件 */
+  async exportAgent(id: string, name: string): Promise<void> {
+    const res = await fetch(base + `/api/agents/${id}/export`);
+    if (!res.ok) throw new Error("导出失败");
+    const card = await res.json();
+    const blob = new Blob([JSON.stringify(card, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `幻世人格-${(name || "card").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  /** 人格卡片导入 */
+  importAgent: (card: unknown) =>
+    request<{ agent: AgentDef }>(`/api/agents/import`, { method: "POST", body: JSON.stringify(card) }),
   search: (q: string) =>
     request<{ sessions: { session: SessionMeta; matches: number }[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   /** 图片附件上传,返回相对数据目录的文件路径 */

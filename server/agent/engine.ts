@@ -25,6 +25,52 @@ function truncate(s: string, max: number): string {
 /** 正在生成摘要的会话(防止并发重复生成) */
 const summaryLocks = new Set<string>();
 
+/** 世界观文档生成:综合会话摘要 + 最近对话,生成/更新结构化设定文档 */
+export async function generateLore(
+  providerCfg: ModelConfig,
+  messages: ChatMessage[],
+  existingLore: string | undefined,
+  dataDir: string,
+): Promise<string> {
+  if (!providerCfg || !messages.length) return "";
+  const provider = createProvider(providerCfg);
+  const history = messages
+    .map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.parts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text ?? "")
+        .join("\n")
+        .slice(0, 1500),
+    }))
+    .filter((m) => m.content.trim())
+    .slice(-60);
+  if (!history.length) return "";
+  let text = "";
+  try {
+    for await (const chunk of provider.chatStream({
+      messages: [
+        {
+          role: "system",
+          content:
+            (existingLore ? `以下是现有世界观设定文档,请在其基础上更新(保留有效内容,合并新信息):\n${existingLore}\n\n` : "") +
+            "你是世界观整理师。请根据对话记录,生成/更新一份世界观设定文档,结构固定为:\n" +
+            "【世界背景】【主要人物(含性格/身份/关系)】【剧情进展】【重要设定与规则】【用户偏好与互动方式】【未解决悬念】\n" +
+            "精炼准确,中文,600字以内。只输出文档本身。",
+        },
+        ...history,
+      ],
+      tools: [],
+      maxTokens: 1200,
+    })) {
+      if (chunk.delta) text += chunk.delta;
+    }
+  } catch {
+    /* 失败不影响主流程 */
+  }
+  return text.trim();
+}
+
 /**
  * 用模型把早期对话压成摘要(纯文本请求,不调工具)。
  * 供"AI 自动摘要":会话过长时让 AI 自主提炼关键信息,而不是简单截断。
@@ -170,6 +216,10 @@ export class AgentEngine {
     // 摘要注入:追加到 memoryBlock(作为早期对话的背景),再组装 system prompt
     if (session.summary) {
       memoryBlock += `\n\n【早期对话摘要(本会话较早部分,供你延续剧情)】\n${session.summary}`;
+    }
+    // 世界观设定文档注入(由 AI 维护的长篇设定,优先级高于滚动摘要)
+    if (session.lore) {
+      memoryBlock += `\n\n【世界观设定文档(本故事世界的权威设定,务必遵守)】\n${session.lore}`;
     }
     const systemPrompt = buildSystemPrompt(
       agent,

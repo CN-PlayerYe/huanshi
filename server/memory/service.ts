@@ -18,6 +18,8 @@ export interface MemoryBackend {
   recall(query: string, limit?: number): Promise<MemoryItem[]>;
   retain(content: string, kind: MemoryKind): Promise<void>;
   reflect(bankId?: string): Promise<string>;
+  /** 列出全部记忆(用于导出/备份) */
+  list(): Promise<MemoryItem[]>;
   isHealthy(): Promise<boolean>;
   stats(): Promise<{ facts: number; experiences: number }>;
   clear(): void;
@@ -110,6 +112,11 @@ export class MemoryService {
   /** 本地记忆统计(条数)与清空 */
   stats(agentId?: string): Promise<{ facts: number; experiences: number }> {
     return this.backendFor(agentId).stats();
+  }
+
+  /** 列出全部记忆(用于人格卡片导出) */
+  list(agentId?: string): Promise<MemoryItem[]> {
+    return this.backendFor(agentId).list();
   }
 
   clear(agentId?: string): void {
