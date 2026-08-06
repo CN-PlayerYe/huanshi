@@ -17,6 +17,7 @@ export function ChatView() {
   const stop = useApp((s) => s.stop);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const [summarizing, setSummarizing] = useState(false);
 
   const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
     if ((!text.trim() && !atts?.length) || sending) return;
@@ -45,6 +46,26 @@ export function ChatView() {
             </option>
           ))}
         </select>
+        {activeSessionId && (
+          <button
+            className="btn secondary sm summarize-btn"
+            title="手动压缩上下文:让 AI 把早期对话压成摘要(长会话提速、延续剧情)"
+            disabled={summarizing}
+            onClick={async () => {
+              setSummarizing(true);
+              try {
+                const r = await api.summarizeSession(activeSessionId);
+                useApp.getState().showToast(`已压缩 ${r.compressed} 条早期消息为摘要:${r.summary.slice(0, 60)}…`);
+              } catch (err) {
+                useApp.getState().showToast(`压缩失败:${(err as Error).message}`);
+              } finally {
+                setSummarizing(false);
+              }
+            }}
+          >
+            {summarizing ? "压缩中…" : "🧹 压缩上下文"}
+          </button>
+        )}
         {activeModel && <span className="model-tag">{activeModel}</span>}
       </div>
 

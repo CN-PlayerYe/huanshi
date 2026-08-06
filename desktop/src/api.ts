@@ -85,6 +85,9 @@ export const api = {
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
   renameSession: (id: string, title: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/rename`, { method: "POST", body: JSON.stringify({ title }) }),
+  /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */
+  summarizeSession: (id: string) =>
+    request<{ ok: boolean; summary: string; compressed: number; kept: number }>(`/api/sessions/${id}/summarize`, { method: "POST" }),
   setSessionAgent: (id: string, agentId: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/agent`, { method: "POST", body: JSON.stringify({ agentId }) }),
   search: (q: string) =>

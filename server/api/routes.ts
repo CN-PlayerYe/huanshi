@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
 import { newId, type AgentDef, type ChatRequest, type ModelConfig, type SessionMeta, type Settings, type StreamEvent, type TaskDef } from "../../shared/types";
-import { AgentEngine } from "../agent/engine";
+import { AgentEngine, generateSummary } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
 import { nextRunTime, parseCron } from "../cron";
@@ -317,6 +317,21 @@ export function createApp(deps: AppDeps): Hono {
     const { title } = (await c.req.json()) as { title: string };
     deps.db.updateSession(c.req.param("id"), { title: title || "新会话" });
     return c.json({ ok: true });
+  });
+
+  /** 手动压缩上下文:立即用 AI 把早期对话压成摘要存进会话(手动档) */
+  app.post("/api/sessions/:id/summarize", async (c) => {
+    const id = c.req.param("id");
+    const session = deps.db.getSession(id);
+    if (!session) return c.json({ error: "会话不存在" }, 404);
+    const msgs = deps.db.getMessages(id);
+    if (msgs.length <= 10) return c.json({ error: "会话太短,暂不需要压缩" }, 400);
+    const early = msgs.slice(0, Math.max(msgs.length - 30, 10)); // 最近 30 条保留完整,更早的压成摘要
+    const cfg = deps.getSettings().providers[deps.getSettings().activeProvider];
+    const summary = await generateSummary(cfg, early, deps.paths.dataDir);
+    if (!summary) return c.json({ error: "摘要生成失败,请稍后重试" }, 500);
+    deps.db.updateSession(id, { summary, summaryCount: msgs.length });
+    return c.json({ ok: true, summary, compressed: early.length, kept: msgs.length - early.length });
   });
 
   // ---- 搜索(会话标题 + 消息正文) ----
