@@ -43,6 +43,8 @@ export interface SessionMeta {
   summaryCount?: number;
   /** 世界观设定文档:由 AI 维护的长篇设定(人物/世界观/关系),不随会话滚动丢失 */
   lore?: string;
+  /** 世界观历史版本(回退用,最多 5 版) */
+  loreHistory?: string[];
 }
 
 export interface AgentDef {

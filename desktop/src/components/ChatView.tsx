@@ -18,6 +18,7 @@ export function ChatView() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const [summarizing, setSummarizing] = useState(false);
+  const [loreOpen, setLoreOpen] = useState(false);
 
   const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
     if ((!text.trim() && !atts?.length) || sending) return;
@@ -78,18 +79,22 @@ export function ChatView() {
         {activeSessionId && (
           <button
             className="btn secondary sm"
-            title="生成/更新世界观设定文档:AI 把剧情提炼成权威设定(人物/世界/规则),不随上下文滚动丢失"
-            onClick={() =>
-              void api
-                .loreSession(activeSessionId)
-                .then((r) => useApp.getState().showToast(`世界观已${activeSession?.lore ? "更新" : "生成"}:${r.lore.slice(0, 60)}…`))
-                .catch((e) => useApp.getState().showToast(`生成失败:${(e as Error).message}`))
-            }
+            title="世界观设定:预览/生成/编辑/撤销/清除"
+            onClick={() => setLoreOpen(true)}
           >
             📖 世界观
           </button>
         )}
         {activeModel && <span className="model-tag">{activeModel}</span>}
+        {loreOpen && activeSessionId && (
+          <LorePanel
+            sessionId={activeSessionId}
+            initialLore={activeSession?.lore}
+            hasHistory={Boolean(activeSession?.loreHistory?.length)}
+            onClose={() => setLoreOpen(false)}
+            onChanged={() => void useApp.getState().refreshSessions()}
+          />
+        )}
       </div>
 
       <MessageList messages={messages} streaming={sending} />
@@ -104,6 +109,100 @@ export function ChatView() {
 }
 
 /** 独立输入框组件:本地 state,打字只重渲染自身,不拖累消息列表 */
+/** 世界观管理面板:预览 / 生成 / 编辑 / 撤销 / 清除(误点可回退) */
+function LorePanel({
+  sessionId,
+  initialLore,
+  hasHistory,
+  onClose,
+  onChanged,
+}: {
+  sessionId: string;
+  initialLore?: string;
+  hasHistory: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [lore, setLore] = useState(initialLore ?? "");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [editText, setEditText] = useState(initialLore ?? "");
+
+  const toast = (m: string) => useApp.getState().showToast(m);
+  const act = async (fn: () => Promise<{ lore?: string }>, okMsg: string) => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      if (r.lore !== undefined) setLore(r.lore);
+      setEditText(r.lore ?? "");
+      onChanged();
+      toast(okMsg);
+    } catch (err) {
+      toast(`操作失败:${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal lore-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <strong>📖 世界观设定</strong>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 8px" }}>
+            AI 每次对话都会遵守这份设定(人设不崩、设定不冲突)。可以预览、生成、手动编辑,误操作可撤销。
+          </p>
+          {editing ? (
+            <textarea
+              className="lore-editor"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={14}
+              placeholder="输入世界观设定内容…"
+            />
+          ) : (
+            <pre className="lore-view">{lore || "(尚未生成世界观。点击「✨ 生成」让 AI 提炼当前剧情。)"}</pre>
+          )}
+        </div>
+        <div className="modal-foot">
+          {!editing ? (
+            <>
+              <button className="btn" disabled={busy} onClick={() => void act(() => api.loreSession(sessionId), "世界观已生成/更新")}>
+                {busy ? "生成中…" : "✨ 生成/更新"}
+              </button>
+              <button className="btn secondary" disabled={busy || !lore} onClick={() => { setEditing(true); }}>
+                ✏️ 编辑
+              </button>
+              <button className="btn secondary" disabled={busy || !hasHistory} onClick={() => void act(() => api.loreUndo(sessionId), "已回退到上一版本")}>
+                ↩️ 撤销
+              </button>
+              <button className="btn danger" disabled={busy || !lore} onClick={() => void act(() => api.loreClear(sessionId).then(() => ({ lore: "" })), "世界观已清除")}>
+                🗑 清除
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() => void act(() => api.loreSet(sessionId, editText).then((r) => ({ lore: r.lore })), "已保存")}
+              >
+                保存
+              </button>
+              <button className="btn secondary" disabled={busy} onClick={() => { setEditing(false); setEditText(lore); }}>
+                取消
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ChatInput = memo(function ChatInput({
   sending,
   onSend,

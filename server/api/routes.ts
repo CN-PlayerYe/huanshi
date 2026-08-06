@@ -398,7 +398,7 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true, summary, compressed: early.length, kept: msgs.length - early.length });
   });
 
-  /** 世界观设定文档:生成/更新(手动档,AI 综合摘要+最近对话维护设定) */
+  /** 世界观设定文档:生成/更新(AI 综合摘要+最近对话维护设定)。更新前保存历史版本供回退 */
   app.post("/api/sessions/:id/lore", async (c) => {
     const id = c.req.param("id");
     const session = deps.db.getSession(id);
@@ -408,8 +408,40 @@ export function createApp(deps: AppDeps): Hono {
     const cfg = deps.getSettings().providers[deps.getSettings().activeProvider];
     const lore = await generateLore(cfg, msgs.slice(-200), session.lore, deps.paths.dataDir);
     if (!lore) return c.json({ error: "世界观生成失败,请稍后重试" }, 500);
-    deps.db.updateSession(id, { lore });
+    const history = session.lore ? [session.lore, ...(session.loreHistory ?? [])].slice(0, 5) : session.loreHistory;
+    deps.db.updateSession(id, { lore, loreHistory: history });
     return c.json({ ok: true, lore });
+  });
+
+  /** 世界观:回退到上一版本 */
+  app.post("/api/sessions/:id/lore/undo", (c) => {
+    const id = c.req.param("id");
+    const session = deps.db.getSession(id);
+    if (!session || !session.loreHistory?.length) return c.json({ error: "没有可回退的历史版本" }, 400);
+    const [prev, ...rest] = session.loreHistory;
+    deps.db.updateSession(id, { lore: prev, loreHistory: rest });
+    return c.json({ ok: true, lore: prev });
+  });
+
+  /** 世界观:清除(误点或不需要时) */
+  app.post("/api/sessions/:id/lore/clear", (c) => {
+    const id = c.req.param("id");
+    const session = deps.db.getSession(id);
+    if (!session) return c.json({ error: "会话不存在" }, 404);
+    deps.db.updateSession(id, { lore: undefined, loreHistory: undefined });
+    return c.json({ ok: true });
+  });
+
+  /** 世界观:手动编辑(直接设置内容) */
+  app.post("/api/sessions/:id/lore/set", async (c) => {
+    const id = c.req.param("id");
+    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
+    const session = deps.db.getSession(id);
+    if (!session) return c.json({ error: "会话不存在" }, 404);
+    const newLore = (text ?? "").trim();
+    const history = session.lore ? [session.lore, ...(session.loreHistory ?? [])].slice(0, 5) : session.loreHistory;
+    deps.db.updateSession(id, { lore: newLore || undefined, loreHistory: history });
+    return c.json({ ok: true, lore: newLore });
   });
 
   /** 会话导出:对话全文 + 摘要 → 纯文本(下载) */

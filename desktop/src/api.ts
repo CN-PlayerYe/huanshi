@@ -91,6 +91,10 @@ export const api = {
   /** 世界观设定文档:生成/更新(AI 维护的长篇设定) */
   loreSession: (id: string) =>
     request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore`, { method: "POST" }),
+  loreUndo: (id: string) => request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore/undo`, { method: "POST" }),
+  loreClear: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/lore/clear`, { method: "POST" }),
+  loreSet: (id: string, text: string) =>
+    request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore/set`, { method: "POST", body: JSON.stringify({ text }) }),
   /** 导出会话为文本(下载) */
   async exportSession(id: string, title: string): Promise<void> {
     const res = await fetch(base + `/api/sessions/${id}/export`);
