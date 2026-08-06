@@ -6,6 +6,9 @@ import { api, apiBase } from "../api";
 import { useApp } from "../store";
 import logo from "../assets/icon.png";
 
+// 模块级常量:避免 selector 里 ?? [] 每次返回新引用导致 React 无限重渲染
+const EMPTY_OPTIONS: string[] = [];
+
 export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
@@ -233,7 +236,7 @@ function stripImages(text: string): string {
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const activeSessionId = useApp((s) => s.activeSessionId);
-  const options = activeSessionId ? useApp((s) => s.sessionOptions[activeSessionId] ?? []) : [];
+  const options = activeSessionId ? useApp((s) => s.sessionOptions[activeSessionId] ?? EMPTY_OPTIONS) : EMPTY_OPTIONS;
   const clearOptions = useApp((s) => s.clearOptions);
   const sendMessage = useApp((s) => s.sendMessage);
 
