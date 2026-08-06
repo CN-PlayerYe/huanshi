@@ -167,7 +167,7 @@ export class AgentEngine {
       const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
-        ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all")),
+        ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
         {
           role: "user",
           content: `(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
@@ -609,6 +609,7 @@ export async function historyToProviderMessages(
   dataDir?: string,
   describeAsText = false,
   thinkingEcho: "all" | "recent5" | "off" = "all",
+  agentNameOf?: (agentId: string) => string | undefined,
 ): Promise<ProviderMsg[]> {
   const out: ProviderMsg[] = [];
   // assistant 序号(从后往前),用于思考回传压缩
@@ -654,9 +655,12 @@ export async function historyToProviderMessages(
       }
     }
     if (m.role === "assistant" && toolParts.length) {
+      // 群聊回放:给发言带上人格名,让模型分清在场是谁说的
+      const speaker = m.agentId ? agentNameOf?.(m.agentId) : undefined;
+      const spoken = speaker && text.trim() ? `（${speaker}）${text}` : text;
       out.push({
         role: "assistant",
-        content: text,
+        content: spoken,
         toolCalls: toolParts.map((p) => ({
           id: p.tool!.id,
           name: p.tool!.name,
@@ -671,9 +675,11 @@ export async function historyToProviderMessages(
       // 防御:跳过既无文本、无思考、也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")
       continue;
     } else if (m.role === "assistant") {
+      const speaker = m.agentId ? agentNameOf?.(m.agentId) : undefined;
+      const spoken = speaker && text.trim() ? `（${speaker}）${text}` : text;
       out.push({
         role: "assistant",
-        content: text,
+        content: spoken,
         reasoningContent: reasoning || undefined,
       });
     }

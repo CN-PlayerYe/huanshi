@@ -84,6 +84,11 @@ export const api = {
   deleteSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}`, { method: "DELETE" }),
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
   unarchiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unarchive`, { method: "POST" }),
+  createBackup: () => request<{ ok: boolean; backupDir: string }>("/api/backup", { method: "POST" }),
+  listBackups: () =>
+    request<{ backups: { name: string; dir: string; size: number; mtime: number }[] }>("/api/backups"),
+  restoreBackup: (backupDir: string) =>
+    request<{ ok: boolean; snapshot?: string }>("/api/backup/restore", { method: "POST", body: JSON.stringify({ backupDir }) }),
   renameSession: (id: string, title: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/rename`, { method: "POST", body: JSON.stringify({ title }) }),
   /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */

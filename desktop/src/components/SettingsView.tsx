@@ -61,6 +61,8 @@ export function SettingsView() {
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
+  const [backups, setBackups] = useState<{ name: string; dir: string; mtime: number }[]>([]);
+  const [backupMsg, setBackupMsg] = useState("");
   const [csInfo, setCsInfo] = useState("");
   const [tasks, setTasks] = useState<TaskDef[]>([]);
   const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
@@ -130,6 +132,7 @@ export function SettingsView() {
     void api.providerPresets().then((r) => setPresets(r.presets)).catch(() => undefined);
     void api.memoryStats().then((r) => setMemStats(r.stats)).catch(() => undefined);
     void api.memoryAgents().then((r) => setAgentMems(r.agents)).catch(() => undefined);
+    void api.listBackups().then((r) => setBackups(r.backups)).catch(() => undefined);
   }, []);
 
   const runTest = async (key: string, cfg: ModelConfig) => {
@@ -547,6 +550,78 @@ export function SettingsView() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ---- 数据备份 / 恢复 ---- */}
+      <div className="settings-section">
+        <h3>🗜 数据备份 / 恢复</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
+          一键把全部数据(会话 / 人格 / 记忆 / 文件)复制到数据目录同级的「幻世备份」文件夹。恢复前会自动给当前数据留一份快照。
+        </p>
+        <div className="field-row">
+          <button
+            className="btn primary"
+            onClick={async () => {
+              try {
+                const res = await api.createBackup();
+                setBackupMsg(`✅ 备份完成:${res.backupDir}`);
+                setBackups((await api.listBackups()).backups);
+              } catch (err) {
+                setBackupMsg(`❌ 备份失败:${(err as Error).message}`);
+              }
+            }}
+          >
+            💾 立即备份
+          </button>
+          <button
+            className="btn secondary"
+            onClick={async () => setBackups((await api.listBackups()).backups)}
+          >
+            🔄 刷新列表
+          </button>
+        </div>
+        {backupMsg && (
+          <p style={{ fontSize: 12.5, color: backupMsg.startsWith("✅") ? "var(--ok)" : "var(--danger)", wordBreak: "break-all", margin: "6px 0 0" }}>
+            {backupMsg}
+          </p>
+        )}
+        {backups.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            {backups.map((b) => (
+              <div
+                key={b.name}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--border)" }}
+              >
+                <span
+                  style={{ flex: 1, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={b.name}
+                >
+                  🗂 {b.name}
+                </span>
+                <span style={{ fontSize: 11.5, color: "var(--text-dim)", flexShrink: 0 }}>
+                  {new Date(b.mtime).toLocaleString("zh-CN")}
+                </span>
+                <button
+                  className="btn secondary sm"
+                  onClick={async () => {
+                    const ok = window.hanalite?.confirmDialog
+                      ? await window.hanalite.confirmDialog(`从备份「${b.name}」恢复?当前数据会自动留快照,恢复后需重启应用生效。`)
+                      : confirm(`从备份「${b.name}」恢复?`);
+                    if (!ok) return;
+                    try {
+                      const res = await api.restoreBackup(b.dir);
+                      setBackupMsg(`✅ 已从「${b.name}」恢复。请重启幻世生效${res.snapshot ? `(恢复前快照:${res.snapshot})` : ""}`);
+                    } catch (err) {
+                      setBackupMsg(`❌ 恢复失败:${(err as Error).message}`);
+                    }
+                  }}
+                >
+                  恢复
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ---- 数据迁移(从 Cherry Studio) ---- */}

@@ -123,3 +123,18 @@ describe("群聊 groupChat", () => {
     expect(msgs[2].parts[0]).toMatchObject({ type: "text", text: expect.stringContaining("我来") });
   });
 });
+
+describe("群聊历史回放", () => {
+  it("回放 assistant 消息时带人格名,让模型分清谁说的", async () => {
+    const { historyToProviderMessages } = await import("../server/agent/engine");
+    const msgs: any[] = [
+      { id: "m1", sessionId: "s", role: "user", parts: [{ type: "text", text: "大家好啊" }], createdAt: 1 },
+      { id: "m2", sessionId: "s", role: "assistant", agentId: "agent-a", parts: [{ type: "text", text: "我来了" }], createdAt: 2 },
+      { id: "m3", sessionId: "s", role: "assistant", agentId: "agent-b", parts: [{ type: "text", text: "我也在" }], createdAt: 3 },
+    ];
+    const out = await historyToProviderMessages(msgs as any, undefined, false, "all", (id) => (id === "agent-a" ? "小盏" : id === "agent-b" ? "小尺" : undefined));
+    expect(out[1].content).toBe("（小盏）我来了");
+    expect(out[2].content).toBe("（小尺）我也在");
+    expect(out[0].content).toBe("大家好啊");
+  });
+});

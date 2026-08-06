@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, statSync } from "node:fs";
+import { basename, dirname, extname, join } from "node:path";
 import { networkInterfaces } from "node:os";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -353,6 +353,59 @@ export function createApp(deps: AppDeps): Hono {
   app.post("/api/sessions/:id/unarchive", (c) => {
     const s = deps.db.updateSession(c.req.param("id"), { archived: false });
     return c.json({ ok: Boolean(s) });
+  });
+
+  // ---- 数据备份/恢复 ----
+  // 备份根目录:数据目录同级下的「幻世备份」文件夹
+  const backupRoot = (dataDir: string) => join(dirname(dataDir), "幻世备份");
+  const backupExcludes = ["_backup_", "幻世备份", "重定向备份"];
+
+  /** 递归复制目录(避开 fs.cpSync 在 Windows 中文路径下的崩溃,逐文件复制最稳) */
+  function copyDirRecursive(src: string, dest: string, excludes: string[]): void {
+    mkdirSync(dest, { recursive: true });
+    for (const ent of readdirSync(src, { withFileTypes: true })) {
+      if (excludes.some((e) => ent.name.startsWith(e))) continue;
+      const s = join(src, ent.name);
+      const d = join(dest, ent.name);
+      if (ent.isDirectory()) copyDirRecursive(s, d, excludes);
+      else if (ent.isFile()) copyFileSync(s, d);
+    }
+  }
+
+  app.post("/api/backup", (c) => {
+    const dataDir = deps.paths.dataDir;
+    const root = backupRoot(dataDir);
+    mkdirSync(root, { recursive: true });
+    const name = `${basename(dataDir)}-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}`;
+    const dest = join(root, name);
+    copyDirRecursive(dataDir, dest, backupExcludes);
+    return c.json({ ok: true, backupDir: dest });
+  });
+
+  app.get("/api/backups", (c) => {
+    const root = backupRoot(deps.paths.dataDir);
+    if (!existsSync(root)) return c.json({ backups: [] });
+    const backups = readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => {
+        const p = join(root, d.name);
+        const st = statSync(p);
+        return { name: d.name, dir: p, size: st.size, mtime: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return c.json({ backups });
+  });
+
+  app.post("/api/backup/restore", async (c) => {
+    const { backupDir } = (await c.req.json().catch(() => ({}))) as { backupDir?: string };
+    if (!backupDir) return c.json({ ok: false, message: "缺少备份目录" });
+    const dataDir = deps.paths.dataDir;
+    if (!existsSync(backupDir)) return c.json({ ok: false, message: "备份不存在" });
+    // 恢复前先把当前数据留一份快照,防止误恢复
+    const snap = join(backupRoot(dataDir), `_恢复前快照-${Date.now()}`);
+    copyDirRecursive(dataDir, snap, backupExcludes);
+    copyDirRecursive(backupDir, dataDir, []);
+    return c.json({ ok: true, snapshot: snap });
   });
 
   app.get("/api/sessions/:id/messages", (c) => {
