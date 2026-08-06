@@ -331,6 +331,16 @@ export function SettingsView() {
             长会话变慢的主因是历史思考全量回传;压缩后通常明显提速,若报错请改回「全量」
           </div>
         </div>
+        <div className="field" style={{ marginBottom: 10 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={settings.autoSummarize !== false}
+              onChange={(e) => void updateSettings({ autoSummarize: e.target.checked })}
+            />
+            自动摘要长上下文(AI 把早期对话压成摘要,发送时注入,兼顾速度与剧情连续性)
+          </label>
+        </div>
         <div className="radio-row">
           <label>
             <input

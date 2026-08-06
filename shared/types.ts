@@ -37,6 +37,10 @@ export interface SessionMeta {
   createdAt: number;
   updatedAt: number;
   archived: boolean;
+  /** AI 自动摘要:早期对话的压缩,发送时注入给模型,兼顾速度与连续性 */
+  summary?: string;
+  /** 生成摘要时的消息总数(用于判断是否需要更新) */
+  summaryCount?: number;
 }
 
 export interface AgentDef {
@@ -108,6 +112,8 @@ export interface Settings {
   };
   /** 历史思考回传策略:DeepSeek thinking 要求回传 reasoning_content;all=全量,recent5=仅最近 5 条完整(更快,可能报错),off=不回传(最快,可能报错) */
   thinkingEcho?: "all" | "recent5" | "off";
+  /** 自动摘要长上下文:会话过长时用 AI 把早期对话压成摘要,发送时注入(默认开启) */
+  autoSummarize?: boolean;
   /** 人格风格参数(语气/详略/幽默度) */
   style?: {
     tone?: "formal" | "casual" | "professional";

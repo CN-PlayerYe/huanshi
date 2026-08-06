@@ -21,6 +21,53 @@ const MAX_TEXT_LEN = 20000;
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "…[已截断]" : s;
 }
+
+/** 正在生成摘要的会话(防止并发重复生成) */
+const summaryLocks = new Set<string>();
+
+/**
+ * 用模型把早期对话压成摘要(纯文本请求,不调工具)。
+ * 供"AI 自动摘要":会话过长时让 AI 自主提炼关键信息,而不是简单截断。
+ */
+export async function generateSummary(
+  providerCfg: ModelConfig,
+  messages: ChatMessage[],
+  dataDir: string,
+): Promise<string> {
+  if (!providerCfg || !messages.length) return "";
+  const provider = createProvider(providerCfg);
+  const history = messages
+    .map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.parts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text ?? "")
+        .join("\n")
+        .slice(0, 2000),
+    }))
+    .filter((m) => m.content.trim());
+  if (!history.length) return "";
+  let text = "";
+  try {
+    for await (const chunk of provider.chatStream({
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是对话整理助手。请把下面的早期对话压缩成一份精炼摘要,必须保留:人物设定与关系、剧情进展、用户的偏好与习惯、重要事实与承诺、未完成事项。用要点列表,中文,300字以内。只输出摘要本身。",
+        },
+        ...history,
+      ],
+      tools: [],
+      maxTokens: 800,
+    })) {
+      if (chunk.delta) text += chunk.delta;
+    }
+  } catch {
+    /* 摘要失败不影响主流程 */
+  }
+  return text.trim();
+}
 const MAX_TOOL_ITERATIONS = 15;
 
 export interface EngineDeps {
@@ -35,6 +82,7 @@ export interface EngineDeps {
     toolWhitelistDir: string;
     visionProvider?: string;
     thinkingEcho?: "all" | "recent5" | "off";
+    autoSummarize?: boolean;
     style?: Settings["style"];
   };
 }
@@ -103,6 +151,25 @@ export class AgentEngine {
       if (recent.length) {
         memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
       }
+    }
+    // AI 自动摘要:会话过长时,后台用模型把早期对话压成摘要存进 session,发送时注入
+    // (后台生成不阻塞本次回复;摘要让模型记得早期剧情,而不是简单丢弃)
+    if (settings.autoSummarize !== false && allHistory.length > MAX_HISTORY_UNLIMITED) {
+      const stale = !session.summary || allHistory.length - (session.summaryCount ?? 0) > 50;
+      if (stale && !summaryLocks.has(session.id)) {
+        summaryLocks.add(session.id);
+        const early = allHistory.slice(0, allHistory.length - MAX_HISTORY_UNLIMITED);
+        void generateSummary(providerCfg, early, dataDir)
+          .then((text) => {
+            if (text) db.updateSession(session.id, { summary: text, summaryCount: allHistory.length });
+          })
+          .catch(() => undefined)
+          .finally(() => summaryLocks.delete(session.id));
+      }
+    }
+    // 摘要注入:追加到 memoryBlock(作为早期对话的背景),再组装 system prompt
+    if (session.summary) {
+      memoryBlock += `\n\n【早期对话摘要(本会话较早部分,供你延续剧情)】\n${session.summary}`;
     }
     const systemPrompt = buildSystemPrompt(
       agent,
