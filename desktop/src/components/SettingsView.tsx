@@ -992,7 +992,7 @@ export function SettingsView() {
                   checked={agentForm.historyUnlimited === true}
                   onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked })}
                 />
-                历史上下文不限长度(默认最近 60 条,开启后全部保留)
+                历史上下文不限长度(开启后保留最近 200 条,更完整但仍受模型上下文限制;超长会话会明显变慢)
               </label>
               <label>
                 <input

@@ -9,6 +9,8 @@ import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
 const MAX_HISTORY_MESSAGES = 30;
+/** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(夜玲珑等野生人格遇到过 1.4MB/88 秒) */
+const MAX_HISTORY_UNLIMITED = 200;
 /** 单条 assistant 最多回放的工具结果数(迁移会话可能出现上百个工具调用,全量回放会撑爆 payload) */
 const MAX_TOOL_RESULTS = 15;
 /** 每条工具输出回放截断长度 */
@@ -86,7 +88,7 @@ export class AgentEngine {
     // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
     // 注意:必须排除刚 append 的当前 user 消息,否则会发给 API 两次(重复输入 bug)
     const allHistory = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
-    const history = agent.historyUnlimited ? allHistory : allHistory.slice(-MAX_HISTORY_MESSAGES);
+    const history = agent.historyUnlimited ? allHistory.slice(-MAX_HISTORY_UNLIMITED) : allHistory.slice(-MAX_HISTORY_MESSAGES);
 
     // 组装系统提示:人格 + 记忆 + 环境
     // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库
