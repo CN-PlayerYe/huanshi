@@ -9,6 +9,16 @@ import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
 const MAX_HISTORY_MESSAGES = 30;
+/** 单条 assistant 最多回放的工具结果数(迁移会话可能出现上百个工具调用,全量回放会撑爆 payload) */
+const MAX_TOOL_RESULTS = 15;
+/** 每条工具输出回放截断长度 */
+const MAX_TOOL_OUTPUT = 3000;
+/** 单条文本回放截断长度 */
+const MAX_TEXT_LEN = 20000;
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…[已截断]" : s;
+}
 const MAX_TOOL_ITERATIONS = 15;
 
 export interface EngineDeps {
@@ -380,7 +390,11 @@ export async function historyToProviderMessages(
     if (m.role === "assistant") assistantIdx.push(i);
   });
   for (const m of messages) {
-    const text = m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n");
+    // 文本截断:迁移的超长正文避免撑爆请求
+    const text = truncate(
+      m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n"),
+      MAX_TEXT_LEN,
+    );
     if (m.role === "user") {
       const images = m.parts.filter((p) => p.type === "image" && p.image).map((p) => p.image!);
       const descs = images.map((p) => p.desc).filter((d): d is string => Boolean(d));
@@ -398,7 +412,8 @@ export async function historyToProviderMessages(
       });
       continue;
     }
-    const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool);
+    // 只回放最近 MAX_TOOL_RESULTS 个工具结果(迁移会话可能有上百个,全量会极慢)
+    const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool).slice(-MAX_TOOL_RESULTS);
     // 思考回传策略:all=全量;recent5=仅最近 5 条 assistant 完整、更早截断;off=不回传(实验,可能 400)
     let reasoning: string | undefined;
     if (m.role === "assistant") {
@@ -423,7 +438,7 @@ export async function historyToProviderMessages(
         reasoningContent: reasoning || undefined,
       });
       for (const p of toolParts) {
-        out.push({ role: "tool", content: p.tool!.output ?? "(无输出)", toolCallId: p.tool!.id });
+        out.push({ role: "tool", content: truncate(p.tool!.output ?? "(无输出)", MAX_TOOL_OUTPUT), toolCallId: p.tool!.id });
       }
     } else if (m.role === "assistant" && !text.trim() && !reasoning) {
       // 防御:跳过既无文本、无思考、也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")

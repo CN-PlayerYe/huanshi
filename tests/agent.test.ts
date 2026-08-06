@@ -132,6 +132,39 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
     expect(out[1].reasoningContent).toBe("内嵌思考");
   });
 
+  it("超长工具调用与文本被压缩(迁移会话提速)", async () => {
+    const bigOutput = "x".repeat(10000);
+    const manyTools = Array.from({ length: 25 }, (_, i) => ({
+      type: "tool" as const,
+      tool: { id: `t${i}`, name: "read_file", input: "{}", output: bigOutput, status: "done" as const, startedAt: 0 },
+    }));
+    const msgs: ChatMessage[] = [
+      {
+        id: "1",
+        sessionId: "s",
+        role: "user",
+        parts: [{ type: "text", text: "y".repeat(50000) }],
+        createdAt: 0,
+      },
+      {
+        id: "2",
+        sessionId: "s",
+        role: "assistant",
+        parts: [{ type: "text", text: "正文" }, ...manyTools],
+        createdAt: 0,
+      },
+    ];
+    const out = await historyToProviderMessages(msgs);
+    // 25 个工具调用 → 只回放最近 15 个
+    expect(out.filter((m) => m.role === "tool")).toHaveLength(15);
+    // 工具输出被截断(不再有 1 万字符的原始输出)
+    const toolMsgs = out.filter((m) => m.role === "tool");
+    expect(toolMsgs[0].content.length).toBeLessThan(3200);
+    expect(toolMsgs[0].content).toContain("[已截断]");
+    // 超长 user 正文被截断
+    expect(out[0].content.length).toBeLessThan(21000);
+  });
+
   it("空 assistant 消息被跳过(避免 content or tool_calls must be set)", async () => {
     const msgs: ChatMessage[] = [
       { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "hi" }], createdAt: 0 },
