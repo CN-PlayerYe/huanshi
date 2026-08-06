@@ -67,8 +67,7 @@ export default function App() {
     setPct("--bubble-opacity", appearance.bubbleOpacity, "100%");
     const body = document.body;
     if (appearance.bgImage) {
-      // 有背景图时:若未手动调聊天区透明度,则默认聊天区透明,让背景图直接可见
-      if (appearance.chatOpacity == null) root.setProperty("--chat-opacity", "0%");
+      // 背景图作为底层装饰:界面保持默认不透明,想沉浸可在外观里手动调聊天区透明度
       const base = useApp.getState().backendUrl;
       // 加时间戳,防止浏览器复用同名旧缓存图
       body.style.backgroundImage = `url(${base}/files/${appearance.bgImage}?v=${Date.now()})`;
