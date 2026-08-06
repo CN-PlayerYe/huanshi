@@ -383,8 +383,26 @@ export function createApp(deps: AppDeps): Hono {
         deps.broadcast?.(e);
       };
 
+      // 群聊模式:会话设置了多个成员时,所有成员依次发言
+      const groupIds = session.groupAgents?.length ? session.groupAgents : undefined;
+      if (groupIds) {
+        const groupAgents = groupIds.map((id) => deps.db.getAgent(id)).filter((a): a is AgentDef => Boolean(a));
+        if (groupAgents.length >= 2) {
+          await deps.engine.groupChat(session, groupAgents, body.content, onEvent, c.req.raw.signal);
+          return;
+        }
+      }
       await deps.engine.runChat(session!, agent, body.content, onEvent, c.req.raw.signal, body.attachments);
     });
+  });
+
+  /** 设置会话群聊成员(多个人格同场);传空数组 = 恢复单人模式 */
+  app.post("/api/sessions/:id/group", async (c) => {
+    const id = c.req.param("id");
+    const { agentIds } = (await c.req.json().catch(() => ({}))) as { agentIds?: string[] };
+    const ids = Array.isArray(agentIds) ? agentIds.filter((x) => deps.db.getAgent(x)) : [];
+    deps.db.updateSession(id, { groupAgents: ids.length >= 2 ? ids : undefined });
+    return c.json({ ok: true, groupAgents: ids.length >= 2 ? ids : [] });
   });
 
   // ---- 会话标题重命名 ----

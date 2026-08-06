@@ -1427,3 +1427,16 @@ select {
   border-color: var(--accent);
   transform: translateX(2px);
 }
+
+/* ---- 群聊 ---- */
+.msg-speaker {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.call-active {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  animation: pulse 1.2s ease-in-out infinite;
+}

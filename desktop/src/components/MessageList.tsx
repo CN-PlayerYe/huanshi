@@ -10,6 +10,8 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
   const deleteMessage = useApp((s) => s.deleteMessage);
+  // 群聊:assistant 消息显示发言人格名
+  const speakerName = useApp((s) => (!isUser && msg.agentId ? s.agents.find((a) => a.id === msg.agentId)?.name : undefined));
   // 朗读状态(全局单例:同一时间只读一条)
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -69,6 +71,8 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`}>
       <div className="message-bubble">
+        {/* 群聊发言人格名 */}
+        {speakerName && <div className="msg-speaker">{speakerName}</div>}
         {/* API 朗读用隐藏音频元素 */}
         <audio ref={audioRef} onEnded={() => setSpeaking(false)} onPause={() => setSpeaking(false)} />
         {!isUser && thinking && showThinking && (

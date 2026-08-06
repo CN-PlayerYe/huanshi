@@ -27,6 +27,8 @@ export interface ChatMessage {
   parts: MessagePart[];
   createdAt: number;
   model?: string;
+  /** 发言人格 id(assistant 消息;群聊时用于区分是谁说的) */
+  agentId?: string;
   error?: string;
 }
 
@@ -45,6 +47,8 @@ export interface SessionMeta {
   lore?: string;
   /** 世界观历史版本(回退用,最多 5 版) */
   loreHistory?: string[];
+  /** 群聊成员(多个人格同场登场);空 = 单人模式(agentId) */
+  groupAgents?: string[];
 }
 
 export interface AgentDef {

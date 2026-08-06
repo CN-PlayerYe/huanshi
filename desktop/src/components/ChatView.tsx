@@ -19,6 +19,55 @@ export function ChatView() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const [summarizing, setSummarizing] = useState(false);
   const [loreOpen, setLoreOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
+  // 语音通话模式(免按键连续对话)
+  const callRef = useRef(false);
+  const [callActive, setCallActive] = useState(false);
+
+  const runCallLoop = async () => {
+    while (callRef.current) {
+      let text = "";
+      try {
+        const r = await window.hanalite?.recognizeSpeech();
+        text = r?.text ?? "";
+      } catch {
+        text = "";
+      }
+      if (!callRef.current) break;
+      if (!text.trim()) continue;
+      useApp.getState().showToast(`🎙 听到:${text.slice(0, 40)}…`);
+      await sendMessage(text);
+      if (!callRef.current) break;
+      // 朗读最后一条回复
+      try {
+        const last = useApp.getState().messagesBySession[activeSessionId ?? ""]?.filter((m) => m.role === "assistant").at(-1);
+        const t = last?.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n") ?? "";
+        if (t && "speechSynthesis" in window) {
+          const u = new SpeechSynthesisUtterance(t.slice(0, 800));
+          u.lang = "zh-CN";
+          await new Promise<void>((res) => {
+            u.onend = () => res();
+            u.onerror = () => res();
+            window.speechSynthesis.speak(u);
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const toggleCall = () => {
+    if (callActive) {
+      callRef.current = false;
+      setCallActive(false);
+      window.speechSynthesis?.cancel();
+      return;
+    }
+    callRef.current = true;
+    setCallActive(true);
+    void runCallLoop();
+  };
 
   const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
     if ((!text.trim() && !atts?.length) || sending) return;
@@ -78,6 +127,24 @@ export function ChatView() {
         )}
         {activeSessionId && (
           <button
+            className={`btn secondary sm${callActive ? " call-active" : ""}`}
+            title="语音通话:免按键连续对话(说话→AI 回应并朗读→再说话)"
+            onClick={toggleCall}
+          >
+            {callActive ? "⏹ 挂断" : "🎙 通话"}
+          </button>
+        )}
+        {activeSessionId && (
+          <button
+            className="btn secondary sm"
+            title="群聊:一个会话里多个人格同场登场(点击选择成员)"
+            onClick={() => setGroupOpen(true)}
+          >
+            👥 群聊
+          </button>
+        )}
+        {activeSessionId && (
+          <button
             className="btn secondary sm"
             title="世界观设定:预览/生成/编辑/撤销/清除"
             onClick={() => setLoreOpen(true)}
@@ -95,6 +162,7 @@ export function ChatView() {
             onChanged={() => void useApp.getState().refreshSessions()}
           />
         )}
+        {groupOpen && activeSessionId && <GroupPanel sessionId={activeSessionId} onClose={() => setGroupOpen(false)} onChanged={() => void useApp.getState().refreshSessions()} />}
       </div>
 
       <MessageList messages={messages} streaming={sending} />
@@ -197,6 +265,58 @@ function LorePanel({
               </button>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 群聊成员设置面板:勾选 2+ 个人格同场登场 */
+function GroupPanel({ sessionId, onClose, onChanged }: { sessionId: string; onClose: () => void; onChanged: () => void }) {
+  const agents = useApp((s) => s.agents);
+  const [selected, setSelected] = useState<string[]>(() => useApp.getState().sessions.find((s) => s.id === sessionId)?.groupAgents ?? []);
+  const [busy, setBusy] = useState(false);
+  const toggle = (id: string) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 380 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <strong>👥 群聊成员</strong>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 10px" }}>
+            选 2 个以上人格,它们会在一个会话里同场登场、轮流对你说的话回应。留空或只选 1 个 = 单人模式。
+          </p>
+          {agents.map((a) => (
+            <label key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}>
+              <input type="checkbox" checked={selected.includes(a.id)} onChange={() => toggle(a.id)} />
+              {a.name}
+            </label>
+          ))}
+        </div>
+        <div className="modal-foot">
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await api.setSessionGroup(sessionId, selected);
+                onChanged();
+                useApp.getState().showToast(selected.length >= 2 ? `群聊模式:${selected.length} 位人格同场` : "已恢复单人模式");
+                onClose();
+              } catch (err) {
+                useApp.getState().showToast(`设置失败:${(err as Error).message}`);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            保存
+          </button>
         </div>
       </div>
     </div>

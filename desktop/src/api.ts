@@ -88,6 +88,9 @@ export const api = {
   /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */
   summarizeSession: (id: string) =>
     request<{ ok: boolean; summary: string; compressed: number; kept: number }>(`/api/sessions/${id}/summarize`, { method: "POST" }),
+  /** 群聊成员设置 */
+  setSessionGroup: (id: string, agentIds: string[]) =>
+    request<{ ok: boolean; groupAgents: string[] }>(`/api/sessions/${id}/group`, { method: "POST", body: JSON.stringify({ agentIds }) }),
   /** 世界观设定文档:生成/更新(AI 维护的长篇设定) */
   loreSession: (id: string) =>
     request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore`, { method: "POST" }),

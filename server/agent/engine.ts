@@ -138,6 +138,71 @@ export class AgentEngine {
   constructor(private deps: EngineDeps) {}
 
   /** 处理一轮用户消息,产生 assistant 消息(可能含工具调用往返) */
+  /**
+   * 群聊模式:一个会话里多个不同人格依次对同一话题发言。
+   * 每个成员看到"用户输入 + 前面成员的发言",以自己身份回应。
+   */
+  async groupChat(
+    session: SessionMeta,
+    agents: AgentDef[],
+    userContent: string,
+    onEvent: (e: StreamEvent) => void | Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const { db, memory, registry, dataDir } = this.deps;
+    const settings = this.deps.getSettings();
+    // 用户消息只写入一次
+    const userMsg: ChatMessage = {
+      id: newId("msg"),
+      sessionId: session.id,
+      role: "user",
+      parts: [{ type: "text", text: userContent }],
+      createdAt: Date.now(),
+    };
+    db.appendMessage(userMsg);
+
+    for (const agent of agents) {
+      const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
+      const history = agent.historyUnlimited ? historyAll.slice(-200) : historyAll.slice(-MAX_HISTORY_MESSAGES);
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
+      const providerMessages: ProviderMsg[] = [
+        { role: "system", content: systemPrompt },
+        ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all")),
+        {
+          role: "user",
+          content: `(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
+        },
+      ];
+      const provider = createProvider(settings.providers[settings.activeProvider]);
+      const assistant: ChatMessage = {
+        id: newId("msg"),
+        sessionId: session.id,
+        role: "assistant",
+        agentId: agent.id,
+        parts: [],
+        createdAt: Date.now(),
+      };
+      db.appendMessage(assistant);
+      await onEvent({ type: "delta", content: `【${agent.name}】` });
+      let textBuf = "";
+      try {
+        for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048 }, signal)) {
+          if (chunk.delta) {
+            textBuf += chunk.delta;
+            await onEvent({ type: "delta", content: chunk.delta });
+          }
+        }
+        if (textBuf) assistant.parts.push({ type: "text", text: textBuf });
+        else assistant.parts.push({ type: "text", text: "(沉默不语)" });
+      } catch (err) {
+        assistant.parts = [{ type: "text", text: `出错了:${(err as Error).message}` }];
+      }
+      db.updateMessage(assistant);
+      db.updateSession(session.id, { updatedAt: Date.now() });
+    }
+    await onEvent({ type: "done", message: db.getMessages(session.id).slice(-1)[0], session });
+  }
+
   async runChat(
     session: SessionMeta,
     agent: AgentDef,
