@@ -16,6 +16,8 @@ export class Scheduler {
     private db: Db,
     private engine: AgentEngine,
     private getAgent: (id: string) => AgentDef | undefined,
+    /** 任务执行完成回调(用于桌面通知) */
+    private onDone?: (e: { taskName: string; ok: boolean; result: string }) => void,
   ) {}
 
   start(): void {
@@ -82,6 +84,7 @@ export class Scheduler {
         lastStatus: "ok",
         lastResult: finalText || "(无文本输出)",
       });
+      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "" });
     } catch (err) {
       this.db.saveTask({
         ...task,
@@ -89,6 +92,7 @@ export class Scheduler {
         lastStatus: "error",
         lastResult: `执行失败:${(err as Error).message}`,
       });
+      this.onDone?.({ taskName: task.name, ok: false, result: (err as Error).message });
     }
   }
 }

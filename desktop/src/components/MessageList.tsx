@@ -228,6 +228,10 @@ function stripImages(text: string): string {
 
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const activeSessionId = useApp((s) => s.activeSessionId);
+  const options = activeSessionId ? useApp((s) => s.sessionOptions[activeSessionId] ?? []) : [];
+  const clearOptions = useApp((s) => s.clearOptions);
+  const sendMessage = useApp((s) => s.sendMessage);
 
   useEffect(() => {
     const el = ref.current;
@@ -249,6 +253,23 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
       {messages.map((m, i) => (
         <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} />
       ))}
+      {options.length > 0 && !streaming && (
+        <div className="chat-options">
+          <div className="chat-options-hint">✨ 下一步做什么?</div>
+          {options.map((o, i) => (
+            <button
+              key={i}
+              className="chat-option"
+              onClick={() => {
+                clearOptions();
+                void sendMessage(o);
+              }}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
       <Lightbox />
     </div>
   );

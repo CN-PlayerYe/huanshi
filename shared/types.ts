@@ -118,6 +118,10 @@ export interface Settings {
   thinkingEcho?: "all" | "recent5" | "off";
   /** 自动摘要长上下文:会话过长时用 AI 把早期对话压成摘要,发送时注入(默认开启) */
   autoSummarize?: boolean;
+  /** 局域网访问:开启后手机/其他设备可通过本机 IP 访问聊天(需重启生效) */
+  lanAccess?: boolean;
+  /** 剧情选项分支:回复完成后 AI 生成 2-3 个下一步选项(默认开启) */
+  enableOptions?: boolean;
   /** 人格风格参数(语气/详略/幽默度) */
   style?: {
     tone?: "formal" | "casual" | "professional";
@@ -177,7 +181,11 @@ export type StreamEvent =
   | { type: "tool_start"; tool: ToolCallPart }
   | { type: "tool_end"; tool: ToolCallPart }
   | { type: "done"; message: ChatMessage; session: SessionMeta }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** 剧情选项分支:回复完成后 AI 给出的下一步选项 */
+  | { type: "options"; sessionId: string; options: string[] }
+  /** 定时任务执行完成(桌面通知) */
+  | { type: "task_done"; taskName: string; ok: boolean; result: string };
 
 // ---- 默认值 ----
 

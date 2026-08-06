@@ -95,6 +95,8 @@ export const api = {
   loreClear: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/lore/clear`, { method: "POST" }),
   loreSet: (id: string, text: string) =>
     request<{ ok: boolean; lore: string }>(`/api/sessions/${id}/lore/set`, { method: "POST", body: JSON.stringify({ text }) }),
+  /** 局域网访问信息 */
+  network: () => request<{ ips: string[]; lanAccess: boolean }>("/api/network"),
   /** 导出会话为文本(下载) */
   async exportSession(id: string, title: string): Promise<void> {
     const res = await fetch(base + `/api/sessions/${id}/export`);

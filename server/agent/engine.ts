@@ -129,6 +129,7 @@ export interface EngineDeps {
     visionProvider?: string;
     thinkingEcho?: "all" | "recent5" | "off";
     autoSummarize?: boolean;
+    enableOptions?: boolean;
     style?: Settings["style"];
   };
 }
@@ -406,6 +407,16 @@ export class AgentEngine {
         );
       } catch {
         /* ignore */
+      }
+
+      // 剧情选项分支:后台生成 2-3 个下一步选项并广播(不阻塞本次回复;失败则无选项)
+      if (settings.enableOptions !== false) {
+        const recent = db.getMessages(session.id).slice(-8);
+        void generateOptions(providerCfg, recent).then((opts) => {
+          if (opts.length >= 2) {
+            void onEvent({ type: "options", sessionId: session.id, options: opts });
+          }
+        });
       }
 
       return assistant;
@@ -711,4 +722,54 @@ function summarize(user: string, reply: string): string {
   const u = user.replace(/\s+/g, " ").trim().slice(0, 300);
   const r = reply.replace(/\s+/g, " ").trim().slice(0, 500);
   return `[${new Date().toLocaleString("zh-CN")}] 用户:${u}\n助手回应:${r}`;
+}
+
+/**
+ * 剧情选项分支:基于最近的对话,让 AI 生成 2-3 个简短的下一步选项。
+ * 失败或格式不对时返回空数组(前端不显示选项,不影响正常聊天)。
+ */
+export async function generateOptions(providerCfg: ModelConfig, messages: ChatMessage[]): Promise<string[]> {
+  if (!providerCfg || messages.length < 2) return [];
+  const provider = createProvider(providerCfg);
+  const history = messages
+    .slice(-12)
+    .map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.parts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text ?? "")
+        .join("\n")
+        .slice(0, 500),
+    }))
+    .filter((m) => m.content.trim());
+  if (!history.length) return [];
+  let text = "";
+  try {
+    for await (const chunk of provider.chatStream({
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是剧情推进助手。基于对话最后的状态,构思 2-3 个简短、有戏剧张力的下一步剧情选项(每个不超过 15 字,第一人称或祈使句)。只输出 JSON 数组,如 [\"追问夜玲珑的身世\", \"带她去山顶看日出\"]。不要输出其他内容。",
+        },
+        ...history,
+      ],
+      tools: [],
+      maxTokens: 200,
+    })) {
+      if (chunk.delta) text += chunk.delta;
+    }
+  } catch {
+    return [];
+  }
+  try {
+    const m = /\[[\s\S]*\]/.exec(text);
+    const arr = JSON.parse(m ? m[0] : "[]") as unknown;
+    if (Array.isArray(arr)) {
+      return arr.map((x) => String(x).trim()).filter((x) => x.length > 1 && x.length <= 20).slice(0, 3);
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
 }

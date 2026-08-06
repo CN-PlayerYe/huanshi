@@ -1399,3 +1399,31 @@ select {
   border-radius: 8px;
   padding: 10px;
 }
+
+/* ---- 剧情选项分支 ---- */
+.chat-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 12px;
+  max-width: 420px;
+}
+.chat-options-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.chat-option {
+  text-align: left;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13.5px;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.chat-option:hover {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}

@@ -101,14 +101,22 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     })),
   );
 
-  const server: ServerType = serve({ fetch: hanaApp.fetch, hostname: "127.0.0.1", port: Number(process.env.HANALITE_PORT) || 0 });
+  const server: ServerType = serve({
+    fetch: hanaApp.fetch,
+    // 局域网访问:开启后监听所有网卡,手机/其他设备可通过局域网 IP 访问
+    hostname: settings.lanAccess ? "0.0.0.0" : "127.0.0.1",
+    port: Number(process.env.HANALITE_PORT) || 0,
+  });
   // 等待监听就绪后再读取端口(端口 0 随机分配是异步的)
   await new Promise<void>((resolveListen) => server.once("listening", () => resolveListen()));
   injectWebSocket(server);
   const port = (server.address() as AddressInfo).port;
 
   // ---- 定时任务调度器 ----
-  const scheduler = new Scheduler(db, engine, (id) => db.getAgent(id));
+  const scheduler = new Scheduler(db, engine, (id) => db.getAgent(id), (e) => {
+    // 任务完成:广播给前端做桌面通知(人格主动找你)
+    broadcast({ type: "task_done", taskName: e.taskName, ok: e.ok, result: e.result.slice(0, 200) });
+  });
   scheduler.start();
 
   console.log(`[hanalite] server listening on http://127.0.0.1:${port}`);

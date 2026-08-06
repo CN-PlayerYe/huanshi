@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ModelConfig, ProviderKind, TaskDef } from "@shared/types";
-import { api } from "../api";
+import { api, apiBase } from "../api";
 import { useApp } from "../store";
 
 const KIND_LABEL: Record<ProviderKind, string> = {
@@ -68,6 +68,8 @@ export function SettingsView() {
   const [ttsTesting, setTtsTesting] = useState(false);
   const cardFileRef = useRef<HTMLInputElement>(null);
   const [taskMsg, setTaskMsg] = useState("");
+  const [lanIps, setLanIps] = useState<string[]>([]);
+  const [port, setPort] = useState("");
 
   const refreshTasks = async () => {
     try {
@@ -78,6 +80,15 @@ export function SettingsView() {
   };
 
   useEffect(() => {
+    // 局域网访问信息
+    void api.network().then((r) => {
+      setLanIps(r.ips);
+      try {
+        setPort(new URL(apiBase()).port);
+      } catch {
+        /* ignore */
+      }
+    }).catch(() => undefined);
     void refreshTasks();
     if (!taskForm.agentId && agents.length) setTaskForm((f) => ({ ...f, agentId: agents[0].id }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,6 +352,31 @@ export function SettingsView() {
             />
             自动摘要长上下文(AI 把早期对话压成摘要,发送时注入,兼顾速度与剧情连续性)
           </label>
+        </div>
+        <div className="field" style={{ marginBottom: 10 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={settings.enableOptions !== false}
+              onChange={(e) => void updateSettings({ enableOptions: e.target.checked })}
+            />
+            剧情选项分支(回复后 AI 给出 2-3 个下一步选项,点击继续剧情)
+          </label>
+        </div>
+        <div className="field" style={{ marginBottom: 10 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={settings.lanAccess === true}
+              onChange={(e) => void updateSettings({ lanAccess: e.target.checked })}
+            />
+            局域网访问(手机/其他设备可通过本机 IP 聊天;⚠️ 修改后需重启应用生效)
+          </label>
+          {lanIps.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
+              手机访问地址(同一 Wi-Fi):{lanIps.map((ip) => `http://${ip}:${port}`).join(" 或 ")}
+            </div>
+          )}
         </div>
         <div className="radio-row">
           <label>

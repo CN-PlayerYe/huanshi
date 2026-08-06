@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
+import { networkInterfaces } from "node:os";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
@@ -208,6 +209,17 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   /** 本地记忆统计(条数)与清空 */
+  /** 局域网访问信息:本机局域网 IP 列表(端口由前端从 backendUrl 获取) */
+  app.get("/api/network", (c) => {
+    const ips: string[] = [];
+    for (const list of Object.values(networkInterfaces())) {
+      for (const it of list ?? []) {
+        if (it.family === "IPv4" && !it.internal) ips.push(it.address);
+      }
+    }
+    return c.json({ ips, lanAccess: deps.getSettings().lanAccess === true });
+  });
+
   app.get("/api/memory/stats", async (c) => {
     return c.json({ stats: await deps.memory.stats() });
   });

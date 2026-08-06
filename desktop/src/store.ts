@@ -12,6 +12,9 @@ interface AppState {
   sessions: SessionMeta[];
   /** 递增触发输入框重新聚焦(删除消息/弹窗关闭等) */
   focusTick: number;
+  /** 剧情选项:每个会话最近一次的 AI 选项 */
+  sessionOptions: Record<string, string[]>;
+  clearOptions(): void;
   /** 非模态提示(避免 window.alert 在 Electron 的焦点 bug) */
   toast: string | null;
   showToast(msg: string): void;
@@ -54,6 +57,7 @@ export const useApp = create<AppState>((set, get) => ({
   ready: false,
   error: null,
   focusTick: 0,
+  sessionOptions: {},
   toast: null,
   systemInfo: null,
   settings: null,
@@ -65,6 +69,15 @@ export const useApp = create<AppState>((set, get) => ({
   view: "chat",
   sidebarCollapsed: false,
 
+  clearOptions() {
+    const id = get().activeSessionId;
+    if (!id) return;
+    set((s) => {
+      const next = { ...s.sessionOptions };
+      delete next[id];
+      return { sessionOptions: next };
+    });
+  },
   async init() {
     try {
       const url = await initApi();
@@ -76,6 +89,8 @@ export const useApp = create<AppState>((set, get) => ({
         await get().selectSession(sessions[0].id);
       }
       set({ ready: true });
+      // WebSocket:接收剧情选项 / 定时任务完成通知
+      connectWs(url);
     } catch (err) {
       set({ error: String((err as Error).message), ready: true });
     }
@@ -313,4 +328,52 @@ function apply(fn: (m: ChatMessage) => void, m: ChatMessage): ChatMessage {
   const copy: ChatMessage = { ...m, parts: m.parts.map((p) => ({ ...p, tool: p.tool ? { ...p.tool } : undefined })) };
   fn(copy);
   return copy;
+}
+
+/** WebSocket:接收剧情选项(options)与定时任务完成通知(task_done),断线自动重连 */
+function connectWs(backendUrl: string): void {
+  let ws: WebSocket | null = null;
+  let retry = 0;
+  const open = () => {
+    try {
+      ws = new WebSocket(backendUrl.replace(/^http/, "ws") + "/api/ws");
+    } catch {
+      return;
+    }
+    ws.onmessage = (ev) => {
+      try {
+        const e = JSON.parse(String(ev.data)) as { type?: string; [k: string]: unknown };
+        if (e.type === "options") {
+          const sid = String(e.sessionId ?? "");
+          const opts = Array.isArray(e.options) ? (e.options as string[]) : [];
+          if (sid && opts.length) useApp.setState((s) => ({ sessionOptions: { ...s.sessionOptions, [sid]: opts } }));
+        } else if (e.type === "task_done") {
+          const name = String(e.taskName ?? "定时任务");
+          const ok = e.ok !== false;
+          useApp.getState().showToast(`${ok ? "✅" : "⚠️"} 任务「${name}」${ok ? "已完成" : "执行失败"}`);
+          // 桌面通知(人格主动找你)
+          try {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification(`幻世 · ${name}`, { body: ok ? String(e.result ?? "").slice(0, 120) : String(e.result ?? "") });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    ws.onclose = () => {
+      // 断线重连(指数退避)
+      setTimeout(open, Math.min(30000, 2000 * 2 ** retry++));
+    };
+    ws.onopen = () => {
+      retry = 0;
+      if ("Notification" in window && Notification.permission === "default") {
+        void Notification.requestPermission().catch(() => undefined);
+      }
+    };
+  };
+  open();
 }
