@@ -72,7 +72,9 @@ export class AgentEngine {
     const provider = createProvider(providerCfg);
 
     // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
-    const allHistory = db.getMessages(session.id);
+    // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
+    // 注意:必须排除刚 append 的当前 user 消息,否则会发给 API 两次(重复输入 bug)
+    const allHistory = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
     const history = agent.historyUnlimited ? allHistory : allHistory.slice(-MAX_HISTORY_MESSAGES);
 
     // 组装系统提示:人格 + 记忆 + 环境
