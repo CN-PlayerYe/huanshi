@@ -122,7 +122,8 @@ export const useApp = create<AppState>((set, get) => ({
 
   async selectSession(id) {
     if (get().activeSessionId === id && get().messagesBySession[id]) return;
-    set({ activeSessionId: id });
+    // 选中会话时切回聊天视图(如从设置页「打开心跳日记」)
+    set({ activeSessionId: id, view: "chat" });
     if (!get().messagesBySession[id]) {
       const { messages } = await api.getMessages(id);
       set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));

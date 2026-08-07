@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { Settings, StreamEvent } from "../shared/types";
 import { AgentEngine } from "./agent/engine";
 import { ensureDefaultAgents } from "./agents";
-import { fixEmbeddedThinking } from "./datafix";
+import { fixEmbeddedThinking, fixLegacyHeartbeatSessions } from "./datafix";
 import { createApp } from "./api/routes";
 import { ensureDirs, loadSettings, resolveDataDir, type ResolvedPaths } from "./config";
 import { MemoryService } from "./memory/service";
@@ -44,6 +44,14 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     if (fixedThinking > 0) console.log(`[hanalite] 修复了 ${fixedThinking} 条消息的思考内容`);
   } catch (err) {
     console.error("[hanalite] 数据修复失败(不影响启动):", (err as Error).message);
+  }
+
+  // 旧版心跳碎片会话归档:标题「💓 心跳 <时间>」→ 归档(数据保留)
+  try {
+    const hbArchived = fixLegacyHeartbeatSessions(db);
+    if (hbArchived > 0) console.log(`[hanalite] 已归档 ${hbArchived} 个旧心跳碎片会话`);
+  } catch {
+    /* 不影响启动 */
   }
 
   const memory = new MemoryService(settings.memory, paths.dataDir);

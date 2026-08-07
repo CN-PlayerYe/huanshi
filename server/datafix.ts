@@ -41,3 +41,22 @@ export function fixEmbeddedThinking(db: Db): number {
   }
   return changed;
 }
+
+/**
+ * 旧版心跳碎片会话归档:早期心跳每次新建「💓 心跳 <时间>」会话,
+ * 新版改为固定「💓 <人格名> 心跳日记」。把旧的碎片心跳会话归档
+ * (数据保留,侧栏清爽,可在归档区找回)。
+ * 幂等:只处理标题以「💓」开头且不含「心跳日记」的会话。
+ */
+export function fixLegacyHeartbeatSessions(db: Db): number {
+  let archived = 0;
+  for (const s of db.listSessions(true)) {
+    if (s.archived) continue;
+    const t = s.title || "";
+    if (t.startsWith("💓") && !t.includes("心跳日记")) {
+      db.updateSession(s.id, { archived: true });
+      archived++;
+    }
+  }
+  return archived;
+}
