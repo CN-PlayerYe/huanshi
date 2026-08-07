@@ -1,6 +1,6 @@
 import { homedir, platform } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { newId, type AgentDef, type ChatMessage, type ModelConfig, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
 import type { MemoryService } from "../memory/service";
 import { createProvider } from "../providers";
@@ -228,7 +228,7 @@ export class AgentEngine {
     for (const agent of agents) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
-      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style, opts?.cwd);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
@@ -352,12 +352,15 @@ export class AgentEngine {
     if (session.lore) {
       memoryBlock += `\n\n【世界观设定文档(本故事世界的权威设定,务必遵守)】\n${session.lore}`;
     }
+    const effCwd = opts?.cwd || settings.toolWhitelistDir || join(dataDir, "workspace");
+    const homeDir = opts?.cwd && basename(opts.cwd) === agent.name ? opts.cwd : join(effCwd, agent.name);
     const systemPrompt = buildSystemPrompt(
       agent,
       dataDir,
       settings.toolWhitelistDir,
       memoryBlock,
       agent.useGlobalStyle === false ? undefined : settings.style,
+      homeDir,
     );
 
     // 视觉辅助模型:主模型纯文本时,图片先交给辅助多模态模型转成文字描述
@@ -795,8 +798,13 @@ export function buildSystemPrompt(
   whitelistDir: string,
   memoryBlock: string,
   style?: Settings["style"],
+  homeDirOverride?: string,
 ): string {
-  const cwd = whitelistDir || join(dataDir, "workspace");
+  // 实际工作目录:心跳/自由活动等会用专属空间作为 cwd;普通对话用白名单目录或默认 workspace
+  const cwd = homeDirOverride || whitelistDir || join(dataDir, "workspace");
+  // 专属空间(院子):当 cwd 已是该人格的院子(scope=self 的心跳/自由活动)时为 cwd 本身;
+  // 否则为其下的 <名字>/ 目录
+  const home = homeDirOverride ? cwd : join(cwd, agent.name);
   const styleBlock = buildStyleBlock(style);
   // 身份锚点:即使 systemPrompt 为空(如从 Cherry 迁移的人格),也让模型明确知道"我是谁"
   const identity =
@@ -810,6 +818,7 @@ export function buildSystemPrompt(
 - 操作系统:${platform()}${platform() === "win32" ? " (Windows)" : ""}
 - 用户主目录:${homedir()}
 - 你的工作目录(可读写):${cwd}
+- ★你的专属空间(院子):${home}/ —— 你的日志、笔记、待定之页都放在这里,这是"你自己的地方"。自主活动时优先在院子里,不要到处建文件夹。
 - 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。${memoryBlock}
 
 【工作方式】

@@ -151,6 +151,7 @@ export class Scheduler {
       lastBeatAt: task.lastRunAt,
       lastUserAt: this.lastUserAtFn?.(),
       spaceStatus,
+      homeDir: agentSpace,
       footprint,
       isBedtime,
       agent,

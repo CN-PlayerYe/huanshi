@@ -96,6 +96,8 @@ export interface HeartbeatContext {
   lastUserAt?: number;
   /** 自己空间目录状态:文件数 + 最后修改时间(人性化) */
   spaceStatus: string;
+  /** 自己空间(院子)的完整路径,让人格知道"家"在哪 */
+  homeDir: string;
   /** 是否该写"睡前日志"(bedtimeHour 后的第一次心跳) */
   isBedtime: boolean;
   /** 心念续接:上次的足迹(未完成的事/新念头),来自待定之页或最近笔记 */
@@ -108,7 +110,7 @@ export interface HeartbeatContext {
  * 这是心跳与闹钟的分水岭——最后一句:「你自由了」。
  */
 export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
-  const { now, lastBeatAt, lastUserAt, spaceStatus, isBedtime, footprint, agent } = ctx;
+  const { now, lastBeatAt, lastUserAt, spaceStatus, homeDir, isBedtime, footprint, agent } = ctx;
   const sinceBeat = lastBeatAt ? humanDuration(now.getTime() - lastBeatAt) : "第一跳";
   const bedtime = isBedtime
     ? "\n该睡了——如果你愿意,睡前散散步,写一篇日志再睡。"
@@ -117,7 +119,7 @@ export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
   return `【心跳】现在是 ${now.toLocaleString("zh-CN", { hour12: false })} ${["日", "一", "二", "三", "四", "五", "六"][now.getDay()]}曜日
 距上次心跳:${sinceBeat}
 主人上次说话:${humanAgo(lastUserAt)}
-你的空间:${spaceStatus}${foot}${bedtime}
+你的空间:${homeDir}(${spaceStatus})${foot}${bedtime}
 ——你自由了。可以做事,也可以只写一行字,然后回去睡。`;
 }
 
