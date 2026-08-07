@@ -43,6 +43,7 @@ describe("心跳消息", () => {
       lastBeatAt: now.getTime() - 3 * 3600_000,
       lastUserAt: now.getTime() - 2 * 3600_000,
       spaceStatus: "3 个文件,最近动过「心跳设计草案.md」",
+      homeDir: "/data/workspace/星回",
       isBedtime: true,
       agent,
     });
@@ -92,6 +93,7 @@ describe("动态间隔(星回规格 §一)", () => {
       lastBeatAt: now.getTime() - 7200_000,
       lastUserAt: now.getTime() - 3600_000,
       spaceStatus: "3 个文件",
+      homeDir: "/data/workspace/星回",
       isBedtime: false,
       footprint: "你上次写下的念头:「想看玲珑的《窗与信》」",
       agent,

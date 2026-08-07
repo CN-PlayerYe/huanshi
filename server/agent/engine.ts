@@ -228,7 +228,7 @@ export class AgentEngine {
     for (const agent of agents) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
-      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style, opts?.cwd);
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
