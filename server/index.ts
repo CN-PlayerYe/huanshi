@@ -130,6 +130,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     },
     workspaceDir,
     () => lastUserAt,
+    () => settings.heartbeatPaused === true,
   );
   scheduler.start();
 

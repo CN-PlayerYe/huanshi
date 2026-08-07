@@ -62,3 +62,41 @@ describe("心跳消息", () => {
     expect(DEFAULT_HEARTBEAT.interruptible).toBe(true);
   });
 });
+
+describe("动态间隔(星回规格 §一)", () => {
+  it("主人刚聊完(30 分钟内)→ 间隔拉长到 ≥6h", async () => {
+    const cfg = mergeHeartbeat({ intervalHours: 3 });
+    const now = Date.now();
+    const i = (await import("../server/heartbeat")).effectiveInterval(cfg, 0, now - 10 * 60_000);
+    expect(i).toBeGreaterThanOrEqual(6);
+  });
+
+  it("主人久未出现(>24h)→ 间隔加密到 ≤2h", async () => {
+    const cfg = mergeHeartbeat({ intervalHours: 3 });
+    const i = (await import("../server/heartbeat")).effectiveInterval(cfg, 0, Date.now() - 30 * 3600_000);
+    expect(i).toBeLessThanOrEqual(2);
+  });
+
+  it("连续空跳 → 间隔翻倍;有产出清零", async () => {
+    const cfg = mergeHeartbeat({ intervalHours: 3 });
+    const now = Date.now();
+    const twice = (await import("../server/heartbeat")).effectiveInterval(cfg, 3, now - 5 * 3600_000); // 3 次空跳
+    const once = (await import("../server/heartbeat")).effectiveInterval(cfg, 0, now - 5 * 3600_000); // 有产出
+    expect(twice).toBeGreaterThan(once);
+  });
+
+  it("心跳消息带足迹(心念续接)", async () => {
+    const now = new Date(2026, 7, 7, 21, 30);
+    const msg = (await import("../server/heartbeat")).buildHeartbeatMessage({
+      now,
+      lastBeatAt: now.getTime() - 7200_000,
+      lastUserAt: now.getTime() - 3600_000,
+      spaceStatus: "3 个文件",
+      isBedtime: false,
+      footprint: "你上次写下的念头:「想看玲珑的《窗与信》」",
+      agent,
+    });
+    expect(msg).toContain("足迹:");
+    expect(msg).toContain("《窗与信》");
+  });
+});

@@ -129,6 +129,8 @@ export interface Settings {
   autoSummarize?: boolean;
   /** 局域网访问:开启后手机/其他设备可通过本机 IP 访问聊天(需重启生效) */
   lanAccess?: boolean;
+  /** 全局暂停心跳:主人可随时让所有心跳任务安静(默认开启心跳) */
+  heartbeatPaused?: boolean;
   /** 剧情选项分支:回复完成后 AI 生成 2-3 个下一步选项(默认开启) */
   enableOptions?: boolean;
   /** 人格风格参数(语气/详略/幽默度) */
@@ -171,6 +173,8 @@ export interface TaskDef {
   lastRunAt?: number;
   lastResult?: string;
   lastStatus?: "ok" | "error" | "running";
+  /** 连续空跳次数(无自发产出),用于动态间隔翻倍 */
+  blankBeats?: number;
   /** cron=定时任务(默认);heartbeat=心跳(自主醒来,消息由系统动态生成) */
   kind?: "cron" | "heartbeat";
   /** kind=heartbeat 时的节奏与安全边界配置 */

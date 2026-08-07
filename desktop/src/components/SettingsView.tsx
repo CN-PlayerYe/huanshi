@@ -1087,6 +1087,16 @@ export function SettingsView() {
       {/* ---- 定时任务 ---- */}
       <div className="settings-section">
         <h3>⏰ 定时任务</h3>
+        <div className="field-row" style={{ marginBottom: 6 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+            <input
+              type="checkbox"
+              checked={settings.heartbeatPaused === true}
+              onChange={(e) => void updateSettings({ heartbeatPaused: e.target.checked })}
+            />
+            ⏸ 全局暂停心跳(所有「💓 心跳」任务安静,不跳、不打扰)
+          </label>
+        </div>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
           Agent 按 cron 计划自动执行提示词。格式:分 时 日 月 星期(如 <code>0 9 * * *</code> = 每天 9:00,<code>*/30 * * * *</code> = 每 30 分钟)。执行结果会创建一个独立会话。
         </p>

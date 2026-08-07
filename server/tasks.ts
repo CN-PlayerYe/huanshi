@@ -3,7 +3,7 @@ import type { AgentEngine } from "./agent/engine";
 import type { ChatRunOpts } from "./agent/engine";
 import { nextRunTime, parseCron } from "./cron";
 import type { Db } from "./storage";
-import { mergeHeartbeat, inQuietWindow, nextHeartbeatAt, buildHeartbeatMessage, scanAgentSpace } from "./heartbeat";
+import { mergeHeartbeat, inQuietWindow, nextHeartbeatAt, buildHeartbeatMessage, scanAgentSpace, readFootprint, effectiveInterval } from "./heartbeat";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -27,6 +27,8 @@ export class Scheduler {
     private workspaceDir = "workspace",
     /** 主人最近一次发消息的时间(心跳打断用) */
     private lastUserAtFn?: () => number | undefined,
+    /** 全局暂停心跳:返回 true 时所有心跳任务安静 */
+    private isHeartbeatPaused?: () => boolean,
   ) {}
 
   start(): void {
@@ -49,6 +51,7 @@ export class Scheduler {
     const now = Date.now();
     for (const task of this.db.listTasks()) {
       if (!task.enabled || this.running.has(task.id)) continue;
+      if (task.kind === "heartbeat" && this.isHeartbeatPaused?.()) continue; // 全局暂停
       if (task.nextRunAt > now) continue;
       this.running.add(task.id);
       // 防抖:立即把 nextRunAt 推到下次,避免异常导致死循环
@@ -58,11 +61,14 @@ export class Scheduler {
     }
   }
 
-  /** 计算下一次执行时间(cron 任务按 cron;心跳任务按 interval+静默时段) */
+  /** 计算下一次执行时间(cron 任务按 cron;心跳任务按动态间隔+静默时段) */
   computeNext(task: TaskDef): number | null {
     if (task.kind === "heartbeat") {
       const hb = mergeHeartbeat(task.heartbeat);
-      return nextHeartbeatAt(new Date(Date.now() + 60_000), hb).getTime();
+      return nextHeartbeatAt(new Date(Date.now() + 60_000), hb, {
+        blankBeats: task.blankBeats ?? 0,
+        lastUserAt: this.lastUserAtFn?.(),
+      }).getTime();
     }
     try {
       const d = nextRunTime(parseCron(task.schedule), new Date(Date.now() + 60_000));
@@ -122,6 +128,7 @@ export class Scheduler {
     const now = new Date();
     const agentSpace = join(this.workspaceDir, agent.name);
     const spaceStatus = scanAgentSpace(agentSpace);
+    const footprint = readFootprint(agentSpace);
     // 睡前跳:bedtimeHour 后的第一次心跳(距上次心跳跨过 bedtimeHour)
     const prevHour = task.lastRunAt ? new Date(task.lastRunAt).getHours() : -1;
     const isBedtime = now.getHours() >= hb.bedtimeHour && prevHour < hb.bedtimeHour;
@@ -130,6 +137,7 @@ export class Scheduler {
       lastBeatAt: task.lastRunAt,
       lastUserAt: this.lastUserAtFn?.(),
       spaceStatus,
+      footprint,
       isBedtime,
       agent,
     });
@@ -185,11 +193,15 @@ export class Scheduler {
       };
       await this.engine.runChat(session, agent, message, onEvent, ctrl.signal, undefined, opts);
       const interrupted = ctrl.signal.aborted;
+      // 产出检测(星回规格 §一):有自发产出 → 空跳清零;无事发生 → 空跳 +1(下次间隔翻倍)
+      const hasOutput = !interrupted && finalText.trim().length > 20;
+      const blankBeats = hasOutput ? 0 : (task.blankBeats ?? 0) + 1;
       this.db.saveTask({
         ...task,
         lastRunAt: Date.now(),
         lastStatus: "ok",
         lastResult: interrupted ? "(被主人打断,已收工)" : finalText || "(安静地待了一会儿)",
+        blankBeats,
       });
       this.onDone?.({ taskName: task.name, ok: true, result: finalText || "安静活动" });
     } catch (err) {
