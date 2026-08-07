@@ -81,6 +81,8 @@ export function SettingsView() {
   const cardFileRef = useRef<HTMLInputElement>(null);
   const [taskMsg, setTaskMsg] = useState("");
   const [hbEditId, setHbEditId] = useState<string | null>(null);
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const selectSession = useApp((s) => s.selectSession);
   const [lanIps, setLanIps] = useState<string[]>([]);
   const [port, setPort] = useState("");
 
@@ -1161,8 +1163,28 @@ export function SettingsView() {
                   ⚙️ 边界
                 </button>
               )}
-              <button className="btn secondary sm" onClick={() => void api.runTask(t.id).then((r) => setTaskMsg(`立即执行完成:${r.result.slice(0, 80)}`))}>
-                ▶ 立即运行
+              {t.kind === "heartbeat" && t.sessionId && (
+                <button className="btn secondary sm" title="打开这本心跳日记" onClick={() => void selectSession(t.sessionId!)}>
+                  📖 打开日记
+                </button>
+              )}
+              <button
+                className="btn secondary sm"
+                disabled={runningId === t.id}
+                onClick={async () => {
+                  setRunningId(t.id);
+                  try {
+                    const r = await api.runTask(t.id);
+                    setTaskMsg(`「${t.name}」运行完成:${(r.result || "").slice(0, 120)}`);
+                  } catch (err) {
+                    setTaskMsg(`运行失败:${(err as Error).message}`);
+                  } finally {
+                    setRunningId(null);
+                    await refreshTasks();
+                  }
+                }}
+              >
+                {runningId === t.id ? "⏳ 运行中…" : "▶ 立即运行"}
               </button>
               <button className="remove" onClick={() => void api.deleteTask(t.id).then(refreshTasks)}>
                 ✕ 删除
@@ -1254,7 +1276,14 @@ export function SettingsView() {
                 </div>
               </div>
             )}
-            {t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
+            {t.kind === "heartbeat"
+              ? t.lastResult && (
+                  <div className="prompt" style={{ maxHeight: 40, fontSize: 12 }}>
+                    {t.lastResult.slice(0, 80)}
+                    {t.lastResult.length > 80 ? "…(详情见 💓 心跳日记)" : ""}
+                  </div>
+                )
+              : t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
           </div>
         ))}
         <div className="provider-card" style={{ marginTop: 12 }}>

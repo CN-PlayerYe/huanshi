@@ -32,6 +32,8 @@ export interface AppDeps {
   broadcast?: (e: StreamEvent) => void;
   /** 主人发消息时回调(心跳打断用) */
   onUserMessage?: () => void;
+  /** 手动立即运行任务(走调度器,心跳任务走心跳分支) */
+  onRunTask?: (taskId: string) => Promise<{ ok: boolean; result: string }>;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -735,8 +737,15 @@ ${tools || "- (无工具)"}
 
   /** 立即手动触发一次任务(测试用) */
   app.post("/api/tasks/:id/run", async (c) => {
-    const task = deps.db.getTask(c.req.param("id"));
+    const id = c.req.param("id");
+    const task = deps.db.getTask(id);
     if (!task) return c.json({ error: "任务不存在" }, 404);
+    if (deps.onRunTask) {
+      // 走调度器:心跳任务按心跳逻辑(固定日记会话/边界/打断),普通任务原逻辑
+      const r = await deps.onRunTask(id);
+      return c.json({ ok: r.ok, result: r.result });
+    }
+    // 兜底(无调度器时):普通任务直接跑
     const agent = deps.db.getAgent(task.agentId);
     if (!agent) return c.json({ error: "人格不存在" }, 404);
     const session = deps.db.createSession(`⏰ ${task.name}`, task.agentId);

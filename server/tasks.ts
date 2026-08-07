@@ -78,15 +78,28 @@ export class Scheduler {
     }
   }
 
-  private async runTask(task: TaskDef): Promise<void> {
+  /** 手动立即运行(设置页「▶ 立即运行」):按任务类型走正确分支 */
+  async runNow(taskId: string): Promise<{ ok: boolean; result: string }> {
+    const task = this.db.getTask(taskId);
+    if (!task) return { ok: false, result: "任务不存在" };
     const agent = this.getAgent(task.agentId);
-    if (!agent) {
+    if (!agent) return { ok: false, result: "人格不存在" };
+    let result = "";
+    await this.runTask(task, agent);
+    const cur = this.db.getTask(taskId);
+    if (cur) result = cur.lastResult || "";
+    return { ok: true, result };
+  }
+
+  private async runTask(task: TaskDef, agent?: AgentDef): Promise<void> {
+    const a = agent ?? this.getAgent(task.agentId);
+    if (!a) {
       this.db.saveTask({ ...task, lastStatus: "error", lastResult: `人格不存在:${task.agentId}`, lastRunAt: Date.now() });
       return;
     }
     try {
       if (task.kind === "heartbeat") {
-        await this.runHeartbeat(task, agent);
+        await this.runHeartbeat(task, a);
         return;
       }
       const session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
@@ -100,7 +113,7 @@ export class Scheduler {
             .slice(0, 600);
         }
       };
-      await this.engine.runChat(session, agent, task.prompt, onEvent);
+      await this.engine.runChat(session, a, task.prompt, onEvent);
       this.db.saveTask({
         ...task,
         lastRunAt: Date.now(),
@@ -121,9 +134,10 @@ export class Scheduler {
 
   /**
    * 心跳执行:系统动态生成心跳消息(不是任务书),按安全边界裁剪工具,
-   * 到时长自动收工,主人发消息立即打断。
+   * 到时长自动收工,主人发消息立即打断。心跳写入该任务固定的
+   * 「💓 心跳日记」会话(不产生碎片),便于主人随时翻阅。
    */
-  private async runHeartbeat(task: TaskDef, agent: AgentDef): Promise<void> {
+  async runHeartbeat(task: TaskDef, agent: AgentDef): Promise<void> {
     const hb = mergeHeartbeat(task.heartbeat);
     const now = new Date();
     const agentSpace = join(this.workspaceDir, agent.name);
@@ -142,7 +156,13 @@ export class Scheduler {
       agent,
     });
 
-    const session = this.db.createSession(`💓 心跳 ${now.toLocaleString("zh-CN", { hour12: false }).slice(0, 16)}`, task.agentId);
+    // 固定心跳日记会话:首次创建并记在任务上,之后每次追加
+    let session = task.sessionId ? this.db.getSession(task.sessionId) : undefined;
+    if (!session) {
+      session = this.db.createSession(`💓 ${agent.name} 心跳日记`, task.agentId);
+      this.db.saveTask({ ...task, sessionId: session.id });
+      task = { ...task, sessionId: session.id };
+    }
 
     // 安全边界 → 工具过滤与权限覆盖
     const opts: ChatRunOpts = {

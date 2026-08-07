@@ -87,6 +87,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     onUserMessage: () => {
       lastUserAt = Date.now();
     },
+    // 手动立即运行:走调度器(心跳任务走心跳分支:固定日记会话/边界/打断)
+    onRunTask: async (taskId) => scheduler.runNow(taskId),
   });
 
   // CORS:渲染进程(file:// 或 dev localhost)请求本机后端;仅监听 127.0.0.1,允许所有来源无安全风险

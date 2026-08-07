@@ -175,6 +175,8 @@ export interface TaskDef {
   lastStatus?: "ok" | "error" | "running";
   /** 连续空跳次数(无自发产出),用于动态间隔翻倍 */
   blankBeats?: number;
+  /** 心跳任务的固定会话(「💓 心跳日记」):每次心跳追加到同一会话,不产生碎片 */
+  sessionId?: string;
   /** cron=定时任务(默认);heartbeat=心跳(自主醒来,消息由系统动态生成) */
   kind?: "cron" | "heartbeat";
   /** kind=heartbeat 时的节奏与安全边界配置 */
