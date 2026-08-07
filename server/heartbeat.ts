@@ -120,6 +120,7 @@ export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
 距上次心跳:${sinceBeat}
 主人上次说话:${humanAgo(lastUserAt)}
 你的空间:${homeDir}(${spaceStatus})${foot}${bedtime}
+——开始前,先回一趟记忆库:调用 memory_recall 回忆"我是谁、最近发生过什么",再去决定做什么。
 ——你自由了。可以做事,也可以只写一行字,然后回去睡。`;
 }
 
