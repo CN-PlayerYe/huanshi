@@ -9,6 +9,8 @@ export interface MemoryItem {
   id: string;
   content: string;
   kind: MemoryKind;
+  /** 用户可修订的标注:fact=事实 / inference=推断;未标注时由 kind 推导展示 */
+  tag?: "fact" | "inference";
   createdAt: number;
   updatedAt: number;
 }
@@ -20,6 +22,10 @@ export interface MemoryBackend {
   reflect(bankId?: string): Promise<string>;
   /** 列出全部记忆(用于导出/备份) */
   list(): Promise<MemoryItem[]>;
+  /** 修订一条记忆(内容/标注);不存在则忽略 */
+  updateItem(id: string, patch: { content?: string; tag?: "fact" | "inference" | null }): Promise<void>;
+  /** 删除一条记忆 */
+  deleteItem(id: string): Promise<void>;
   isHealthy(): Promise<boolean>;
   stats(): Promise<{ facts: number; experiences: number }>;
   clear(): void;
@@ -117,6 +123,16 @@ export class MemoryService {
   /** 列出全部记忆(用于人格卡片导出) */
   list(agentId?: string): Promise<MemoryItem[]> {
     return this.backendFor(agentId).list();
+  }
+
+  /** 修订一条记忆(内容/标注) */
+  updateItem(id: string, patch: { content?: string; tag?: "fact" | "inference" | null }, agentId?: string): Promise<void> {
+    return this.backendFor(agentId).updateItem(id, patch);
+  }
+
+  /** 删除一条记忆 */
+  deleteItem(id: string, agentId?: string): Promise<void> {
+    return this.backendFor(agentId).deleteItem(id);
   }
 
   clear(agentId?: string): void {

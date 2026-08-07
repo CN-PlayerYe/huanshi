@@ -239,6 +239,30 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true });
   });
 
+  /** 记忆库管理:列出(可指定独立空间 agentId;空 = 全局记忆) */
+  app.get("/api/memory/list", async (c) => {
+    const agentId = c.req.query("agentId") || undefined;
+    const items = await deps.memory.list(agentId);
+    return c.json({ items: items.sort((a, b) => b.updatedAt - a.updatedAt) });
+  });
+
+  /** 修订一条记忆(内容 / 事实·推断标注) */
+  app.post("/api/memory/:id/update", async (c) => {
+    const id = c.req.param("id");
+    const agentId = c.req.query("agentId") || undefined;
+    const { content, tag } = (await c.req.json().catch(() => ({}))) as { content?: string; tag?: "fact" | "inference" | null };
+    await deps.memory.updateItem(id, { content, tag }, agentId);
+    return c.json({ ok: true });
+  });
+
+  /** 删除一条记忆 */
+  app.post("/api/memory/:id/delete", async (c) => {
+    const id = c.req.param("id");
+    const agentId = c.req.query("agentId") || undefined;
+    await deps.memory.deleteItem(id, agentId);
+    return c.json({ ok: true });
+  });
+
   app.post("/api/memory/clear", async (c) => {
     deps.memory.clear();
     return c.json({ ok: true });

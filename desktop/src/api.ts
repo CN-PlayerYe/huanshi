@@ -89,6 +89,17 @@ export const api = {
     request<{ backups: { name: string; dir: string; size: number; mtime: number }[] }>("/api/backups"),
   restoreBackup: (backupDir: string) =>
     request<{ ok: boolean; snapshot?: string }>("/api/backup/restore", { method: "POST", body: JSON.stringify({ backupDir }) }),
+  memoryList: (agentId?: string) =>
+    request<{ items: { id: string; content: string; kind: string; tag?: string; createdAt: number; updatedAt: number }[] }>(
+      `/api/memory/list${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ""}`,
+    ),
+  memoryUpdate: (id: string, patch: { content?: string; tag?: string | null }, agentId?: string) =>
+    request<{ ok: boolean }>(`/api/memory/${id}/update${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ""}`, {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
+  memoryDelete: (id: string, agentId?: string) =>
+    request<{ ok: boolean }>(`/api/memory/${id}/delete${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ""}`, { method: "POST" }),
   renameSession: (id: string, title: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/rename`, { method: "POST", body: JSON.stringify({ title }) }),
   /** 手动压缩上下文:AI 立即生成早期对话摘要(手动档) */

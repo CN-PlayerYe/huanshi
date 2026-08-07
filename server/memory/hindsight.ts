@@ -112,6 +112,14 @@ export class HindsightMemory implements MemoryBackend {
     return this.fallback.list();
   }
 
+  async updateItem(id: string, patch: { content?: string; tag?: "fact" | "inference" | null }): Promise<void> {
+    await this.fallback.updateItem(id, patch);
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    await this.fallback.deleteItem(id);
+  }
+
   clear(): void {
     // 云端记忆不易批量清空,仅清本地回退;如需清云端可删除 bank 重建
     this.fallback.clear();

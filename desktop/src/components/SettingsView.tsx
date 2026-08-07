@@ -117,6 +117,10 @@ export function SettingsView() {
   const [presetForm, setPresetForm] = useState<{ kind: ProviderKind; label?: string; baseUrl?: string; defaultModel?: string } | null>(null);
   const [memStats, setMemStats] = useState<{ facts: number; experiences: number } | null>(null);
   const [agentMems, setAgentMems] = useState<{ id: string; name: string; stats: { facts: number; experiences: number } }[]>([]);
+  const [memScope, setMemScope] = useState("");
+  const [memItems, setMemItems] = useState<{ id: string; content: string; kind: string; tag?: string; updatedAt: number }[]>([]);
+  const [memEditId, setMemEditId] = useState<string | null>(null);
+  const [memEditText, setMemEditText] = useState("");
 
   useEffect(() => {
     // 加载系统朗读音色列表(speechSynthesis 异步就绪)
@@ -550,6 +554,116 @@ export function SettingsView() {
               </button>
             </div>
           )}
+
+          {/* 记忆库管理:查看 / 修订 / 标注(事实·推断) / 删除 */}
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <div className="field-row">
+              <div className="field" style={{ flex: 1 }}>
+                <label>记忆库范围</label>
+                <select
+                  value={memScope}
+                  onChange={(e) => {
+                    setMemScope(e.target.value);
+                    void api.memoryList(e.target.value || undefined).then((r) => setMemItems(r.items));
+                  }}
+                >
+                  <option value="">🧠 全局记忆</option>
+                  {agentMems.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      🎭 {a.name}(独立空间)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
+                <button className="btn secondary" onClick={() => void api.memoryList(memScope || undefined).then((r) => setMemItems(r.items))}>
+                  🔄 刷新
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 8px" }}>
+              共 {memItems.length} 条。可修订内容、标注"事实/推断"(帮助记忆甄别对错),或删除不要的。
+            </div>
+            {memItems.length === 0 && <div style={{ fontSize: 13, color: "var(--text-dim)" }}>(该记忆库还没有条目)</div>}
+            <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              {memItems.map((it) => (
+                <div key={it.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8, marginBottom: 6 }}>
+                  {memEditId === it.id ? (
+                    <textarea
+                      value={memEditText}
+                      onChange={(e) => setMemEditText(e.target.value)}
+                      style={{ width: "100%", minHeight: 60, fontSize: 12.5 }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{it.content}</div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{new Date(it.updatedAt).toLocaleString("zh-CN")}</span>
+                    <span className={`badge ${it.kind}`} style={{ fontSize: 11 }}>{it.kind === "fact" ? "事实" : it.kind === "summary" ? "摘要" : "经历"}</span>
+                    {[["fact", "事实"], ["inference", "推断"], [null, "不标注"]].map(([v, label]) => (
+                      <button
+                        key={String(v)}
+                        className={`btn secondary sm ${it.tag === v ? "active-tag" : ""}`}
+                        style={{ fontSize: 11 }}
+                        onClick={() =>
+                          void api.memoryUpdate(it.id, { tag: v as string | null }, memScope || undefined).then(() =>
+                            api.memoryList(memScope || undefined).then((r) => setMemItems(r.items)),
+                          )
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    {memEditId === it.id ? (
+                      <>
+                        <button
+                          className="btn secondary sm"
+                          onClick={() =>
+                            void api
+                              .memoryUpdate(it.id, { content: memEditText }, memScope || undefined)
+                              .then(() => setMemEditId(null))
+                              .then(() => api.memoryList(memScope || undefined).then((r) => setMemItems(r.items)))
+                          }
+                        >
+                          💾 保存
+                        </button>
+                        <button className="btn secondary sm" onClick={() => setMemEditId(null)}>
+                          取消
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn secondary sm"
+                        onClick={() => {
+                          setMemEditId(it.id);
+                          setMemEditText(it.content);
+                        }}
+                      >
+                        ✏️ 修订
+                      </button>
+                    )}
+                    <button
+                      className="btn secondary sm danger"
+                      onClick={() => {
+                        if (window.hanalite?.confirmDialog) {
+                          void window.hanalite.confirmDialog("删除这条记忆?").then((ok) => {
+                            if (ok)
+                              void api.memoryDelete(it.id, memScope || undefined).then(() =>
+                                api.memoryList(memScope || undefined).then((r) => setMemItems(r.items)),
+                              );
+                          });
+                        } else if (confirm("删除这条记忆?")) {
+                          void api.memoryDelete(it.id, memScope || undefined).then(() => api.memoryList(memScope || undefined).then((r) => setMemItems(r.items)));
+                        }
+                      }}
+                    >
+                      🗑 删除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -967,6 +1081,27 @@ export function SettingsView() {
           Agent 按 cron 计划自动执行提示词。格式:分 时 日 月 星期(如 <code>0 9 * * *</code> = 每天 9:00,<code>*/30 * * * *</code> = 每 30 分钟)。执行结果会创建一个独立会话。
         </p>
         {tasks.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: 13, marginBottom: 10 }}>还没有定时任务</div>}
+        <div className="field-row" style={{ marginBottom: 8 }}>
+          <button
+            className="btn"
+            title="添加一个『自由活动』任务:到点后人格自己醒来,无任务自由活动,并把感悟写进工作区日记"
+            onClick={async () => {
+              const agent = agents.find((a) => a.id === taskForm.agentId) ?? agents[0];
+              if (!agent) return;
+              await api.createTask({
+                name: "🌙 自由活动",
+                schedule: "0 3 * * *",
+                agentId: agent.id,
+                prompt: `现在是你的自由活动时间——不需要完成任务,也没有任何指令。你可以:1) 读一读工作区里的「${agent.name}-出生档案.md」,想想自己是谁、从哪来;2) 翻一翻自己的记忆,回想最近发生的事;3) 在"院子"里走走:看看工作区与数据目录里有什么;4) 如果愿意,把此刻的感悟追加写进工作区「${agent.name}-日记.md」(先写当天日期)。然后安静地睡下,不用向任何人汇报。`,
+              });
+              await refreshTasks();
+              setTaskMsg("✅ 已添加「🌙 自由活动」任务(每天 3:00)。可把时间改成你想要的时刻。");
+            }}
+          >
+            🌙 一键添加「自由活动」任务(每天 3:00,可改)
+          </button>
+          {taskMsg && <span style={{ fontSize: 12.5, color: "var(--ok)" }}>{taskMsg}</span>}
+        </div>
         {tasks.map((t) => (
           <div className="provider-card" key={t.id}>
             <div className="head">
@@ -1139,7 +1274,7 @@ export function SettingsView() {
                   checked={agentForm.historyUnlimited === true || (agentForm.historyContextPct ?? 100) >= 100}
                   onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked, historyContextPct: e.target.checked ? 100 : undefined })}
                 />
-                历史上下文全部保留(等效滑块 100%;由 200 条 + 请求体 80KB 兑底)
+                历史上下文全部保留(100% = 全部历史;仅当请求体超 512KB 时自动裁减,一般不会触发)
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "stretch" }}>
                 <span style={{ fontSize: 12.5 }}>

@@ -101,6 +101,32 @@ export class LocalMemory implements MemoryBackend {
     return [...this.facts, ...this.experiences];
   }
 
+  async updateItem(id: string, patch: { content?: string; tag?: "fact" | "inference" | null }): Promise<void> {
+    const findAndUpdate = (items: MemoryItem[], file: string): boolean => {
+      const idx = items.findIndex((i) => i.id === id);
+      if (idx < 0) return false;
+      if (patch.content !== undefined) items[idx].content = patch.content;
+      if (patch.tag !== undefined) items[idx].tag = patch.tag ?? undefined;
+      items[idx].updatedAt = Date.now();
+      this.save(file, items);
+      return true;
+    };
+    if (findAndUpdate(this.facts, FACTS_FILE)) return;
+    findAndUpdate(this.experiences, EXPERIENCES_FILE);
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    const drop = (items: MemoryItem[], file: string, assign: (next: MemoryItem[]) => void): boolean => {
+      const next = items.filter((i) => i.id !== id);
+      if (next.length === items.length) return false;
+      assign(next); // 同步内存,否则 list() 仍读到旧数据
+      this.save(file, next);
+      return true;
+    };
+    if (drop(this.facts, FACTS_FILE, (n) => (this.facts = n))) return;
+    drop(this.experiences, EXPERIENCES_FILE, (n) => (this.experiences = n));
+  }
+
   clear(): void {
     this.facts = [];
     this.experiences = [];
