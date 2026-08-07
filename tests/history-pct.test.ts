@@ -10,7 +10,7 @@ function agent(over: Partial<AgentDef> = {}): AgentDef {
 }
 
 describe("sliceHistoryByPct(历史上下文百分比)", () => {
-  it("pct=100 保留全部(200 条兜底),pct=50 大约只留一半", () => {
+  it("pct=100 真无限(全部发送),pct=50 大约只留一半", () => {
     // 每条约 100 字 ≈ 50 token,20 条总 1000 token
     const msgs = Array.from({ length: 20 }, (_, i) => msg(i % 2 ? "assistant" : "user", "长".repeat(100)));
     const all = sliceHistoryByPct(msgs, agent({ historyContextPct: 100 }));
@@ -30,7 +30,7 @@ describe("sliceHistoryByPct(历史上下文百分比)", () => {
 
   it("兼容旧配置:historyUnlimited=true 等效 100,未设置用默认窗口", () => {
     const msgs = Array.from({ length: 500 }, (_, i) => msg(i % 2 ? "assistant" : "user", "字"));
-    expect(sliceHistoryByPct(msgs, agent({ historyUnlimited: true })).length).toBe(400);
+    expect(sliceHistoryByPct(msgs, agent({ historyUnlimited: true })).length).toBe(500);
     expect(sliceHistoryByPct(msgs, agent({})).length).toBe(30);
   });
 });

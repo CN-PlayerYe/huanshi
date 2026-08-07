@@ -45,9 +45,9 @@ export function sliceHistoryByPct(messages: ChatMessage[], agent: AgentDef): Cha
   const unlimited = agent.historyUnlimited === true;
   if (pct == null) {
     // 兼容旧配置:historyUnlimited=true 等效 100%;否则用默认窗口
-    return unlimited ? messages.slice(-MAX_HISTORY_UNLIMITED) : messages.slice(-MAX_HISTORY_MESSAGES);
+    return unlimited ? messages : messages.slice(-MAX_HISTORY_MESSAGES);
   }
-  if (pct >= 100) return messages.slice(-MAX_HISTORY_UNLIMITED);
+  if (pct >= 100) return messages; // 真无限:全部发送(慢是用户自己的选择)
   if (messages.length <= 1) return messages;
   const total = messages.reduce((n, m) => n + estimateTokens(m), 0);
   if (total === 0) return messages.slice(-MAX_HISTORY_UNLIMITED);

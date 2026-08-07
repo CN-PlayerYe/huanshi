@@ -235,8 +235,9 @@ function stripImages(text: string): string {
 
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  // 记录上次消息数:只有"变多(新回复)"或流式中才自动滚底;删除(变少)时保持当前滚动位置
+  // 滚动策略:切换会话 → 滚到底部看最新;新增消息/流式中 → 滚底;删除(变少) → 保持当前位置
   const prevLen = useRef(messages.length);
+  const prevSession = useRef(activeSessionId);
   const activeSessionId = useApp((s) => s.activeSessionId);
   // hook 必须无条件调用(条件调用会在 activeSessionId 变化时导致 React "more hooks" 崩溃);
   // 模块级常量 EMPTY_OPTIONS 保证无选项时引用稳定,避免无限重渲染
@@ -247,11 +248,18 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (prevSession.current !== activeSessionId) {
+      // 切换会话:直接看最新消息
+      el.scrollTop = el.scrollHeight;
+      prevSession.current = activeSessionId;
+      prevLen.current = messages.length;
+      return;
+    }
     if (streaming || messages.length > prevLen.current) {
       el.scrollTop = el.scrollHeight;
     }
     prevLen.current = messages.length;
-  }, [messages.length, streaming]);
+  }, [activeSessionId, messages.length, streaming]);
 
   if (!messages.length) {
     return (

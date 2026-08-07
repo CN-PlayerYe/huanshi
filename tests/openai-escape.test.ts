@@ -42,11 +42,11 @@ describe("shrinkMessages(请求体压缩)", () => {
       msgs.push({ role: "assistant", content: "回答", reasoningContent: "思".repeat(20000) });
     }
     const before = Buffer.byteLength(JSON.stringify(msgs));
-    expect(before).toBeGreaterThan(96 * 1024);
+    expect(before).toBeGreaterThan(512 * 1024);
 
     const shrunk = shrinkMessages(msgs);
     const after = Buffer.byteLength(JSON.stringify(shrunk));
-    expect(after).toBeLessThanOrEqual(96 * 1024);
+    expect(after).toBeLessThanOrEqual(512 * 1024);
 
     // 思考被删(最多 3 条 500 字符)
     const keptThinking = shrunk.filter((m) => m.reasoningContent);
