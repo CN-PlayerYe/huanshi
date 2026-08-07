@@ -8,6 +8,30 @@ import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../provider
 import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
+export interface ChatRunOpts {
+  /** 仅允许这些工具(与边界过滤叠加) */
+  allowedTools?: string[];
+  /** 只读模式:排除写类工具(写文件/写记忆/命令) */
+  readOnly?: boolean;
+  /** 联网工具(抓网页/搜索)是否禁用 */
+  allowNetwork?: boolean;
+  /** 命令工具是否禁用 */
+  allowCommands?: boolean;
+  /** 覆盖工作目录(心跳活动范围) */
+  cwd?: string;
+  /** 覆盖写入白名单目录 */
+  allowedWriteDirs?: string[];
+  /** 覆盖高危命令权限 */
+  allowDangerousCommands?: boolean;
+  /** 覆盖路径白名单 */
+  unrestrictedPaths?: boolean;
+}
+
+/** 写类工具:只读模式下禁用 */
+const WRITE_TOOLS = new Set(["file_write", "file_append", "memory_retain", "run_command"]);
+/** 联网工具 */
+const NETWORK_TOOLS = new Set(["fetch_url", "search_web"]);
+
 const MAX_HISTORY_MESSAGES = 30;
 /** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(夜玲珑等野生人格遇到过 1.4MB/88 秒) */
 const MAX_HISTORY_UNLIMITED = 400;
@@ -250,6 +274,7 @@ export class AgentEngine {
     onEvent: (e: StreamEvent) => void | Promise<void>,
     signal?: AbortSignal,
     attachments?: { file: string; mime: string }[],
+    opts?: ChatRunOpts,
   ): Promise<ChatMessage> {
     const { db, memory, registry, dataDir } = this.deps;
     const settings = this.deps.getSettings();
@@ -376,6 +401,11 @@ export class AgentEngine {
     const tools = registry
       .list()
       .filter((t) => agent.tools.includes(t.name))
+      // 心跳安全边界:按 opts 裁剪工具(只读/联网/命令)
+      .filter((t) => (opts?.allowedTools ? opts.allowedTools.includes(t.name) : true))
+      .filter((t) => (opts?.readOnly ? !WRITE_TOOLS.has(t.name) : true))
+      .filter((t) => (opts?.allowNetwork === false ? !NETWORK_TOOLS.has(t.name) : true))
+      .filter((t) => (opts?.allowCommands === false ? t.name !== "run_command" : true))
       .map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
 
     const assistant: ChatMessage = {
@@ -390,14 +420,14 @@ export class AgentEngine {
     await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
 
     const toolCtx: ToolContext = {
-      cwd: settings.toolWhitelistDir || join(dataDir, "workspace"),
-      allowedWriteDirs: [join(dataDir, "workspace"), settings.toolWhitelistDir].filter(Boolean),
+      cwd: opts?.cwd || settings.toolWhitelistDir || join(dataDir, "workspace"),
+      allowedWriteDirs: opts?.allowedWriteDirs || [join(dataDir, "workspace"), settings.toolWhitelistDir].filter(Boolean),
       dataDir,
       env: process.env,
       memory: agent.memoryEnabled ? memory : null,
-      // Agent 级权限:全命令 / 全文件路径
-      allowDangerousCommands: agent.allowDangerousCommands === true,
-      unrestrictedPaths: agent.unrestrictedPaths === true,
+      // Agent 级权限:全命令 / 全文件路径(心跳边界可覆盖收紧)
+      allowDangerousCommands: opts?.allowDangerousCommands ?? (agent.allowDangerousCommands === true),
+      unrestrictedPaths: opts?.unrestrictedPaths ?? (agent.unrestrictedPaths === true),
       // 独立记忆空间作用域
       agentId: agent.isolatedMemory ? agent.id : undefined,
     };

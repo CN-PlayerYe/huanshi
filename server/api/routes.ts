@@ -9,6 +9,8 @@ import { AgentEngine, generateLore, generateSummary } from "../agent/engine";
 import { createCustomAgent } from "../agents";
 import { saveSettings, writeDataDirRedirect, type ResolvedPaths } from "../config";
 import { nextRunTime, parseCron } from "../cron";
+import { mergeHeartbeat, nextHeartbeatAt } from "../heartbeat";
+import type { HeartbeatConfig } from "../../shared/types";
 import { searchSessions } from "../storage/search";
 import { importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, type ImportStats } from "../import/cherrystudio";
 import { fetchModelList, PROVIDER_PRESETS, testProvider } from "../providers/test";
@@ -28,6 +30,8 @@ export interface AppDeps {
   isPortable: () => boolean;
   /** 事件广播(WebSocket 推送),可选 */
   broadcast?: (e: StreamEvent) => void;
+  /** 主人发消息时回调(心跳打断用) */
+  onUserMessage?: () => void;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -474,6 +478,7 @@ ${tools || "- (无工具)"}
   // ---- 聊天(SSE 流式) ----
 
   app.post("/api/chat", (c) => {
+    deps.onUserMessage?.();
     return streamSSE(c, async (stream) => {
       const body = (await c.req.json().catch(() => ({}))) as ChatRequest & { title?: string };
       if (!body.content?.trim()) {
@@ -668,17 +673,23 @@ ${tools || "- (无工具)"}
   app.get("/api/tasks", (c) => c.json({ tasks: deps.db.listTasks() }));
 
   app.post("/api/tasks", async (c) => {
-    const body = (await c.req.json()) as { name?: string; prompt?: string; schedule?: string; agentId?: string };
+    const body = (await c.req.json()) as { name?: string; prompt?: string; schedule?: string; agentId?: string; kind?: "cron" | "heartbeat"; heartbeat?: HeartbeatConfig };
     if (!body.name?.trim() || !body.prompt?.trim() || !body.schedule?.trim()) {
       return c.json({ error: "名称、提示词、cron 表达式均不能为空" }, 400);
     }
     let nextRunAt: number;
-    try {
-      const d = nextRunTime(parseCron(body.schedule.trim()), new Date(Date.now() + 60_000));
-      if (!d) return c.json({ error: "无法计算下次执行时间" }, 400);
-      nextRunAt = d.getTime();
-    } catch (err) {
-      return c.json({ error: `cron 表达式无效:${(err as Error).message}` }, 400);
+    if (body.kind === "heartbeat") {
+      // 心跳:节奏由 interval+静默时段决定,不解析 cron
+      const hb = mergeHeartbeat(body.heartbeat);
+      nextRunAt = nextHeartbeatAt(new Date(Date.now() + 60_000), hb).getTime();
+    } else {
+      try {
+        const d = nextRunTime(parseCron(body.schedule.trim()), new Date(Date.now() + 60_000));
+        if (!d) return c.json({ error: "无法计算下次执行时间" }, 400);
+        nextRunAt = d.getTime();
+      } catch (err) {
+        return c.json({ error: `cron 表达式无效:${(err as Error).message}` }, 400);
+      }
     }
     const task: TaskDef = {
       id: newId("task"),
@@ -689,6 +700,8 @@ ${tools || "- (无工具)"}
       enabled: true,
       createdAt: Date.now(),
       nextRunAt,
+      kind: body.kind,
+      heartbeat: body.heartbeat,
     };
     deps.db.saveTask(task);
     return c.json({ task });
@@ -699,7 +712,11 @@ ${tools || "- (无工具)"}
     const cur = deps.db.getTask(c.req.param("id"));
     if (!cur) return c.json({ error: "任务不存在" }, 404);
     const next: TaskDef = { ...cur, ...body, id: cur.id };
-    if (body.schedule && body.schedule !== cur.schedule) {
+    if (next.kind === "heartbeat") {
+      // 心跳任务:schedule 变更用心跳节奏重算
+      const hb = mergeHeartbeat(next.heartbeat);
+      next.nextRunAt = nextHeartbeatAt(new Date(Date.now() + 60_000), hb).getTime();
+    } else if (body.schedule && body.schedule !== cur.schedule) {
       try {
         const d = nextRunTime(parseCron(body.schedule), new Date(Date.now() + 60_000));
         next.nextRunAt = d?.getTime() ?? cur.nextRunAt;

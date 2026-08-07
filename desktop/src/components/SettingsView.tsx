@@ -35,6 +35,15 @@ function describeCron(expr: string): string {
   }
 }
 
+/** 心跳节奏描述 */
+function describeHeartbeat(hb?: { intervalHours?: number; quietStart?: number; quietEnd?: number; scope?: string; network?: string; commands?: string }): string {
+  const i = hb?.intervalHours ?? 3;
+  const scope = hb?.scope === "global" ? "不限制" : hb?.scope === "workspace" ? "工作区" : "仅自己空间";
+  const net = hb?.network === "allow" ? "联网" : hb?.network === "readonly" ? "只读网页" : "断网";
+  const cmd = hb?.commands === "allow" ? "命令全放" : hb?.commands === "lowrisk" ? "低危命令" : "无命令";
+  return `每 ${i} 小时 · ${scope} · ${net} · ${cmd}`;
+}
+
 export function SettingsView() {
   const settings = useApp((s) => s.settings);
   const systemInfo = useApp((s) => s.systemInfo);
@@ -71,6 +80,7 @@ export function SettingsView() {
   const [ttsTesting, setTtsTesting] = useState(false);
   const cardFileRef = useRef<HTMLInputElement>(null);
   const [taskMsg, setTaskMsg] = useState("");
+  const [hbEditId, setHbEditId] = useState<string | null>(null);
   const [lanIps, setLanIps] = useState<string[]>([]);
   const [port, setPort] = useState("");
 
@@ -1100,19 +1110,47 @@ export function SettingsView() {
           >
             🌙 一键添加「自由活动」任务(每天 3:00,可改)
           </button>
+          <button
+            className="btn"
+            title="添加一个「心跳」任务:每 3 小时,系统生成动态心跳消息(「你自由了」),人格自主活动;23:00-7:00 静默;安全边界可调"
+            onClick={async () => {
+              const agent = agents.find((a) => a.id === taskForm.agentId) ?? agents[0];
+              if (!agent) return;
+              await api.createTask({
+                name: "💓 心跳",
+                schedule: "* * * * *", // 心跳任务忽略 cron,由 interval 决定
+                agentId: agent.id,
+                kind: "heartbeat",
+                heartbeat: { intervalHours: 3, quietStart: 23, quietEnd: 7, bedtimeHour: 21, scope: "self", network: "off", commands: "off", maxMinutes: 10, interruptible: true },
+                prompt: "(心跳任务:消息由系统在每次心跳时动态生成)",
+              });
+              await refreshTasks();
+              setTaskMsg("✅ 已添加「💓 心跳」任务(每 3 小时,23:00-7:00 静默)。点「⚙️ 边界」可调安全边界。");
+            }}
+          >
+            💓 一键添加「心跳」任务(每 3 小时,自主醒来)
+          </button>
           {taskMsg && <span style={{ fontSize: 12.5, color: "var(--ok)" }}>{taskMsg}</span>}
         </div>
         {tasks.map((t) => (
           <div className="provider-card" key={t.id}>
             <div className="head">
               <span className="name">
+                {t.kind === "heartbeat" ? "💓 " : ""}
                 {t.name}
-                <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>{describeCron(t.schedule)}</span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>
+                  {t.kind === "heartbeat" ? describeHeartbeat(t.heartbeat) : describeCron(t.schedule)}
+                </span>
               </span>
               <label style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4 }}>
                 <input type="checkbox" checked={t.enabled} onChange={(e) => void api.updateTask(t.id, { enabled: e.target.checked }).then(refreshTasks)} />
                 启用
               </label>
+              {t.kind === "heartbeat" && (
+                <button className="btn secondary sm" onClick={() => setHbEditId(hbEditId === t.id ? null : t.id)}>
+                  ⚙️ 边界
+                </button>
+              )}
               <button className="btn secondary sm" onClick={() => void api.runTask(t.id).then((r) => setTaskMsg(`立即执行完成:${r.result.slice(0, 80)}`))}>
                 ▶ 立即运行
               </button>
@@ -1121,9 +1159,91 @@ export function SettingsView() {
               </button>
             </div>
             <div className="desc" style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              人格:{agents.find((a) => a.id === t.agentId)?.name ?? t.agentId} · 下次:{t.nextRunAt ? new Date(t.nextRunAt).toLocaleString("zh-CN") : "—"}
+              人格:{agents.find((a) => a.id === t.agentId)?.name ?? t.agentId} · 下次心跳:{t.nextRunAt ? new Date(t.nextRunAt).toLocaleString("zh-CN") : "—"}
               {t.lastRunAt ? ` · 上次:${new Date(t.lastRunAt).toLocaleString("zh-CN")}(${t.lastStatus})` : ""}
             </div>
+            {t.kind === "heartbeat" && hbEditId === t.id && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 8 }}>
+                <div className="field-row" style={{ flexWrap: "wrap" }}>
+                  <div className="field" style={{ minWidth: 110 }}>
+                    <label>间隔(小时)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={t.heartbeat?.intervalHours ?? 3}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), intervalHours: Math.max(1, Number(e.target.value) || 3) } }).then(refreshTasks)
+                      }
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 130 }}>
+                    <label>活动范围</label>
+                    <select
+                      value={t.heartbeat?.scope ?? "self"}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), scope: e.target.value as "self" | "workspace" | "global" } }).then(refreshTasks)
+                      }
+                    >
+                      <option value="self">🏠 仅自己空间</option>
+                      <option value="workspace">📁 整个工作区</option>
+                      <option value="global">🌍 不限制(慎用)</option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ minWidth: 120 }}>
+                    <label>联网</label>
+                    <select
+                      value={t.heartbeat?.network ?? "off"}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), network: e.target.value as "off" | "readonly" | "allow" } }).then(refreshTasks)
+                      }
+                    >
+                      <option value="off">🚫 禁止</option>
+                      <option value="readonly">📖 只读网页</option>
+                      <option value="allow">🌐 允许</option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ minWidth: 120 }}>
+                    <label>命令</label>
+                    <select
+                      value={t.heartbeat?.commands ?? "off"}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), commands: e.target.value as "off" | "lowrisk" | "allow" } }).then(refreshTasks)
+                      }
+                    >
+                      <option value="off">🚫 禁止</option>
+                      <option value="lowrisk">🔧 低危</option>
+                      <option value="allow">⚡ 允许</option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ minWidth: 110 }}>
+                    <label>时长上限(分钟)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={t.heartbeat?.maxMinutes ?? 10}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), maxMinutes: Math.max(1, Number(e.target.value) || 10) } }).then(refreshTasks)
+                      }
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 110, display: "flex", alignItems: "flex-end" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={t.heartbeat?.interruptible !== false}
+                        onChange={(e) => void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), interruptible: e.target.checked } }).then(refreshTasks)}
+                      />
+                      主人发消息即打断
+                    </label>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4 }}>
+                  💡 安全边界可调:放虚拟机里养灵时,把范围/联网/命令放宽就是你的实验场。
+                </div>
+              </div>
+            )}
             {t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
           </div>
         ))}

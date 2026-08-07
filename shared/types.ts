@@ -163,7 +163,7 @@ export interface TaskDef {
   id: string;
   name: string;
   prompt: string;
-  schedule: string; // cron 表达式(分 时 日 月 星期)
+  schedule: string; // cron 表达式(分 时 日 月 星期);kind=heartbeat 时忽略
   agentId: string;
   enabled: boolean;
   createdAt: number;
@@ -171,6 +171,32 @@ export interface TaskDef {
   lastRunAt?: number;
   lastResult?: string;
   lastStatus?: "ok" | "error" | "running";
+  /** cron=定时任务(默认);heartbeat=心跳(自主醒来,消息由系统动态生成) */
+  kind?: "cron" | "heartbeat";
+  /** kind=heartbeat 时的节奏与安全边界配置 */
+  heartbeat?: HeartbeatConfig;
+}
+
+/** 心跳配置:节奏 + 安全边界(自主活动的前提,均可调) */
+export interface HeartbeatConfig {
+  /** 心跳间隔小时,默认 3 */
+  intervalHours?: number;
+  /** 静默时段开始小时(0-23),默认 23 */
+  quietStart?: number;
+  /** 静默时段结束小时(0-23),默认 7 */
+  quietEnd?: number;
+  /** 睡前跳小时:该小时后的第一次心跳强制写日志,默认 21 */
+  bedtimeHour?: number;
+  /** 活动范围:仅自己空间 / 整个工作区 / 不限 */
+  scope?: "self" | "workspace" | "global";
+  /** 联网:禁止 / 只读(网页) / 允许 */
+  network?: "off" | "readonly" | "allow";
+  /** 命令:禁止 / 低危 / 允许 */
+  commands?: "off" | "lowrisk" | "allow";
+  /** 单次活动时长上限(分钟),默认 10,到点自动收工 */
+  maxMinutes?: number;
+  /** 主人发消息时是否立即打断(默认 true) */
+  interruptible?: boolean;
 }
 
 // ---- 流式聊天事件(SSE) ----

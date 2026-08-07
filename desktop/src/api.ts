@@ -60,7 +60,7 @@ export const api = {
   reflect: () => request<{ text: string }>("/api/memory/reflect", { method: "POST" }),
 
   listTasks: () => request<{ tasks: TaskDef[] }>("/api/tasks"),
-  createTask: (body: { name: string; prompt: string; schedule: string; agentId: string }) =>
+  createTask: (body: { name: string; prompt: string; schedule: string; agentId: string; kind?: "cron" | "heartbeat"; heartbeat?: import("../../shared/types").HeartbeatConfig }) =>
     request<{ task: TaskDef }>("/api/tasks", { method: "POST", body: JSON.stringify(body) }),
   updateTask: (id: string, patch: Partial<TaskDef>) =>
     request<{ task: TaskDef }>(`/api/tasks/${id}`, { method: "PUT", body: JSON.stringify(patch) }),

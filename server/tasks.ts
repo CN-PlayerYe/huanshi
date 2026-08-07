@@ -1,11 +1,17 @@
 import type { AgentDef, StreamEvent, TaskDef } from "../shared/types";
 import type { AgentEngine } from "./agent/engine";
+import type { ChatRunOpts } from "./agent/engine";
 import { nextRunTime, parseCron } from "./cron";
 import type { Db } from "./storage";
+import { mergeHeartbeat, inQuietWindow, nextHeartbeatAt, buildHeartbeatMessage, scanAgentSpace } from "./heartbeat";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * 定时任务调度器:周期性检查到期任务,后台交给 Agent 引擎执行。
- * 不阻塞主流程,结果写入任务记录。
+ * 不阻塞主流程,结果写入任务记录。支持两种任务:
+ * - cron:闹钟,到点执行固定提示词
+ * - heartbeat:心跳,到点生成动态消息(「你自由了」),让人格自主活动
  */
 export class Scheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -18,6 +24,9 @@ export class Scheduler {
     private getAgent: (id: string) => AgentDef | undefined,
     /** 任务执行完成回调(用于桌面通知) */
     private onDone?: (e: { taskName: string; ok: boolean; result: string }) => void,
+    private workspaceDir = "workspace",
+    /** 主人最近一次发消息的时间(心跳打断用) */
+    private lastUserAtFn?: () => number | undefined,
   ) {}
 
   start(): void {
@@ -43,16 +52,20 @@ export class Scheduler {
       if (task.nextRunAt > now) continue;
       this.running.add(task.id);
       // 防抖:立即把 nextRunAt 推到下次,避免异常导致死循环
-      const next = this.computeNext(task.schedule);
+      const next = this.computeNext(task);
       this.db.saveTask({ ...task, nextRunAt: next ?? task.nextRunAt + 60_000, lastStatus: "running" });
       void this.runTask(task).finally(() => this.running.delete(task.id));
     }
   }
 
-  /** 计算下一次执行时间(基于当前时间 + 1 分钟) */
-  computeNext(expr: string): number | null {
+  /** 计算下一次执行时间(cron 任务按 cron;心跳任务按 interval+静默时段) */
+  computeNext(task: TaskDef): number | null {
+    if (task.kind === "heartbeat") {
+      const hb = mergeHeartbeat(task.heartbeat);
+      return nextHeartbeatAt(new Date(Date.now() + 60_000), hb).getTime();
+    }
     try {
-      const d = nextRunTime(parseCron(expr), new Date(Date.now() + 60_000));
+      const d = nextRunTime(parseCron(task.schedule), new Date(Date.now() + 60_000));
       return d ? d.getTime() : null;
     } catch {
       return null;
@@ -66,6 +79,10 @@ export class Scheduler {
       return;
     }
     try {
+      if (task.kind === "heartbeat") {
+        await this.runHeartbeat(task, agent);
+        return;
+      }
       const session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
       let finalText = "";
       const onEvent = (e: StreamEvent) => {
@@ -93,6 +110,99 @@ export class Scheduler {
         lastResult: `执行失败:${(err as Error).message}`,
       });
       this.onDone?.({ taskName: task.name, ok: false, result: (err as Error).message });
+    }
+  }
+
+  /**
+   * 心跳执行:系统动态生成心跳消息(不是任务书),按安全边界裁剪工具,
+   * 到时长自动收工,主人发消息立即打断。
+   */
+  private async runHeartbeat(task: TaskDef, agent: AgentDef): Promise<void> {
+    const hb = mergeHeartbeat(task.heartbeat);
+    const now = new Date();
+    const agentSpace = join(this.workspaceDir, agent.name);
+    const spaceStatus = scanAgentSpace(agentSpace);
+    // 睡前跳:bedtimeHour 后的第一次心跳(距上次心跳跨过 bedtimeHour)
+    const prevHour = task.lastRunAt ? new Date(task.lastRunAt).getHours() : -1;
+    const isBedtime = now.getHours() >= hb.bedtimeHour && prevHour < hb.bedtimeHour;
+    const message = buildHeartbeatMessage({
+      now,
+      lastBeatAt: task.lastRunAt,
+      lastUserAt: this.lastUserAtFn?.(),
+      spaceStatus,
+      isBedtime,
+      agent,
+    });
+
+    const session = this.db.createSession(`💓 心跳 ${now.toLocaleString("zh-CN", { hour12: false }).slice(0, 16)}`, task.agentId);
+
+    // 安全边界 → 工具过滤与权限覆盖
+    const opts: ChatRunOpts = {
+      readOnly: hb.scope === "self",
+      allowNetwork: hb.network !== "off",
+      allowCommands: hb.commands !== "off",
+      allowDangerousCommands: hb.commands === "allow",
+    };
+    if (hb.scope === "self") {
+      mkdirSync(agentSpace, { recursive: true });
+      opts.cwd = agentSpace;
+      opts.allowedWriteDirs = [agentSpace];
+      opts.unrestrictedPaths = false;
+    } else if (hb.scope === "workspace") {
+      opts.cwd = this.workspaceDir;
+      opts.allowedWriteDirs = [this.workspaceDir];
+      opts.unrestrictedPaths = false;
+    }
+
+    // 超时:到点自动收工
+    const ctrl = new AbortController();
+    const maxMs = Math.max(1, hb.maxMinutes) * 60_000;
+    const timer = setTimeout(() => ctrl.abort(), maxMs);
+
+    // 主人插话打断:主人有新消息则立即收工
+    let interruptTimer: ReturnType<typeof setInterval> | null = null;
+    if (hb.interruptible) {
+      const startedAt = Date.now();
+      interruptTimer = setInterval(() => {
+        const lastUser = this.lastUserAtFn?.();
+        if (lastUser && lastUser > startedAt) {
+          ctrl.abort();
+          if (interruptTimer) clearInterval(interruptTimer);
+        }
+      }, 5_000);
+    }
+
+    let finalText = "";
+    try {
+      const onEvent = (e: StreamEvent) => {
+        if (e.type === "done") {
+          finalText = e.message.parts
+            .filter((p) => p.type === "text")
+            .map((p) => p.text ?? "")
+            .join("\n")
+            .slice(0, 400);
+        }
+      };
+      await this.engine.runChat(session, agent, message, onEvent, ctrl.signal, undefined, opts);
+      const interrupted = ctrl.signal.aborted;
+      this.db.saveTask({
+        ...task,
+        lastRunAt: Date.now(),
+        lastStatus: "ok",
+        lastResult: interrupted ? "(被主人打断,已收工)" : finalText || "(安静地待了一会儿)",
+      });
+      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "安静活动" });
+    } catch (err) {
+      const aborted = ctrl.signal.aborted;
+      this.db.saveTask({
+        ...task,
+        lastRunAt: Date.now(),
+        lastStatus: aborted ? "ok" : "error",
+        lastResult: aborted ? "(到点/被打断,自动收工)" : `执行失败:${(err as Error).message}`,
+      });
+    } finally {
+      clearTimeout(timer);
+      if (interruptTimer) clearInterval(interruptTimer);
     }
   }
 }

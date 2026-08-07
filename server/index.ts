@@ -2,6 +2,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { cors } from "hono/cors";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import type { Settings, StreamEvent } from "../shared/types";
 import { AgentEngine } from "./agent/engine";
 import { ensureDefaultAgents } from "./agents";
@@ -82,6 +83,10 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     },
     isPortable: () => paths.portable,
     broadcast,
+    // 主人发消息:记录时间,心跳执行时据此打断
+    onUserMessage: () => {
+      lastUserAt = Date.now();
+    },
   });
 
   // CORS:渲染进程(file:// 或 dev localhost)请求本机后端;仅监听 127.0.0.1,允许所有来源无安全风险
@@ -113,10 +118,19 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   const port = (server.address() as AddressInfo).port;
 
   // ---- 定时任务调度器 ----
-  const scheduler = new Scheduler(db, engine, (id) => db.getAgent(id), (e) => {
-    // 任务完成:广播给前端做桌面通知(人格主动找你)
-    broadcast({ type: "task_done", taskName: e.taskName, ok: e.ok, result: e.result.slice(0, 200) });
-  });
+  let lastUserAt: number | undefined;
+  const workspaceDir = settings.toolWhitelistDir || join(paths.dataDir, "workspace");
+  const scheduler = new Scheduler(
+    db,
+    engine,
+    (id) => db.getAgent(id),
+    (e) => {
+      // 任务完成:广播给前端做桌面通知(人格主动找你)
+      broadcast({ type: "task_done", taskName: e.taskName, ok: e.ok, result: e.result.slice(0, 200) });
+    },
+    workspaceDir,
+    () => lastUserAt,
+  );
   scheduler.start();
 
   console.log(`[hanalite] server listening on http://127.0.0.1:${port}`);
