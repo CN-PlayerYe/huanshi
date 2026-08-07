@@ -20,7 +20,6 @@ export interface ResolvedPaths {
   redirectFile: string;
   dirs: {
     db: string;
-    agents: string;
     memory: string;
     workspace: string;
     logs: string;
@@ -84,7 +83,6 @@ function buildPaths(dataDir: string, portable: boolean, redirectFile: string): R
     redirectFile,
     dirs: {
       db: join(dataDir, "db"),
-      agents: join(dataDir, "agents"),
       memory: join(dataDir, "memory"),
       workspace: join(dataDir, "workspace"),
       logs: join(dataDir, "logs"),
