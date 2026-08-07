@@ -150,12 +150,13 @@ function ToolCallBlock({ tool }: { tool: ToolCallPart }) {
   const textWithoutImages = images.length ? stripImages(tool.output ?? "") : tool.output ?? "";
 
   return (
-    <div className="tool-block">
-      <div className="tool-head">
+    <details className="tool-block" open={tool.status === "running"}>
+      <summary className="tool-head">
         <span className="tool-icon">🔧</span>
         <span className="tool-name">{tool.name}</span>
         <span className={`tool-status ${statusClass}`}>{statusText}</span>
-      </div>
+        <span className="tool-toggle">▾</span>
+      </summary>
       {inputText && <div className="tool-body input">{inputText.slice(0, 1200)}</div>}
       {images.length > 0 && (
         <div className="tool-images">
@@ -165,7 +166,7 @@ function ToolCallBlock({ tool }: { tool: ToolCallPart }) {
         </div>
       )}
       {textWithoutImages && <div className="tool-body">{textWithoutImages.slice(0, 2000)}</div>}
-    </div>
+    </details>
   );
 }
 
@@ -236,9 +237,9 @@ function stripImages(text: string): string {
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const activeSessionId = useApp((s) => s.activeSessionId);
-  // 滚动策略:切换会话 → 滚到底部看最新;新增消息/流式中 → 滚底;删除(变少) → 保持当前位置
+  // 滚动策略:切换会话/重新挂载(如从设置切回)→ 滚底看最新;新增/流式 → 滚底;删除 → 保持
   const prevLen = useRef(messages.length);
-  const prevSession = useRef(activeSessionId);
+  const prevSession = useRef<string | null>(null); // null → 首次挂载/切回会话时触发滚底
   // hook 必须无条件调用(条件调用会在 activeSessionId 变化时导致 React "more hooks" 崩溃);
   // 模块级常量 EMPTY_OPTIONS 保证无选项时引用稳定,避免无限重渲染
   const options = useApp((s) => (activeSessionId ? (s.sessionOptions[activeSessionId] ?? EMPTY_OPTIONS) : EMPTY_OPTIONS));

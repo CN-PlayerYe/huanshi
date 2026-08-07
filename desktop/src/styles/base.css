@@ -1474,3 +1474,25 @@ select {
   color: var(--text-dim);
   margin-left: 6px;
 }
+
+/* ---- 工具调用折叠(details/summary) ---- */
+.tool-block > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tool-block > summary::-webkit-details-marker {
+  display: none;
+}
+.tool-block > summary:hover {
+  background: var(--bg-hover);
+}
+.tool-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.15s;
+}
+.tool-block[open] > summary .tool-toggle {
+  transform: rotate(180deg);
+}

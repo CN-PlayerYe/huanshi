@@ -111,18 +111,35 @@ export const shellTool: Tool = {
     }
     const cwd = input.cwd ? resolvePath(String(input.cwd), ctx.cwd) : ctx.env.HOME || ctx.env.USERPROFILE || ctx.cwd;
     const timeoutMs = Number(input.timeoutMs) || 60_000;
+    // Windows cmd 默认 GBK 输出,Node 按 UTF-8 解码会乱码:先切 UTF-8 代码页
+    const win = process.platform === "win32";
+    const fullCommand = win ? `chcp 65001 >nul & ${command}` : command;
     return new Promise((resolvePromise) => {
       const child = exec(
-        command,
+        fullCommand,
         {
           cwd,
           timeout: timeoutMs,
           maxBuffer: 2 * 1024 * 1024,
           windowsHide: true,
+          encoding: "buffer",
           env: ctx.env,
         },
         (err, stdout, stderr) => {
-          const out = [stdout, stderr].filter(Boolean).join("\n").trim() || "(无输出)";
+          // 双解码:优先 UTF-8(chcp 65001 后);失败则按系统 GBK(中文 Windows 常见)
+          const dec = (b: Buffer | string) => {
+            const buf = Buffer.isBuffer(b) ? b : Buffer.from(b);
+            try {
+              return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+            } catch {
+              try {
+                return new TextDecoder("gbk").decode(buf);
+              } catch {
+                return buf.toString("utf-8");
+              }
+            }
+          };
+          const out = [dec(stdout), dec(stderr)].filter(Boolean).join("\n").trim() || "(无输出)";
           if (err) {
             resolvePromise(`退出码 ${(err as any).code ?? "?"}\n${out}\n${(err.message || "").slice(0, 500)}`);
           } else {
@@ -173,14 +190,30 @@ export const webTool: Tool = {
   async run(input, _ctx) {
     const url = String(input.url);
     if (!/^https?:\/\//i.test(url)) throw new ToolError("URL 必须以 http:// 或 https:// 开头");
+    // 中文 URL 等非 ASCII 必须先百分号编码,否则 fetch 直接报 ByteString 编码错误
+    // 且需手动跟随重定向:undici 对含中文的 Location 头同样报 ByteString 错,每跳都要重新编码
     const maxBytes = Number(input.maxBytes) || 1024 * 1024;
-    const res = await fetch(url, { redirect: "follow", headers: { "User-Agent": "幻世/0.1" } });
-    if (!res.ok) throw new ToolError(`HTTP ${res.status}`);
+    const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
+    let u = encodeURI(url);
+    let res: Response | undefined;
+    for (let hop = 0; hop < 5; hop++) {
+      res = await fetch(u, { redirect: "manual", headers: { "User-Agent": UA } });
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get("location");
+        if (!loc) break;
+        u = encodeURI(new URL(loc, res.url).toString());
+        continue;
+      }
+      break;
+    }
+    if (!res || !res.ok) throw new ToolError(`HTTP ${res?.status ?? "?"}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > maxBytes) throw new ToolError(`内容超过 ${maxBytes} 字节限制`);
-    const html = buf.toString("utf-8");
+    // 超限不报错,截断保留前段(大页面常见,如搜索引擎结果页)
+    const sliced = buf.length > maxBytes ? buf.slice(0, maxBytes) : buf;
+    const html = sliced.toString("utf-8");
     const text = htmlToText(html);
-    return text.slice(0, 20000) || "(无可读文本)";
+    const tail = buf.length > maxBytes ? "\n…(页面过大,已截取前段)" : "";
+    return (text.slice(0, 20000) + tail) || "(无可读文本)";
   },
 };
 
@@ -200,34 +233,36 @@ export const searchTool: Tool = {
     const query = String(input.query).trim();
     if (!query) throw new ToolError("搜索关键词不能为空");
     const max = Math.min(8, Math.max(1, Number(input.maxResults) || 5));
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10_000);
-      const res = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`, {
-        redirect: "follow",
-        signal: ctrl.signal,
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" },
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new ToolError(`搜索服务返回 HTTP ${res.status}`);
-      const html = await res.text();
-      const results = parseDuckDuckGoLite(html).slice(0, max);
-      if (!results.length) return "(没有找到相关结果)";
-      return results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join("\n\n");
-    } catch (err) {
-      // 网络不可达/超时时给出友好提示(国内网络可能无法直连 DuckDuckGo)
-      const msg = (err as Error).message;
-      if (msg.includes("abort") || msg.includes("timeout") || msg.includes("fetch failed")) {
-        return "搜索服务连接失败(可能网络不可达)。可改用 fetch_url 直接抓取百度等搜索引擎页面:\nhttps://www.baidu.com/s?wd=<关键词>";
+    const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
+    // 引擎按可达性排序:必应(国内直连)优先,DuckDuckGo(部分地区被墙)兜底
+    const engines: { name: string; url: (q: string) => string; parse: (html: string) => SearchResult[] }[] = [
+      { name: "必应", url: (q) => `https://cn.bing.com/search?q=${encodeURIComponent(q)}`, parse: parseBingHtml },
+      { name: "DuckDuckGo", url: (q) => `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`, parse: parseDuckDuckGoLite },
+    ];
+    for (const engine of engines) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 10_000);
+        const res = await fetch(engine.url(query), { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": UA } });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const html = await res.text();
+        const results = engine.parse(html).slice(0, max);
+        if (!results.length) continue;
+        return results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join("\n\n");
+      } catch {
+        continue; // 该引擎不可达,试下一个
       }
-      throw new ToolError(`搜索失败:${msg}`);
     }
+    return "搜索服务连接失败(网络不可达或引擎被限制)。可改用 fetch_url 直接抓取搜索引擎页面:\nhttps://www.baidu.com/s?wd=<关键词>";
   },
 };
 
 /** 解析 DuckDuckGo lite 结果页(表格布局) */
-function parseDuckDuckGoLite(html: string): { title: string; url: string; snippet: string }[] {
-  const out: { title: string; url: string; snippet: string }[] = [];
+type SearchResult = { title: string; url: string; snippet: string };
+
+function parseDuckDuckGoLite(html: string): SearchResult[] {
+  const out: SearchResult[] = [];
   // lite 版结果在 <a rel="nofollow" href="...">标题</a>,摘要紧随其后
   const linkRe = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
   const snippetRe = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/g;
@@ -242,6 +277,26 @@ function parseDuckDuckGoLite(html: string): { title: string; url: string; snippe
   while ((m = snippetRe.exec(html))) snippets.push(htmlToText(m[1]).slice(0, 300));
   for (let i = 0; i < links.length; i++) {
     out.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] ?? "" });
+  }
+  return out;
+}
+
+/** 必应 HTML 结果解析:每个结果在 <li class="b_algo"> 内,<h2><a href>标题</a></h2> + <p>摘要</p> */
+function parseBingHtml(html: string): SearchResult[] {
+  const out: SearchResult[] = [];
+  const blockRe = /<li class="b_algo"[\s\S]*?<\/li>/g;
+  let m: RegExpExecArray | null;
+  while ((m = blockRe.exec(html))) {
+    const block = m[0];
+    const a = block.match(/<h2[^>]*><a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a><\/h2>/);
+    if (!a) continue;
+    const url = a[1];
+    if (!url.startsWith("http")) continue;
+    const title = htmlToText(a[2]).slice(0, 200);
+    const p = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+    const snippet = p ? htmlToText(p[1]).slice(0, 300) : "";
+    out.push({ title, url, snippet });
+    if (out.length >= 8) break;
   }
   return out;
 }

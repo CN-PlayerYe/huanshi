@@ -254,6 +254,35 @@ export function createApp(deps: AppDeps): Hono {
       ? { ...deps.db.getAgent(body.id)!, ...body }
       : createCustomAgent(body);
     deps.db.saveAgent(agent);
+    // 出生档案:在人格的工作区生成一份"出生档案.md",让它知道自己的来处与能力
+    try {
+      const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
+      mkdirSync(ws, { recursive: true });
+      const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
+      const birth = `# ${agent.name} 的出生档案
+
+> 本文件由幻世在创建人格时自动生成,存放在你的工作目录,你可以随时阅读它了解自己。
+
+## 我是谁
+- **名字**:${agent.name}
+- **创建时间**:${new Date().toLocaleString("zh-CN")}
+- **运行平台**:${process.platform}(${process.arch})
+- **模型**:${deps.getSettings().activeProvider || "(未配置)"} / ${deps.getSettings().mainModel || "(未配置)"}
+
+## 我能做什么(能力清单)
+${tools || "- (无工具)"}
+
+## 我的限制
+- 执行命令:高危命令会被自动拦截,除非用户为你开启「允许执行高危命令」
+- 文件写入:默认仅限工作区(${ws}),除非用户开启「不受路径白名单限制」
+- 记忆:跨会话长期记忆(本地),可在设置 → 记忆查看与清理
+
+## 我的来处
+我诞生于「幻世」(HanaLite)——一个有记忆、有人格的私人 AI 助手。`;
+      writeFileSync(join(ws, `${agent.name}-出生档案.md`), birth, "utf8");
+    } catch {
+      // 出生档案生成失败不影响保存
+    }
     return c.json({ agent });
   });
 
