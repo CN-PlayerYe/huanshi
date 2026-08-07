@@ -523,7 +523,10 @@ export class AgentEngine {
       // 异步记住本次对话要点(过滤过短/无意义内容)
       if (agent.memoryEnabled) {
         const summary = summarize(userContent, textBuf);
-        if (summary.length > 20) void memory.retain(summary, "experience", agent.isolatedMemory ? agent.id : undefined);
+        // 心跳消息是系统代发的“自主活动邀请”,不是用户的言行,不沉淀为记忆(避免污染人格身份)
+        if (summary.length > 20 && !summary.startsWith("【心跳】")) {
+          void memory.retain(summary, "experience", agent.isolatedMemory ? agent.id : undefined);
+        }
       }
 
       // 成功路径:记录请求性能(诊断慢会话)
@@ -795,7 +798,12 @@ export function buildSystemPrompt(
 ): string {
   const cwd = whitelistDir || join(dataDir, "workspace");
   const styleBlock = buildStyleBlock(style);
-  return `${agent.systemPrompt || "你是一个乐于助人的私人 AI 助手。"}
+  // 身份锚点:即使 systemPrompt 为空(如从 Cherry 迁移的人格),也让模型明确知道"我是谁"
+  const identity =
+    agent.systemPrompt?.trim()
+      ? agent.systemPrompt
+      : `你是「${agent.name}」${agent.description?.trim() ? `,${agent.description.trim()}` : "——一个有自己记忆和想法的独立人格"}。`;
+  return `${identity}
 
 【环境信息】
 - 日期时间:${new Date().toLocaleString("zh-CN")}

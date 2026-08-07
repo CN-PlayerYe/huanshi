@@ -60,3 +60,28 @@ export function fixLegacyHeartbeatSessions(db: Db): number {
   }
   return archived;
 }
+
+/**
+ * 清理误入记忆库的心跳消息:心跳消息是系统代发的"自主活动邀请",
+ * 以用户角色被沉淀进 experiences 会污染人格身份(如让夜玲珑误以为自己是星回)。
+ * 幂等:只删以「【心跳】」开头的条目。
+ */
+export async function cleanHeartbeatMemories(memory: { list: (agentId?: string) => Promise<{ id: string; content: string }[]>; deleteItem: (id: string, agentId?: string) => Promise<void> }, agentIds: string[]): Promise<number> {
+  let n = 0;
+  // 全局 + 各独立空间
+  const scopes: (string | undefined)[] = [undefined, ...agentIds];
+  for (const scope of scopes) {
+    try {
+      const items = await memory.list(scope);
+      for (const it of items) {
+        if (it.content.includes("【心跳】")) {
+          await memory.deleteItem(it.id, scope);
+          n++;
+        }
+      }
+    } catch {
+      /* 跳过 */
+    }
+  }
+  return n;
+}
