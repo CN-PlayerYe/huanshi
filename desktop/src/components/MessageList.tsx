@@ -235,10 +235,10 @@ function stripImages(text: string): string {
 
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const activeSessionId = useApp((s) => s.activeSessionId);
   // 滚动策略:切换会话 → 滚到底部看最新;新增消息/流式中 → 滚底;删除(变少) → 保持当前位置
   const prevLen = useRef(messages.length);
   const prevSession = useRef(activeSessionId);
-  const activeSessionId = useApp((s) => s.activeSessionId);
   // hook 必须无条件调用(条件调用会在 activeSessionId 变化时导致 React "more hooks" 崩溃);
   // 模块级常量 EMPTY_OPTIONS 保证无选项时引用稳定,避免无限重渲染
   const options = useApp((s) => (activeSessionId ? (s.sessionOptions[activeSessionId] ?? EMPTY_OPTIONS) : EMPTY_OPTIONS));
