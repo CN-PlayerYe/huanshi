@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld("hanalite", {
   setWindowOpacity: (opacity: number): void => {
     ipcRenderer.send("set-window-opacity", opacity);
   },
+  /** 自绘标题栏按钮区颜色(跟随聊天区遮罩,支持 rgba) */
+  setTitleBarOverlay: (color: string): void => {
+    ipcRenderer.send("set-titlebar-overlay", color);
+  },
   /** Windows 本地语音识别(SAPI,离线):听一句话返回文本 */
   recognizeSpeech: (): Promise<{ text: string; error?: string }> => ipcRenderer.invoke("recognize-speech"),
   /** 原生确认对话框(避免 window.confirm 在 Electron 的焦点 bug) */

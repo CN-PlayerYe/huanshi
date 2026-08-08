@@ -228,6 +228,13 @@ $r.Dispose()`;
       mainWindow?.setOpacity(v);
     });
 
+    // 自绘标题栏按钮区颜色跟随聊天区遮罩(透明度联动;overlay 是系统层,尽力接近)
+    ipcMain.on("set-titlebar-overlay", (_e, color: string) => {
+      if (typeof color === "string" && color) {
+        mainWindow?.setTitleBarOverlay({ color, symbolColor: "#888888", height: 40 });
+      }
+    });
+
     const settings = serverHandle.getSettings();
     lastThemeBg = themeBg(settings.theme ?? "ink");
     createWindow(lastThemeBg);

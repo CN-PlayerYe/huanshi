@@ -80,6 +80,10 @@ export default function App() {
     root.setProperty("--side-bg", hexToRgba(t.side, appearance.sidebarOpacity ?? 1));
     root.setProperty("--bubble-user", hexToRgba(t.user, appearance.bubbleOpacity ?? 1));
     root.setProperty("--bubble-assistant", hexToRgba(t.assistant, appearance.bubbleOpacity ?? 1));
+    // 标题栏(左侧 drag 区 + 右上按钮区)跟随聊天区遮罩:透明度滑块 0-100% 实时联动
+    const titlebarBg = hexToRgba(t.bg, appearance.chatOpacity ?? 1);
+    root.setProperty("--titlebar-bg", titlebarBg);
+    window.hanalite?.setTitleBarOverlay(titlebarBg);
     const body = document.body;
     if (appearance.bgImage) {
       // 背景图作为底层装饰:界面保持默认不透明,想沉浸可在外观里手动调聊天区透明度

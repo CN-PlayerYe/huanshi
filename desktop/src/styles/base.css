@@ -147,7 +147,7 @@ select {
   padding-top: 40px; /* 自绘标题栏高度 */
   box-sizing: border-box;
 }
-/* 自绘标题栏:透明拖拽区,背景透出主题色/背景图 */
+/* 自绘标题栏:拖拽区,背景跟随聊天区遮罩(透明度滑块实时联动) */
 .titlebar {
   position: fixed;
   top: 0;
@@ -160,6 +160,7 @@ select {
   padding: 0 14px;
   z-index: 2000;
   user-select: none;
+  background: var(--titlebar-bg, var(--chat-bg));
 }
 .titlebar-title {
   font-size: 12px;
