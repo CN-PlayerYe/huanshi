@@ -114,6 +114,10 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* 自绘标题栏:透明拖拽区,背景透出主题/背景图;窗口按钮由 titleBarOverlay 提供 */}
+      <div className="titlebar">
+        <span className="titlebar-title">幻世</span>
+      </div>
       <Sidebar />
       <main className="main">{view === "chat" ? <ChatView /> : <SettingsView />}</main>
       {error && (

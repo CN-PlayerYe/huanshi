@@ -175,8 +175,20 @@ export const SHRINK_TARGET = 200 * 1024;
 
 export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET): ProviderMsg[] {
   let m = msgs;
-  const len = () => Buffer.byteLength(JSON.stringify(m));
-  if (len() <= targetBytes) return sanitizeToolMessages(m);
+  // 精确测量(仅入口一次;JSON.stringify 3MB 对象很贵,循环里不能再全量调用,
+  // 否则在 Electron 主进程同步执行会阻塞窗口 → 未响应 → IME 断连)
+  let len = Buffer.byteLength(JSON.stringify(m));
+  if (len <= targetBytes) return sanitizeToolMessages(m);
+  // 估算长度(字符数×2.5 字节/字符 + 结构开销):循环里用它,毫秒级,避免反复 stringify
+  const est = (arr: ProviderMsg[]): number => {
+    let n = 0;
+    for (const x of arr) {
+      if (x.content) n += x.content.length;
+      if (x.reasoningContent) n += x.reasoningContent.length;
+      if (x.toolCalls) for (const tc of x.toolCalls) n += (tc.arguments || "").length;
+    }
+    return n * 2.5 + arr.length * 80;
+  };
   // ① 思考回传:最近 3 条保留 300 字符,更早全删(思考是过程,不是对话记忆)
   m = m.map((x, i) => {
     if (!x.reasoningContent) return x;
@@ -194,7 +206,7 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
   // ④ 旧正文【截短而非丢弃】:把非最近 10 条中最长的正文逐条截半(保留头部),直到达标
   //    (旧实现直接整段丢消息,对正文多的超长会话记忆丢失严重)
   let guard = 0;
-  while (len() > targetBytes && guard < 200) {
+  while (est(m) > targetBytes && guard < 200) {
     const keepRecent = Math.max(0, m.length - 10);
     let idx = -1;
     let maxLen = 0;
@@ -209,7 +221,7 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
   }
   // ⑤ 仍超:丢旧消息(以 user 消息为边界,避免孤立 tool),保底 15 条
   let dropped = 0;
-  while (len() > targetBytes && m.length > 15 && dropped < 10_000) {
+  while (est(m) > targetBytes && m.length > 15 && dropped < 10_000) {
     const firstUser = m.findIndex((x) => x.role === "user");
     if (firstUser < 0) break;
     m = m.slice(firstUser + 1);
@@ -217,7 +229,7 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
   }
   // ⑥ 极端兜底:连最近消息也截半
   guard = 0;
-  while (len() > targetBytes && guard < 60) {
+  while (est(m) > targetBytes && guard < 60) {
     let idx = -1;
     let maxLen = 0;
     m.forEach((x, i) => {
@@ -227,6 +239,18 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
     if (idx < 0 || maxLen < 2000) break;
     m = m.map((x, i) => (i === idx ? { ...x, content: `${(x.content || "").slice(0, Math.floor(maxLen / 2))}…(已截断)` } : x));
     guard++;
+  }
+  // ⑦ 估算可能偏差(英文 1B/字符):精确校验一次,仍超则按精确值再丢(极少触发)
+  len = Buffer.byteLength(JSON.stringify(m));
+  if (len > targetBytes) {
+    let dropped2 = 0;
+    while (len > targetBytes && m.length > 15 && dropped2 < 2000) {
+      const firstUser = m.findIndex((x) => x.role === "user");
+      if (firstUser < 0) break;
+      m = m.slice(firstUser + 1);
+      len = Buffer.byteLength(JSON.stringify(m));
+      dropped2 += firstUser + 1;
+    }
   }
   return sanitizeToolMessages(m);
 }

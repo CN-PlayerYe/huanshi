@@ -116,6 +116,9 @@ function createWindow(bgColor: string): void {
     minHeight: 600,
     backgroundColor: bgColor,
     title: "幻世",
+    // 自绘标题栏:去掉 Windows 原生白色标题栏,颜色跟随主题(应用内 .titlebar 提供拖拽区)
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: bgColor, symbolColor: "#888888", height: 40 },
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,

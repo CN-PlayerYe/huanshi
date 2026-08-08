@@ -487,8 +487,29 @@ const ChatInput = memo(function ChatInput({
     }
   };
 
+  // 拖拽上传:文件拖到输入区即触发上传(与 📎 选择同一套逻辑)
+  const [dragOver, setDragOver] = useState(false);
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    void pickFiles(e.dataTransfer.files);
+  };
+
   return (
-    <div className="chat-input-wrap">
+    <div
+      className={`chat-input-wrap${dragOver ? " drag-over" : ""}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       {attachments.length > 0 && (
         <div className="chat-attachments">
           {attachments.map((a, i) => (
