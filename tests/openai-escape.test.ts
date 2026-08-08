@@ -134,3 +134,21 @@ describe("shrinkMessages 字节目标压缩(超长会话 400 修复)", () => {
     expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(64 * 1024);
   });
 });
+
+describe("压缩优先级:工具/思考先清,正文最后动", () => {
+  it("工具巨量的会话:正文几乎全保留", () => {
+    const msgs: any[] = [];
+    for (let i = 0; i < 60; i++) {
+      msgs.push({ role: "user", content: `用户问题${i}` });
+      msgs.push({ role: "assistant", content: `简短回答${i}`, reasoningContent: "长思考".repeat(300) });
+      msgs.push({ role: "assistant", content: null, toolCalls: [{ id: `t${i}`, name: "run_command", arguments: "{}" }] });
+      msgs.push({ role: "tool", toolCallId: `t${i}`, content: "X".repeat(3000) }); // 每条工具输出 3K
+    }
+    const fullText = msgs.filter((x) => x.role !== "tool").map((x) => (x.content || "").length).reduce((a, b) => a + b, 0);
+    const out = shrinkMessages(msgs);
+    const keptText = out.filter((x) => x.role !== "tool").map((x) => (x.content || "").length).reduce((a, b) => a + b, 0);
+    expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(200 * 1024);
+    // 正文保留比例应显著高于工具(工具全截,正文基本不动)
+    expect(keptText / fullText).toBeGreaterThan(0.5);
+  });
+});

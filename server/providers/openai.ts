@@ -165,22 +165,47 @@ export function sanitizeToolMessages(msgs: ProviderMsg[]): ProviderMsg[] {
 }
 
 /** 请求体压缩目标:DeepSeek 网关对超大请求体(数百 KB)会截断导致 400(hex escape 残缺)。
- *  必须把请求体压到远低于截断线;历史全量(100%)的超长会话靠这里兜底。 */
+ *  压缩优先级(记忆保护):
+ *  ① 思考回传(纯开销、非记忆)优先删 → ② 工具输出(过程记录,非记忆)截短 → ③ 工具参数回放截短
+ *  → ④ 旧正文【截短而非丢弃】(保留每条消息头部,记忆最大化) → ⑤ 丢旧消息(保底 15 条) → ⑥ 极端兜底。
+ *  正文是记忆本体,最后才动;正文超多的超长会话会优先截短而非整段丢弃。 */
 export const SHRINK_TARGET = 200 * 1024;
 
 export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET): ProviderMsg[] {
   let m = msgs;
   const len = () => Buffer.byteLength(JSON.stringify(m));
-  // ① 思考回传(纯开销、非记忆,常占请求体大半):最近 3 条保留 500 字符,更早全删;正文不动
+  if (len() <= targetBytes) return sanitizeToolMessages(m);
+  // ① 思考回传:最近 3 条保留 300 字符,更早全删(思考是过程,不是对话记忆)
   m = m.map((x, i) => {
     if (!x.reasoningContent) return x;
     const rankFromEnd = m.length - i;
-    return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 500) } : { ...x, reasoningContent: undefined };
+    return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 300) } : { ...x, reasoningContent: undefined };
   });
-  // ② 工具输出同样非记忆:截断到 300 字符
-  m = m.map((x) => (x.role === "tool" && x.content.length > 300 ? { ...x, content: `${x.content.slice(0, 300)}…` } : x));
-  // ③ 字节目标驱动丢消息:以 user 消息为边界(避免孤立 tool),直到达标;保底 15 条
-  //    (旧实现最多丢 400 条,对 3835 条的超长会话杯水车薪,压缩后仍数百 KB → 仍被网关截断)
+  // ② 工具输出(过程记录,非记忆):截断到 80 字符,只留"干了什么"
+  m = m.map((x) => (x.role === "tool" && x.content.length > 80 ? { ...x, content: `${x.content.slice(0, 80)}…` } : x));
+  // ③ 工具调用参数回放:截断到 120 字符
+  m = m.map((x) =>
+    x.toolCalls?.length
+      ? { ...x, toolCalls: x.toolCalls.map((tc) => (tc.arguments.length > 120 ? { ...tc, arguments: `${tc.arguments.slice(0, 120)}…` } : tc)) }
+      : x,
+  );
+  // ④ 旧正文【截短而非丢弃】:把非最近 10 条中最长的正文逐条截半(保留头部),直到达标
+  //    (旧实现直接整段丢消息,对正文多的超长会话记忆丢失严重)
+  let guard = 0;
+  while (len() > targetBytes && guard < 200) {
+    const keepRecent = Math.max(0, m.length - 10);
+    let idx = -1;
+    let maxLen = 0;
+    m.forEach((x, i) => {
+      if (i >= keepRecent) return;
+      const c = x.content || "";
+      if (c.length > 1500 && c.length > maxLen) { maxLen = c.length; idx = i; }
+    });
+    if (idx < 0) break;
+    m = m.map((x, i) => (i === idx ? { ...x, content: `${(x.content || "").slice(0, Math.floor(maxLen / 2))}…(已截断)` } : x));
+    guard++;
+  }
+  // ⑤ 仍超:丢旧消息(以 user 消息为边界,避免孤立 tool),保底 15 条
   let dropped = 0;
   while (len() > targetBytes && m.length > 15 && dropped < 10_000) {
     const firstUser = m.findIndex((x) => x.role === "user");
@@ -188,8 +213,8 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
     m = m.slice(firstUser + 1);
     dropped += firstUser + 1;
   }
-  // ④ 兜底:单条超大正文(如一次贴入 100KB 文本)截半,直到达标
-  let guard = 0;
+  // ⑥ 极端兜底:连最近消息也截半
+  guard = 0;
   while (len() > targetBytes && guard < 60) {
     let idx = -1;
     let maxLen = 0;
