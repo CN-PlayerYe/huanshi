@@ -237,6 +237,8 @@ function stripImages(text: string): string {
 export const MessageList = memo(function MessageList({ messages, streaming }: { messages: ChatMessage[]; streaming: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const activeSessionId = useApp((s) => s.activeSessionId);
+  const settings = useApp((s) => s.settings);
+  const hasProvider = !!settings?.providers && Object.keys(settings.providers).length > 0;
   // 滚动策略:切换会话/重新挂载(如从设置切回)→ 滚底看最新;新增/流式 → 滚底;删除 → 保持
   const prevLen = useRef(messages.length);
   const followRef = useRef(true); // 用户滚离底部时暂停自动跟随,回到底部恢复
@@ -282,7 +284,13 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
       <div className="empty-chat">
         <img src={logo} className="empty-chat-logo" alt="幻世" />
         <div>你好,这里是 幻世</div>
-        <div style={{ fontSize: 13 }}>有记忆、有人格的私人 AI 助手。想聊点什么?</div>
+        {hasProvider ? (
+          <div style={{ fontSize: 13 }}>有记忆、有人格的私人 AI 助手。想聊点什么?</div>
+        ) : (
+          <div style={{ fontSize: 13, maxWidth: 320 }}>
+            还没有接入模型。点右下角 <b>⚙️ 设置 → 模型</b>,填入你的 API Key 和模型名(如 DeepSeek / OpenAI 兼容接口)即可开始对话。
+          </div>
+        )}
       </div>
     );
   }

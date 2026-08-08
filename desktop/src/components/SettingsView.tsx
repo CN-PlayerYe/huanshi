@@ -67,6 +67,8 @@ export function SettingsView() {
     historyUnlimited?: boolean;
     historyContextPct?: number;
     isolatedMemory?: boolean;
+    provider?: string;
+    model?: string;
   } | null>(null);
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
@@ -1370,7 +1372,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory })}>
+                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model })}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1401,6 +1403,29 @@ export function SettingsView() {
                 value={agentForm.systemPrompt}
                 onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })}
               />
+            </div>
+            <div className="field">
+              <label>模型(可选,留空=跟随全局)</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <select
+                  style={{ flex: 1, minWidth: 140 }}
+                  value={agentForm.provider ?? ""}
+                  onChange={(e) => setAgentForm({ ...agentForm, provider: e.target.value || undefined })}
+                >
+                  <option value="">跟随全局({settings.activeProvider || "未配置"})</option>
+                  {Object.keys(settings.providers ?? {}).map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  style={{ flex: 1.5, minWidth: 160 }}
+                  placeholder={`模型名,如 ${settings.providers?.[agentForm.provider ?? ""]?.model ?? "deepseek-chat"}(留空=该 provider 默认)`}
+                  value={agentForm.model ?? ""}
+                  onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value || undefined })}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>写论文/多任务:为每个人格配不同模型(如 DeepSeek 写稿、另一家润色),对话、心跳、群聊都按各自模型工作。</p>
             </div>
             <div className="agent-opts">
               <label>

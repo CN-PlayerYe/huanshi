@@ -8,6 +8,18 @@ import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../provider
 import type { Db } from "../storage";
 import { ToolRegistry, type ToolContext } from "../tools/registry";
 
+/** 人格级模型解析:优先用该 Agent 自己配置的 provider/model,否则跟随全局。
+ *  写论文/多任务时可为每个人格配不同模型(如 DeepSeek 写稿 + 别的模型润色)。 */
+export function resolveModel(
+  agent: AgentDef,
+  settings: { providers: Record<string, ModelConfig>; activeProvider: string; mainModel?: string },
+): ModelConfig {
+  const pid = agent.provider || settings.activeProvider;
+  const base = settings.providers[pid] || settings.providers[settings.activeProvider];
+  if (!base) return base;
+  return agent.model && base.model !== agent.model ? { ...base, model: agent.model } : base;
+}
+
 export interface ChatRunOpts {
   /** 仅允许这些工具(与边界过滤叠加) */
   allowedTools?: string[];
@@ -237,7 +249,7 @@ export class AgentEngine {
           content: `(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
         },
       ];
-      const provider = createProvider(settings.providers[settings.activeProvider]);
+      const provider = createProvider(resolveModel(agent, settings));
       const assistant: ChatMessage = {
         id: newId("msg"),
         sessionId: session.id,
@@ -291,7 +303,7 @@ export class AgentEngine {
     };
     db.appendMessage(userMsg);
 
-    const providerCfg = settings.providers[settings.activeProvider];
+    const providerCfg = resolveModel(agent, settings);
     if (!providerCfg) {
       const err = new Error("尚未配置模型,请先在设置中填写 API Key 和模型。");
       const msg: ChatMessage = {

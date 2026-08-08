@@ -61,6 +61,10 @@ export interface AgentDef {
   createdAt: number;
   /** 是否跟随全局风格设置;关闭=原生态人格,不使用风格注入 */
   useGlobalStyle?: boolean;
+  /** 人格级模型:provider id(如 "DeepSeek"),留空=跟随全局 activeProvider */
+  provider?: string;
+  /** 人格级模型名(如 "deepseek-v4-flash"),留空=跟随全局 mainModel */
+  model?: string;
   /** 允许执行高危命令(该 Agent 拥有完整命令权限) */
   allowDangerousCommands?: boolean;
   /** 文件写入不受白名单限制(该 Agent 拥有完整文件权限) */
