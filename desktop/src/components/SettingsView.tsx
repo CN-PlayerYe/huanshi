@@ -1504,8 +1504,8 @@ export function SettingsView() {
                     ))}
                     <option value="__custom__">✏️ 自定义输入…</option>
                   </select>
-                  {modelsLoading && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>拉取模型列表中…</span>}
                 )}
+                {modelsLoading && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>拉取模型列表中…</span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>常见模型直接选,不用手写;写论文/多任务可为每个人格配不同模型,对话、心跳、群聊都按各自模型工作。</p>
             </div>
