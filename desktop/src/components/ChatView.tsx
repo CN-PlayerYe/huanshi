@@ -79,22 +79,6 @@ export function ChatView() {
     );
   };
 
-  // 思考模式快捷切换:当前 activeProvider 的 disableThinking(模型先想后答 vs 直接答)
-  const activePid = settings?.activeProvider ?? "";
-  const thinkingOff = settings?.providers?.[activePid]?.disableThinking === true;
-  const toggleThinkingMode = () => {
-    if (!activePid || !settings?.providers?.[activePid]) {
-      useApp.getState().showToast("未配置模型,无法切换思考模式");
-      return;
-    }
-    const cfg = settings.providers[activePid];
-    const next = !cfg.disableThinking;
-    void useApp
-      .getState()
-      .updateSettings({ providers: { ...settings.providers, [activePid]: { ...cfg, disableThinking: next } } })
-      .then(() => useApp.getState().showToast(`思考模式:${next ? "关闭(直接回答,更快)" : "开启(先思考再回答,更深入)"}`));
-  };
-
   const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
     if ((!text.trim() && !atts?.length) || sending) return;
     void sendMessage(text, atts);
@@ -375,6 +359,22 @@ const ChatInput = memo(function ChatInput({
   const fileRef = useRef<HTMLInputElement>(null);
   // store 请求聚焦(删除消息/弹窗关闭等)时,把光标放回输入框
   const focusTick = useApp((s) => s.focusTick);
+  // 思考模式快捷切换:当前 activeProvider 的 disableThinking(模型先想后答 vs 直接答)
+  const settings = useApp((s) => s.settings);
+  const activePid = settings?.activeProvider ?? "";
+  const thinkingOff = settings?.providers?.[activePid]?.disableThinking === true;
+  const toggleThinkingMode = () => {
+    if (!activePid || !settings?.providers?.[activePid]) {
+      useApp.getState().showToast("未配置模型,无法切换思考模式");
+      return;
+    }
+    const cfg = settings.providers[activePid];
+    const next = !cfg.disableThinking;
+    void useApp
+      .getState()
+      .updateSettings({ providers: { ...settings.providers, [activePid]: { ...cfg, disableThinking: next } } })
+      .then(() => useApp.getState().showToast(`思考模式:${next ? "关闭(直接回答,更快)" : "开启(先思考再回答,更深入)"}`));
+  };
 
   useEffect(() => {
     taRef.current?.focus();
