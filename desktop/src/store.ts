@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { newId, type AgentDef, type ChatMessage, type SessionMeta, type Settings, type StreamEvent, type SystemInfo } from "@shared/types";
 import { api, initApi } from "./api";
 
+// 保命线提示节流:同会话 5 分钟最多弹一次(工具循环时压缩会频繁触发)
+const lastTrimmedToast: Record<string, number> = {};
+
 interface AppState {
   backendUrl: string;
   ready: boolean;
@@ -346,8 +349,14 @@ export const useApp = create<AppState>((set, get) => ({
               if (textPart) textPart.text = (textPart.text ?? "") + `\n\n⚠️ ${e.message}`;
             }));
           } else if (e.type === "context_trimmed") {
-            // 保命线触发:明示用户(数据未删除,只是本次发送截断)
-            get().showToast(`⚠️ ${String(e.reason ?? "历史过长已自动压缩")}`);
+            // 保命线触发:明示用户(数据未删除,只是本次发送截断)。
+            // 工具循环时每次请求都会触发压缩 → 节流:同会话 5 分钟最多提示一次,避免刷屏
+            const now = Date.now();
+            const last = lastTrimmedToast[sessionId] ?? 0;
+            if (now - last > 5 * 60_000) {
+              lastTrimmedToast[sessionId] = now;
+              get().showToast(`⚠️ ${String(e.reason ?? "历史过长已自动压缩")}`);
+            }
           }
         },
         signal,

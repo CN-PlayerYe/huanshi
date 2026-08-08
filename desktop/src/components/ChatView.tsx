@@ -69,6 +69,16 @@ export function ChatView() {
     void runCallLoop();
   };
 
+  // 历史思考回传快捷切换:off → recent5 → all(与设置页 thinkingEcho 联动,全局生效)
+  const thinkEcho = settings.thinkingEcho ?? "all";
+  const THINK_LABEL: Record<string, string> = { all: "🧠 思考·全部", recent5: "🧠 思考·近5条", off: "🧠 思考·关" };
+  const cycleThinking = () => {
+    const next = thinkEcho === "off" ? "recent5" : thinkEcho === "recent5" ? "all" : "off";
+    void useApp.getState().updateSettings({ thinkingEcho: next }).then(() =>
+      useApp.getState().showToast(`历史思考回传:${next === "all" ? "全部" : next === "recent5" ? "最近 5 条" : "关闭"}`),
+    );
+  };
+
   const handleSend = (text: string, atts?: { file: string; mime: string }[]) => {
     if ((!text.trim() && !atts?.length) || sending) return;
     void sendMessage(text, atts);
@@ -114,6 +124,15 @@ export function ChatView() {
             }}
           >
             {summarizing ? "压缩中…" : "🧹 压缩上下文"}
+          </button>
+        )}
+        {activeSessionId && (
+          <button
+            className="btn secondary sm"
+            title={`历史思考回传:${thinkEcho === "all" ? "全部" : thinkEcho === "recent5" ? "最近 5 条" : "关闭"}(点击切换;超长会话建议关闭可提速)`}
+            onClick={cycleThinking}
+          >
+            {THINK_LABEL[thinkEcho] ?? "🧠 思考"}
           </button>
         )}
         {activeSessionId && (
