@@ -401,6 +401,8 @@ function connectWs(backendUrl: string): void {
           const name = String(e.taskName ?? "定时任务");
           const ok = e.ok !== false;
           useApp.getState().showToast(`${ok ? "✅" : "⚠️"} 任务「${name}」${ok ? "已完成" : "执行失败"}`);
+          // 任务执行可能新建了会话(心跳日记)/更新了会话 → 刷新侧栏,避免"重启才显示"
+          void useApp.getState().refreshSessions();
           // 桌面通知(人格主动找你)
           try {
             if ("Notification" in window && Notification.permission === "granted") {
