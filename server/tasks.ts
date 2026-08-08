@@ -61,6 +61,15 @@ export class Scheduler {
     }
   }
 
+  /** 保存任务但保留最新 nextRunAt(防抖写入的未来值)。
+   *  直接展开旧 task 会把 nextRunAt 覆盖回过去 → 下个 tick 立即再次触发 → 心跳/定时疯狂循环。
+   *  所有"执行完写回"都必须走这里。 */
+  private saveFresh(id: string, patch: Record<string, unknown>): void {
+    const cur = this.db.getTask(id);
+    if (!cur) return;
+    this.db.saveTask({ ...cur, ...patch } as TaskDef);
+  }
+
   /** 计算下一次执行时间(cron 任务按 cron;心跳任务按动态间隔+静默时段) */
   computeNext(task: TaskDef): number | null {
     if (task.kind === "heartbeat") {
@@ -94,7 +103,7 @@ export class Scheduler {
   private async runTask(task: TaskDef, agent?: AgentDef): Promise<void> {
     const a = agent ?? this.getAgent(task.agentId);
     if (!a) {
-      this.db.saveTask({ ...task, lastStatus: "error", lastResult: `人格不存在:${task.agentId}`, lastRunAt: Date.now() });
+      this.saveFresh(task.id, { lastStatus: "error", lastResult: `人格不存在:${task.agentId}`, lastRunAt: Date.now() });
       return;
     }
     try {
@@ -114,16 +123,14 @@ export class Scheduler {
         }
       };
       await this.engine.runChat(session, a, task.prompt, onEvent);
-      this.db.saveTask({
-        ...task,
+      this.saveFresh(task.id, {
         lastRunAt: Date.now(),
         lastStatus: "ok",
         lastResult: finalText || "(无文本输出)",
       });
       this.onDone?.({ taskName: task.name, ok: true, result: finalText || "" });
     } catch (err) {
-      this.db.saveTask({
-        ...task,
+      this.saveFresh(task.id, {
         lastRunAt: Date.now(),
         lastStatus: "error",
         lastResult: `执行失败:${(err as Error).message}`,
@@ -161,7 +168,7 @@ export class Scheduler {
     let session = task.sessionId ? this.db.getSession(task.sessionId) : undefined;
     if (!session) {
       session = this.db.createSession(`💓 ${agent.name} 心跳日记`, task.agentId);
-      this.db.saveTask({ ...task, sessionId: session.id });
+      this.saveFresh(task.id, { sessionId: session.id });
       task = { ...task, sessionId: session.id };
     }
 
@@ -217,8 +224,7 @@ export class Scheduler {
       // 产出检测(星回规格 §一):有自发产出 → 空跳清零;无事发生 → 空跳 +1(下次间隔翻倍)
       const hasOutput = !interrupted && finalText.trim().length > 20;
       const blankBeats = hasOutput ? 0 : (task.blankBeats ?? 0) + 1;
-      this.db.saveTask({
-        ...task,
+      this.saveFresh(task.id, {
         lastRunAt: Date.now(),
         lastStatus: "ok",
         lastResult: interrupted ? "(被主人打断,已收工)" : finalText || "(安静地待了一会儿)",
@@ -227,8 +233,7 @@ export class Scheduler {
       this.onDone?.({ taskName: task.name, ok: true, result: finalText || "安静活动" });
     } catch (err) {
       const aborted = ctrl.signal.aborted;
-      this.db.saveTask({
-        ...task,
+      this.saveFresh(task.id, {
         lastRunAt: Date.now(),
         lastStatus: aborted ? "ok" : "error",
         lastResult: aborted ? "(到点/被打断,自动收工)" : `执行失败:${(err as Error).message}`,
