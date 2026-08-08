@@ -225,6 +225,8 @@ export type StreamEvent =
   | { type: "tool_end"; tool: ToolCallPart }
   | { type: "done"; message: ChatMessage; session: SessionMeta }
   | { type: "error"; message: string }
+  /** 请求体超限自动压缩(保命线):数据未删除,仅本次发送截断;提示用户可调整历史保留度 */
+  | { type: "context_trimmed"; keptMessages: number; reason: string }
   /** 剧情选项分支:回复完成后 AI 给出的下一步选项 */
   | { type: "options"; sessionId: string; options: string[] }
   /** 定时任务执行完成(桌面通知) */

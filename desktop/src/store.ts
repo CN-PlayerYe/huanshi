@@ -345,6 +345,9 @@ export const useApp = create<AppState>((set, get) => ({
               const textPart = m.parts.find((p) => p.type === "text");
               if (textPart) textPart.text = (textPart.text ?? "") + `\n\n⚠️ ${e.message}`;
             }));
+          } else if (e.type === "context_trimmed") {
+            // 保命线触发:明示用户(数据未删除,只是本次发送截断)
+            get().showToast(`⚠️ ${String(e.reason ?? "历史过长已自动压缩")}`);
           }
         },
         signal,

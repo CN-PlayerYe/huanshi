@@ -33,6 +33,8 @@ export interface ChatStreamChunk {
   toolCalls?: ProviderToolCall[]; // 一轮结束时出现的完整工具调用列表
   finishReason?: "stop" | "tool_calls" | "length" | "error";
   usage?: { input: number; output: number };
+  /** 请求体超限自动压缩(保命线)时发出:数据未删除,仅本次发送截断 */
+  trimmed?: { originalMessages: number; keptMessages: number };
 }
 
 export interface ChatRequest {

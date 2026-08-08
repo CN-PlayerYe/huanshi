@@ -46,12 +46,14 @@ export class OpenAICompatibleProvider implements ChatProvider {
         ...(this.disableThinking ? { thinking: { type: "disabled" } } : {}),
       });
 
-    // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩
+    // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩(保命线)
     let msgs = sanitizeToolMessages(req.messages);
     let body = buildBody(msgs);
     if (Buffer.byteLength(body) > SHRINK_TARGET) {
+      const originalMessages = msgs.length;
       msgs = shrinkMessages(msgs);
       body = buildBody(msgs);
+      yield { trimmed: { originalMessages, keptMessages: msgs.length } };
     }
 
     // 400 偶发重试一次(模型端偶发解析失败/传输损坏时,重试往往成功)

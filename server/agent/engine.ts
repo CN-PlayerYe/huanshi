@@ -457,6 +457,13 @@ export class AgentEngine {
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;
+          if (chunk.trimmed) {
+            await onEvent({
+              type: "context_trimmed",
+              keptMessages: chunk.trimmed.keptMessages,
+              reason: `历史过长(超 200KB),已自动压缩:本次发送保留最近 ${chunk.trimmed.keptMessages} 条。数据未删除,可在「设置-人格-历史上下文」调整保留度。`,
+            });
+          }
           if (chunk.delta) {
             textBuf += chunk.delta;
             iterText += chunk.delta;
