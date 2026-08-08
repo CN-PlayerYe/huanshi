@@ -1262,6 +1262,19 @@ select {
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+.chat-attachment-file {
+  display: inline-flex;
+  align-items: center;
+  max-width: 200px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft, rgba(128, 128, 128, 0.08));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .chat-attachment .remove {
   position: absolute;
   top: -6px;

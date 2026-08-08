@@ -146,12 +146,23 @@ export function createApp(deps: AppDeps): Hono {
     const file = body["file"];
     if (!file || typeof file === "string") return c.json({ error: "缺少文件" }, 400);
     const f = file as File;
-    const ext = (f.type.match(/image\/(\w+)/)?.[1] ?? "png").replace("jpeg", "jpg").replace("svg+xml", "svg");
-    const dir = join(deps.paths.dataDir, "uploads");
+    // dir=workspace:文献/文档存入工作区(人格可用 read_file 阅读);默认 uploads(图片附件)
+    const dirParam = String(c.req.query("dir") ?? "uploads");
+    const toWorkspace = dirParam === "workspace";
+    const dir = toWorkspace ? join(deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace"), "上传") : join(deps.paths.dataDir, "uploads");
     mkdirSync(dir, { recursive: true });
-    const name = `${newId("up")}.${ext}`;
-    writeFileSync(join(dir, name), Buffer.from(await f.arrayBuffer()));
-    return c.json({ file: `uploads/${name}`, mime: f.type || "image/png" });
+    const safeName = (f.name || "file").replace(/[\\/:*?"<>|]/g, "_").slice(0, 80);
+    const name = `${newId("up")}-${safeName}`;
+    const buf = Buffer.from(await f.arrayBuffer());
+    writeFileSync(join(dir, name), buf);
+    const rel = toWorkspace ? `workspace/上传/${name}` : `uploads/${name}`;
+    // 文本类文件:直接提取文本(≤100KB),前端可拼进对话,免去"让 AI 读文件"的门槛
+    let text: string | undefined;
+    const mime = f.type || "";
+    if (/^(text\/|application\/json|application\/csv)/.test(mime) || /\.(txt|md|csv|json|log)$/i.test(f.name || "")) {
+      text = buf.toString("utf8").replace(/^\uFEFF/, "").slice(0, 100_000);
+    }
+    return c.json({ file: rel, mime: mime || "application/octet-stream", name: f.name || name, text });
   });
 
   /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */

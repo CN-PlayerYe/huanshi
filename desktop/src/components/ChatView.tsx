@@ -352,7 +352,7 @@ const ChatInput = memo(function ChatInput({
   onStop: () => void;
 }) {
   const [input, setInput] = useState("");
-  const [attachments, setAttachments] = useState<{ file: string; mime: string; preview: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ file: string; mime: string; preview: string; text?: string; name?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [listening, setListening] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -445,10 +445,15 @@ const ChatInput = memo(function ChatInput({
   const handleSend = async () => {
     const text = input.trim();
     if ((!text && !attachments.length) || sending || uploading) return;
-    const atts = attachments.map((a) => ({ file: a.file, mime: a.mime }));
+    // 文本类附件(文献/笔记)直接拼进消息正文;图片附件走多模态
+    const textParts = attachments.filter((a) => a.text);
+    const content = textParts.length
+      ? text + textParts.map((a) => `\n\n【文献 ${a.name ?? a.file}】\n${a.text}`).join("")
+      : text;
+    const atts = attachments.filter((a) => !a.text).map((a) => ({ file: a.file, mime: a.mime }));
     setInput("");
     setAttachments([]);
-    onSend(text, atts);
+    onSend(content, atts);
   };
 
   const pickFiles = async (files: FileList | null) => {
@@ -456,8 +461,24 @@ const ChatInput = memo(function ChatInput({
     setUploading(true);
     try {
       for (const f of Array.from(files)) {
-        const up = await api.upload(f);
-        setAttachments((prev) => [...prev, { ...up, preview: `${api.base}/files/${up.file}` }]);
+        const isImage = f.type.startsWith("image/");
+        const isText = f.type.startsWith("text/") || /\.(txt|md|csv|json|log)$/i.test(f.name);
+        if (isImage) {
+          const up = await api.upload(f);
+          setAttachments((prev) => [...prev, { ...up, preview: `${api.base}/files/${up.file}` }]);
+        } else if (isText) {
+          // 文本类:提取内容,发送时拼进对话(免去让 AI 读文件的门槛)
+          const up = await api.upload(f);
+          if (up.text) {
+            setAttachments((prev) => [...prev, { file: up.file, mime: up.mime, preview: "", name: up.name ?? f.name, text: up.text }]);
+          } else {
+            useApp.getState().showToast(`⚠️ ${f.name}:文本为空或无法读取`);
+          }
+        } else {
+          // PDF/docx 等:存到工作区「上传」文件夹,人格可用 read_file 阅读
+          const up = await api.upload(f, "workspace");
+          useApp.getState().showToast(`📚 ${f.name} 已存到工作区「上传」文件夹,可让 AI 阅读`);
+        }
       }
     } catch (err) {
       useApp.getState().showToast(`上传失败:${(err as Error).message}`);
@@ -472,7 +493,11 @@ const ChatInput = memo(function ChatInput({
         <div className="chat-attachments">
           {attachments.map((a, i) => (
             <div key={i} className="chat-attachment">
-              <img src={a.preview} alt="" />
+              {a.text ? (
+                <span className="chat-attachment-file" title={`${a.name ?? a.file}(${(a.text.length / 1024).toFixed(0)}KB)`}>📄 {a.name ?? a.file}</span>
+              ) : (
+                <img src={a.preview} alt="" />
+              )}
               <button className="remove" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}>
                 ✕
               </button>
@@ -505,7 +530,7 @@ const ChatInput = memo(function ChatInput({
         >
           💭
         </button>
-        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => void pickFiles(e.target.files)} />
+        <input ref={fileRef} type="file" accept="image/*,.txt,.md,.csv,.json,.log,.pdf,.docx" multiple hidden onChange={(e) => void pickFiles(e.target.files)} />
         <button className="attach-btn voice-btn" onClick={startVoice} title={listening ? "聆听中…" : "语音输入"} disabled={sending}>
           {listening ? "🎤…" : "🎤"}
         </button>

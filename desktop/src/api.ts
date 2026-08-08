@@ -151,12 +151,12 @@ export const api = {
   search: (q: string) =>
     request<{ sessions: { session: SessionMeta; matches: number }[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   /** 图片附件上传,返回相对数据目录的文件路径 */
-  async upload(file: File): Promise<{ file: string; mime: string }> {
+  async upload(file: File, dir?: "uploads" | "workspace"): Promise<{ file: string; mime: string; name?: string; text?: string }> {
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch(base + "/api/upload", { method: "POST", body: fd });
+    const res = await fetch(base + `/api/upload${dir === "workspace" ? "?dir=workspace" : ""}`, { method: "POST", body: fd });
     if (!res.ok) throw new Error((await res.text().catch(() => "上传失败")) || "上传失败");
-    return (await res.json()) as { file: string; mime: string };
+    return (await res.json()) as { file: string; mime: string; name?: string; text?: string };
   },
   /** API 朗读:文本 → 音频 Blob */
   async tts(text: string): Promise<Blob> {
