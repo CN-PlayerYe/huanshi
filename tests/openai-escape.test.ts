@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shrinkMessages, hardenEscape, sanitizeToolMessages } from "../server/providers/openai";
+import { shrinkMessages, hardenEscape, sanitizeToolMessages, stripLoneSurrogates } from "../server/providers/openai";
 import type { ProviderMsg } from "../shared/types";
 
 // 与 server/providers/openai.ts 中 hardenEscape 使用的正则完全一致
@@ -150,5 +150,51 @@ describe("压缩优先级:工具/思考先清,正文最后动", () => {
     expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(200 * 1024);
     // 正文保留比例应显著高于工具(工具全截,正文基本不动)
     expect(keptText / fullText).toBeGreaterThan(0.5);
+  });
+});
+
+describe("孤立代理消毒(slice 截断 emoji 制造 400 的真凶)", () => {
+  it("截断含 emoji 文本后消毒:JSON 中无孤立代理转义", () => {
+    // 模拟:长文本含 emoji,压缩截断恰好切在 emoji 中间
+    const emoji = "😏".repeat(500); // 代理对
+    const text = "A".repeat(100) + emoji + "B".repeat(100);
+    const cut = text.slice(0, 150); // 可能切在代理对中间
+    const clean = stripLoneSurrogates(cut);
+    const roundtrip = JSON.parse(JSON.stringify(clean));
+    // 消毒后字符串里不允许再出现孤立代理码位
+    for (let i = 0; i < roundtrip.length; i++) {
+      const c = roundtrip.charCodeAt(i);
+      if (c >= 0xD800 && c <= 0xDFFF) {
+        const hi = c >= 0xD800 && c <= 0xDBFF;
+        const next = roundtrip.charCodeAt(i + 1);
+        const prev = roundtrip.charCodeAt(i - 1);
+        if (hi && !(next >= 0xDC00 && next <= 0xDFFF)) throw new Error("残留孤立高代理");
+        if (!hi && !(prev >= 0xD800 && prev <= 0xDBFF)) throw new Error("残留孤立低代理");
+      }
+    }
+    // 完整压缩链路:构造含 emoji 的超长会话 → 压缩 → 消毒后无孤立代理
+    const msgs: any[] = [];
+    for (let i = 0; i < 500; i++) {
+      msgs.push({ role: "user", content: `问题${i}${"😏".repeat(50)}` });
+      msgs.push({ role: "assistant", content: `回答${i}${"🎵".repeat(50)}`, reasoningContent: "想".repeat(200) + "😊" });
+    }
+    const out = shrinkMessages(msgs);
+    const body = JSON.stringify(out);
+    // 模拟 serde_json:扫描 \uXXXX 转义,孤立代理(后无 \uDCxx)即视为非法
+    for (let i = 0; i < body.length - 1; i++) {
+      if (body[i] === "\\" && body[i + 1] === "u") {
+        const hex = body.slice(i + 2, i + 6);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new Error("非法反斜杠u转义 @" + i + ": " + hex);
+        const code = parseInt(hex, 16);
+        if (code >= 0xD800 && code <= 0xDBFF) {
+          const nextHex = body.slice(i + 8, i + 12);
+          if (!body.startsWith("\\u", i + 6) || !/^[0-9a-fA-F]{4}$/.test(nextHex) || !(parseInt(nextHex, 16) >= 0xDC00 && parseInt(nextHex, 16) <= 0xDFFF)) {
+            throw new Error("孤立高代理转义 @" + i + ": u" + hex);
+          }
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+          throw new Error("孤立低代理转义 @" + i + ": u" + hex);
+        }
+      }
+    }
   });
 });

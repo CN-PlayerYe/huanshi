@@ -231,30 +231,44 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
   return sanitizeToolMessages(m);
 }
 
+/** 移除孤立代理字符:压缩时 slice 截断可能把 emoji(代理对)从中间切断,
+ *  制造出单个 \uD800-\uDFFF 代理,DeepSeek 解析时报 "unexpected end of hex escape"(400)。
+ *  所有发送文本必须经过这里。 */
+export function stripLoneSurrogates(s: string): string {
+  return s
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "\uFFFD")
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
+}
+
+/** 发送出口的统一消毒:孤立代理 → 替换符,残缺 \u 转义 → 偶数反斜杠加固 */
+function sanitizeText(s: string): string {
+  return hardenEscape(stripLoneSurrogates(s));
+}
+
 function toOpenAIMessage(m: ProviderMsg) {
   if (m.role === "tool") {
-    return { role: "tool", tool_call_id: m.toolCallId, content: hardenEscape(m.content) };
+    return { role: "tool", tool_call_id: m.toolCallId, content: sanitizeText(m.content) };
   }
   const base: any = { role: m.role };
   // 多模态:vision 块优先(图片 + 文本);否则纯文本
   if (m.vision?.length) {
     base.content = [
-      ...(m.content ? [{ type: "text", text: hardenEscape(m.content) }] : []),
-      ...m.vision.map((v) => (v.type === "image_url" ? { type: "image_url", image_url: { url: v.image_url.url } } : { type: "text", text: hardenEscape(v.text) })),
+      ...(m.content ? [{ type: "text", text: sanitizeText(m.content) }] : []),
+      ...m.vision.map((v) => (v.type === "image_url" ? { type: "image_url", image_url: { url: v.image_url.url } } : { type: "text", text: sanitizeText(v.text) })),
     ];
   } else {
-    base.content = m.content ? hardenEscape(m.content) : null;
+    base.content = m.content ? sanitizeText(m.content) : null;
   }
   if (m.role === "assistant" && m.toolCalls?.length) {
     base.tool_calls = m.toolCalls.map((tc) => ({
       id: tc.id,
       type: "function",
-      function: { name: tc.name, arguments: hardenEscape(tc.arguments) },
+      function: { name: tc.name, arguments: sanitizeText(tc.arguments) },
     }));
   }
   // DeepSeek thinking 模式:历史 assistant 的思考必须原样回传,否则 400
   if (m.role === "assistant" && m.reasoningContent) {
-    base.reasoning_content = hardenEscape(m.reasoningContent);
+    base.reasoning_content = sanitizeText(m.reasoningContent);
   }
   return base;
 }
