@@ -49,7 +49,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
     // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩
     let msgs = sanitizeToolMessages(req.messages);
     let body = buildBody(msgs);
-    if (Buffer.byteLength(body) > 512 * 1024) {
+    if (Buffer.byteLength(body) > SHRINK_TARGET) {
       msgs = shrinkMessages(msgs);
       body = buildBody(msgs);
     }
@@ -164,32 +164,42 @@ export function sanitizeToolMessages(msgs: ProviderMsg[]): ProviderMsg[] {
   return out;
 }
 
-export function shrinkMessages(msgs: ProviderMsg[]): ProviderMsg[] {
-  // 压缩策略:思考回传(纯开销、非记忆,通常占请求体大半)优先删除 → 正文保持完整(记忆本体)
+/** 请求体压缩目标:DeepSeek 网关对超大请求体(数百 KB)会截断导致 400(hex escape 残缺)。
+ *  必须把请求体压到远低于截断线;历史全量(100%)的超长会话靠这里兜底。 */
+export const SHRINK_TARGET = 200 * 1024;
+
+export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET): ProviderMsg[] {
   let m = msgs;
-  let len = Buffer.byteLength(JSON.stringify(m));
-  if (len > 512 * 1024) {
-    // 思考回传是大头且非记忆:最近 3 条保留(截断 500 字符),更早全删;正文不动
-    m = m.map((x, i) => {
-      if (!x.reasoningContent) return x;
-      const rankFromEnd = m.length - i;
-      return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 500) } : { ...x, reasoningContent: undefined };
-    });
-    len = Buffer.byteLength(JSON.stringify(m));
-  }
-  if (len > 512 * 1024) {
-    // 工具输出同样非记忆:截断到 300 字符
-    m = m.map((x) => (x.role === "tool" && x.content.length > 300 ? { ...x, content: `${x.content.slice(0, 300)}…` } : x));
-    len = Buffer.byteLength(JSON.stringify(m));
-  }
+  const len = () => Buffer.byteLength(JSON.stringify(m));
+  // ① 思考回传(纯开销、非记忆,常占请求体大半):最近 3 条保留 500 字符,更早全删;正文不动
+  m = m.map((x, i) => {
+    if (!x.reasoningContent) return x;
+    const rankFromEnd = m.length - i;
+    return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 500) } : { ...x, reasoningContent: undefined };
+  });
+  // ② 工具输出同样非记忆:截断到 300 字符
+  m = m.map((x) => (x.role === "tool" && x.content.length > 300 ? { ...x, content: `${x.content.slice(0, 300)}…` } : x));
+  // ③ 字节目标驱动丢消息:以 user 消息为边界(避免孤立 tool),直到达标;保底 15 条
+  //    (旧实现最多丢 400 条,对 3835 条的超长会话杯水车薪,压缩后仍数百 KB → 仍被网关截断)
   let dropped = 0;
-  while (len > 512 * 1024 && m.length > 30 && dropped < 400) {
-    // 从最旧开始丢,以 user 消息为边界(user 及其之前全部丢掉),避免孤立 tool
+  while (len() > targetBytes && m.length > 15 && dropped < 10_000) {
     const firstUser = m.findIndex((x) => x.role === "user");
     if (firstUser < 0) break;
     m = m.slice(firstUser + 1);
-    len = Buffer.byteLength(JSON.stringify(m));
     dropped += firstUser + 1;
+  }
+  // ④ 兜底:单条超大正文(如一次贴入 100KB 文本)截半,直到达标
+  let guard = 0;
+  while (len() > targetBytes && guard < 60) {
+    let idx = -1;
+    let maxLen = 0;
+    m.forEach((x, i) => {
+      const c = x.content || "";
+      if (c.length > maxLen) { maxLen = c.length; idx = i; }
+    });
+    if (idx < 0 || maxLen < 2000) break;
+    m = m.map((x, i) => (i === idx ? { ...x, content: `${(x.content || "").slice(0, Math.floor(maxLen / 2))}…(已截断)` } : x));
+    guard++;
   }
   return sanitizeToolMessages(m);
 }

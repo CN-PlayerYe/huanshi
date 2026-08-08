@@ -108,3 +108,29 @@ describe("sanitizeToolMessages(tool 消息配对)", () => {
     expect(shrunk.length).toBeGreaterThan(0);
   });
 });
+
+describe("shrinkMessages 字节目标压缩(超长会话 400 修复)", () => {
+  it("3835 条级超长会话压缩到 ≤200KB 且 ≥15 条", () => {
+    // 构造 2000 条消息、每条含思考+文本,模拟 historyUnlimited 全量发送
+    const msgs: any[] = [];
+    for (let i = 0; i < 2000; i++) {
+      msgs.push({ role: "user", content: `第 ${i} 条用户消息${"啊".repeat(200)}` });
+      msgs.push({ role: "assistant", content: `第 ${i} 条回复${"好".repeat(300)}`, reasoningContent: `思考${"想".repeat(400)}` });
+    }
+    const raw = Buffer.byteLength(JSON.stringify(msgs));
+    expect(raw).toBeGreaterThan(200 * 1024);
+    const out = shrinkMessages(msgs);
+    const len = Buffer.byteLength(JSON.stringify(out));
+    expect(len).toBeLessThanOrEqual(200 * 1024);
+    expect(out.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("单条超大正文兜底截断", () => {
+    const msgs: any[] = [
+      { role: "user", content: "X".repeat(500 * 1024) }, // 500KB 单条
+      { role: "assistant", content: "ok" },
+    ];
+    const out = shrinkMessages(msgs, 64 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(64 * 1024);
+  });
+});
