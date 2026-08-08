@@ -239,6 +239,18 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   const activeSessionId = useApp((s) => s.activeSessionId);
   // 滚动策略:切换会话/重新挂载(如从设置切回)→ 滚底看最新;新增/流式 → 滚底;删除 → 保持
   const prevLen = useRef(messages.length);
+  const followRef = useRef(true); // 用户滚离底部时暂停自动跟随,回到底部恢复
+
+  // 监听用户滚动:滚离底部(80px 内算底部)则暂停跟随,避免 AI 长回复时被拽回
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onScroll = () => {
+      followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeSessionId]);
   const prevSession = useRef<string | null>(null); // null → 首次挂载/切回会话时触发滚底
   // hook 必须无条件调用(条件调用会在 activeSessionId 变化时导致 React "more hooks" 崩溃);
   // 模块级常量 EMPTY_OPTIONS 保证无选项时引用稳定,避免无限重渲染
@@ -250,17 +262,20 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
     const el = ref.current;
     if (!el) return;
     if (prevSession.current !== activeSessionId) {
-      // 切换会话:直接看最新消息
+      // 切换会话:直接看最新消息,恢复跟随
       el.scrollTop = el.scrollHeight;
+      followRef.current = true;
       prevSession.current = activeSessionId;
       prevLen.current = messages.length;
       return;
     }
-    if (streaming || messages.length > prevLen.current) {
+    if ((streaming || messages.length > prevLen.current) && followRef.current) {
       el.scrollTop = el.scrollHeight;
     }
     prevLen.current = messages.length;
-  }, [activeSessionId, messages.length, streaming]);
+    // 依赖 messages 引用而非 length:流式输出时同一消息在增长(长度不变),
+    // 但引用每次 delta 都会变——不依赖引用的话 AI 回复期间不会自动滚动
+  }, [activeSessionId, messages, streaming]);
 
   if (!messages.length) {
     return (
