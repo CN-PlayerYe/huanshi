@@ -15,6 +15,33 @@ const KIND_HINT: Record<ProviderKind, string> = {
   ollama: "本地模型,默认 http://localhost:11434/v1",
 };
 
+/** 常见模型列表(下拉选择,免手写;覆盖主流服务商) */
+const COMMON_MODELS = [
+  "deepseek-chat",
+  "deepseek-reasoner",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-4.1",
+  "gpt-4.1-mini",
+  "o3-mini",
+  "qwen-max",
+  "qwen-plus",
+  "qwen-turbo",
+  "moonshot-v1-8k",
+  "moonshot-v1-32k",
+  "glm-4-plus",
+  "glm-4-air",
+  "glm-4-flash",
+  "doubao-pro-32k",
+  "doubao-lite-32k",
+  "claude-3-5-sonnet",
+  "claude-3-5-haiku",
+  "gemini-1.5-pro",
+  "gemini-1.5-flash",
+  "llama3.1",
+  "qwen2.5",
+];
+
 /** 简易 cron 描述(与后端 describeCron 一致的前端版) */
 function describeCron(expr: string): string {
   try {
@@ -70,6 +97,7 @@ export function SettingsView() {
     provider?: string;
     model?: string;
   } | null>(null);
+  const [modelCustom, setModelCustom] = useState(false); // 模型下拉选「自定义输入…」时显示文本框
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
@@ -1372,7 +1400,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model })}>
+                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model }); }}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1417,15 +1445,40 @@ export function SettingsView() {
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
-                <input
-                  type="text"
-                  style={{ flex: 1.5, minWidth: 160 }}
-                  placeholder={`模型名,如 ${settings.providers?.[agentForm.provider ?? ""]?.model ?? "deepseek-chat"}(留空=该 provider 默认)`}
-                  value={agentForm.model ?? ""}
-                  onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value || undefined })}
-                />
+                {modelCustom ? (
+                  <input
+                    type="text"
+                    style={{ flex: 1.5, minWidth: 160 }}
+                    placeholder="输入模型名,如 deepseek-chat"
+                    value={agentForm.model ?? ""}
+                    onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value || undefined })}
+                    onBlur={() => {
+                      if (!agentForm.model) setModelCustom(false);
+                    }}
+                  />
+                ) : (
+                  <select
+                    style={{ flex: 1.5, minWidth: 200 }}
+                    value={agentForm.model ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__custom__") {
+                        setModelCustom(true);
+                        setAgentForm({ ...agentForm, model: "" });
+                      } else {
+                        setAgentForm({ ...agentForm, model: v || undefined });
+                      }
+                    }}
+                  >
+                    <option value="">跟随全局(该 provider 默认:{settings.providers?.[agentForm.provider ?? ""]?.model ?? settings.mainModel ?? "自动"})</option>
+                    {COMMON_MODELS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    <option value="__custom__">✏️ 自定义输入…</option>
+                  </select>
+                )}
               </div>
-              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>写论文/多任务:为每个人格配不同模型(如 DeepSeek 写稿、另一家润色),对话、心跳、群聊都按各自模型工作。</p>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>常见模型直接选,不用手写;写论文/多任务可为每个人格配不同模型,对话、心跳、群聊都按各自模型工作。</p>
             </div>
             <div className="agent-opts">
               <label>
