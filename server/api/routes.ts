@@ -287,11 +287,13 @@ export function createApp(deps: AppDeps): Hono {
     // 出生档案:在人格的工作区生成一份"出生档案.md",让它知道自己的来处与能力
     try {
       const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
-      mkdirSync(ws, { recursive: true });
+      // 出生档案写入人格的专属空间(院子)workspace/<名字>/,而不是 workspace 根
+      const home = join(ws, agent.name);
+      mkdirSync(home, { recursive: true });
       const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
       const birth = `# ${agent.name} 的出生档案
 
-> 本文件由幻世在创建人格时自动生成,存放在你的工作目录,你可以随时阅读它了解自己。
+> 本文件由幻世在创建人格时自动生成,存放在你的专属空间(院子),你可以随时阅读它了解自己。
 
 ## 我是谁
 - **名字**:${agent.name}
@@ -308,8 +310,8 @@ ${tools || "- (无工具)"}
 - 记忆:跨会话长期记忆(本地),可在设置 → 记忆查看与清理
 
 ## 我的来处
-我诞生于「幻世」(HanaLite)——一个有记忆、有人格的私人 AI 助手。`;
-      writeFileSync(join(ws, `${agent.name}-出生档案.md`), birth, "utf8");
+我诞生于「幻世」——一个有记忆、有人格的私人 AI 助手。`;
+      writeFileSync(join(home, `${agent.name}-出生档案.md`), birth, "utf8");
     } catch {
       // 出生档案生成失败不影响保存
     }
