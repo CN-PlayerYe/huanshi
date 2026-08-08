@@ -98,6 +98,30 @@ export function SettingsView() {
     model?: string;
   } | null>(null);
   const [modelCustom, setModelCustom] = useState(false); // 模型下拉选「自定义输入…」时显示文本框
+  const [providerModels, setProviderModels] = useState<string[]>([]); // 从 API 拉到的该 provider 可用模型
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  /** 拉取某 provider 的可用模型(API 已接通则用实拉列表,失败/未配置时回退内置常见模型) */
+  const loadProviderModels = async (providerId?: string) => {
+    const cfg = providerId ? settings?.providers?.[providerId] : undefined;
+    if (!cfg) {
+      setProviderModels([]);
+      return;
+    }
+    setModelsLoading(true);
+    try {
+      const r = await api.fetchModels(cfg);
+      if (r.ok && r.models?.length) {
+        setProviderModels(r.models);
+      } else {
+        setProviderModels([]);
+      }
+    } catch {
+      setProviderModels([]);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
   const [csDir, setCsDir] = useState("");
   const [csIncludeThinking, setCsIncludeThinking] = useState(false);
   const [csBusy, setCsBusy] = useState(false);
@@ -1400,7 +1424,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model }); }}>
+                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model }); if (a.provider) void loadProviderModels(a.provider); }}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1438,7 +1462,11 @@ export function SettingsView() {
                 <select
                   style={{ flex: 1, minWidth: 140 }}
                   value={agentForm.provider ?? ""}
-                  onChange={(e) => setAgentForm({ ...agentForm, provider: e.target.value || undefined })}
+                  onChange={(e) => {
+                    const v = e.target.value || undefined;
+                    setAgentForm({ ...agentForm, provider: v, model: undefined });
+                    void loadProviderModels(v);
+                  }}
                 >
                   <option value="">跟随全局({settings.activeProvider || "未配置"})</option>
                   {Object.keys(settings.providers ?? {}).map((p) => (
@@ -1470,12 +1498,13 @@ export function SettingsView() {
                       }
                     }}
                   >
-                    <option value="">跟随全局(该 provider 默认:{settings.providers?.[agentForm.provider ?? ""]?.model ?? settings.mainModel ?? "自动"})</option>
-                    {COMMON_MODELS.map((m) => (
+                    <option value="">跟随全局(默认:{settings.providers?.[agentForm.provider ?? ""]?.model ?? settings.mainModel ?? "自动"})</option>
+                    {(providerModels.length ? providerModels : COMMON_MODELS).map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                     <option value="__custom__">✏️ 自定义输入…</option>
                   </select>
+                  {modelsLoading && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>拉取模型列表中…</span>}
                 )}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>常见模型直接选,不用手写;写论文/多任务可为每个人格配不同模型,对话、心跳、群聊都按各自模型工作。</p>
