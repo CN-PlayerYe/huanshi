@@ -70,7 +70,7 @@ export function ChatView() {
   };
 
   // 历史思考回传快捷切换:off → recent5 → all(与设置页 thinkingEcho 联动,全局生效)
-  const thinkEcho = settings.thinkingEcho ?? "all";
+  const thinkEcho = settings?.thinkingEcho ?? "all";
   const THINK_LABEL: Record<string, string> = { all: "🧠 思考·全部", recent5: "🧠 思考·近5条", off: "🧠 思考·关" };
   const cycleThinking = () => {
     const next = thinkEcho === "off" ? "recent5" : thinkEcho === "recent5" ? "all" : "off";
