@@ -20,6 +20,13 @@ export function resolveModel(
   return agent.model && base.model !== agent.model ? { ...base, model: agent.model } : base;
 }
 
+/** 请求体保命线上限(字节):settings.requestBodyLimitKB(0=不限制,undefined=用默认) */
+function bodyLimitOf(settings: Settings): number | undefined {
+  const kb = settings.requestBodyLimitKB;
+  if (kb === undefined) return undefined;
+  return kb === 0 ? 0 : kb * 1024;
+}
+
 export interface ChatRunOpts {
   /** 仅允许这些工具(与边界过滤叠加) */
   allowedTools?: string[];
@@ -262,7 +269,7 @@ export class AgentEngine {
       await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
       let textBuf = "";
       try {
-        for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048 }, signal)) {
+        for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
           if (chunk.delta) {
             textBuf += chunk.delta;
             await onEvent({ type: "delta", content: chunk.delta });
@@ -465,7 +472,7 @@ export class AgentEngine {
         let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
-          { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096 },
+          { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;

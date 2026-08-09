@@ -82,6 +82,8 @@ export const api = {
   createSession: (title?: string, agentId?: string) =>
     request<{ session: SessionMeta }>("/api/sessions", { method: "POST", body: JSON.stringify({ title, agentId }) }),
   deleteSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}`, { method: "DELETE" }),
+  /** 删除一条消息里的全部工具调用信息(只留正文/思考) */
+  stripTools: (sessionId: string, messageId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${messageId}/strip-tools`, { method: "POST" }),
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
   unarchiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unarchive`, { method: "POST" }),
   createBackup: () => request<{ ok: boolean; backupDir: string }>("/api/backup", { method: "POST" }),

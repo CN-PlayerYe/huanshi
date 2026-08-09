@@ -135,6 +135,9 @@ export interface Settings {
   lanAccess?: boolean;
   /** 全局暂停心跳:主人可随时让所有心跳任务安静(默认开启心跳) */
   heartbeatPaused?: boolean;
+  /** 请求体保命线上限(KB):请求体超过此值自动压缩,防止网关截断 400;
+   *  默认 200;模型/网关支持超长上下文时可调大,0=不限制(超长可能 400,给长上下文模型用) */
+  requestBodyLimitKB?: number;
   /** 剧情选项分支:回复完成后 AI 生成 2-3 个下一步选项(默认开启) */
   enableOptions?: boolean;
   /** 人格风格参数(语气/详略/幽默度) */

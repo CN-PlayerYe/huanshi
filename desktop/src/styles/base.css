@@ -728,6 +728,24 @@ select {
   font-size: 13px;
 }
 
+.tool-head .tool-remove {
+  margin-left: auto;
+  margin-right: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0.5;
+}
+.tool-head .tool-remove:hover {
+  opacity: 1;
+  color: #e05252;
+  background: rgba(224, 82, 82, 0.12);
+}
+
 .tool-head .tool-name {
   font-family: var(--mono);
   color: var(--text);

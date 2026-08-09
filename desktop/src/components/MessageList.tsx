@@ -9,7 +9,7 @@ import logo from "../assets/icon.png";
 // 模块级常量:避免 selector 里 ?? [] 每次返回新引用导致 React 无限重渲染
 const EMPTY_OPTIONS: string[] = [];
 
-export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: ChatMessage; streaming?: boolean }) {
+export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveTool }: { msg: ChatMessage; streaming?: boolean; onRemoveTool?: (msgId: string) => void }) {
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
   const deleteMessage = useApp((s) => s.deleteMessage);
@@ -87,7 +87,7 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
         {tools.length > 0 && (
           <div className="tool-list">
             {tools.map((t) => (
-              <ToolCallBlock key={t.id} tool={t} />
+              <ToolCallBlock key={t.id} tool={t} onRemove={onRemoveTool ? () => onRemoveTool(msg.id) : undefined} />
             ))}
           </div>
         )}
@@ -135,7 +135,7 @@ export const MessageItem = memo(function MessageItem({ msg, streaming }: { msg: 
   );
 });
 
-function ToolCallBlock({ tool }: { tool: ToolCallPart }) {
+function ToolCallBlock({ tool, onRemove }: { tool: ToolCallPart; onRemove?: () => void }) {
   let inputText = "";
   try {
     inputText = JSON.stringify(JSON.parse(tool.input), null, 2);
@@ -155,6 +155,19 @@ function ToolCallBlock({ tool }: { tool: ToolCallPart }) {
         <span className="tool-icon">🔧</span>
         <span className="tool-name">{tool.name}</span>
         <span className={`tool-status ${statusClass}`}>{statusText}</span>
+        {onRemove && (
+          <button
+            className="tool-remove"
+            title="删除此条工具调用(只留正文,减小上下文与噪音)"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove();
+            }}
+          >
+            ✕
+          </button>
+        )}
         <span className="tool-toggle">▾</span>
       </summary>
       {inputText && <div className="tool-body input">{inputText.slice(0, 1200)}</div>}
@@ -260,6 +273,24 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   const clearOptions = useApp((s) => s.clearOptions);
   const sendMessage = useApp((s) => s.sendMessage);
 
+  /** 删除一条消息里的全部工具调用信息(只留正文);confirm + 后端 + 本地同步 */
+  const removeTools = async (sessionId: string, msgId: string) => {
+    const ok = await (window.hanalite?.confirmDialog ? window.hanalite.confirmDialog("删除此条消息的全部工具调用信息?只保留正文(操作不可恢复)") : true);
+    if (!ok) return;
+    try {
+      await api.stripTools(sessionId, msgId);
+      useApp.setState((s) => ({
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: (s.messagesBySession[sessionId] ?? []).map((m) => (m.id === msgId ? { ...m, parts: m.parts.filter((p) => p.type !== "tool") } : m)),
+        },
+      }));
+      useApp.getState().showToast("已删除工具调用信息,只保留正文");
+    } catch (err) {
+      useApp.getState().showToast(`删除失败:${(err as Error).message}`);
+    }
+  };
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -298,7 +329,7 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   return (
     <div className="message-list" ref={ref}>
       {messages.map((m, i) => (
-        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} />
+        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} onRemoveTool={(msgId) => void removeTools(m.id, msgId)} />
       ))}
       {options.length > 0 && !streaming && (
         <div className="chat-options">

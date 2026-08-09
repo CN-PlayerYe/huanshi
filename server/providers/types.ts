@@ -42,6 +42,8 @@ export interface ChatRequest {
   tools: ToolSpec[];
   temperature?: number;
   maxTokens?: number;
+  /** 请求体保命线上限(字节):超此值自动压缩;0=不限制;缺省用全局默认 */
+  maxBodyBytes?: number;
 }
 
 /** 多模态内容块(OpenAI 兼容格式;Anthropic 序列化时转换) */

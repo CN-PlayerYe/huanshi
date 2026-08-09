@@ -47,11 +47,13 @@ export class OpenAICompatibleProvider implements ChatProvider {
       });
 
     // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩(保命线)
+    // 上限可配置:req.maxBodyBytes(0=不限制,给长上下文模型);缺省用全局默认
+    const limit = req.maxBodyBytes === 0 ? Infinity : (req.maxBodyBytes ?? SHRINK_TARGET);
     let msgs = sanitizeToolMessages(req.messages);
     let body = buildBody(msgs);
-    if (Buffer.byteLength(body) > SHRINK_TARGET) {
+    if (Buffer.byteLength(body) > limit) {
       const originalMessages = msgs.length;
-      msgs = shrinkMessages(msgs);
+      msgs = shrinkMessages(msgs, limit);
       body = buildBody(msgs);
       yield { trimmed: { originalMessages, keptMessages: msgs.length } };
     }

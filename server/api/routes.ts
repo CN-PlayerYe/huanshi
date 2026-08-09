@@ -104,6 +104,19 @@ export function createApp(deps: AppDeps): Hono {
     return c.json(next);
   });
 
+  // 请求体保命线上限:超此值自动压缩
+  app.post("/api/sessions/:sid/messages/:id/strip-tools", (c) => {
+    const sid = c.req.param("sid");
+    const id = c.req.param("id");
+    const msgs = deps.db.getMessages(sid);
+    const msg = msgs.find((m) => m.id === id);
+    if (!msg) return c.json({ ok: false, error: "消息不存在" }, 404);
+    // 删除该消息里全部工具调用信息(只留正文/思考),减小上下文占用与界面噪音
+    msg.parts = msg.parts.filter((p) => p.type !== "tool");
+    deps.db.updateMessage(msg);
+    return c.json({ ok: true, message: msg });
+  });
+
   /** 修改数据目录(写重定向,重启生效) */
   app.post("/api/settings/data-dir", async (c) => {
     const { path } = (await c.req.json()) as { path: string };

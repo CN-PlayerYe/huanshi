@@ -413,6 +413,20 @@ export function SettingsView() {
             <option value="recent5">仅最近 5 条完整(快,可能报错)</option>
             <option value="off">不回传(最快,可能报错)</option>
           </select>
+          <label>
+            请求体保命线上限(KB):
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={settings.requestBodyLimitKB ?? 200}
+              onChange={(e) => void updateSettings({ requestBodyLimitKB: Math.max(0, Number(e.target.value) || 0) })}
+              style={{ width: 90, marginLeft: 8 }}
+            />
+          </label>
+          <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
+            请求体超过此值自动压缩(防网关截断 400)。默认 200;模型/网关支持超长上下文可调大;<b>0 = 不限制</b>(超长可能直接报错,给长上下文模型用)。
+          </div>
           <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
             长会话变慢的主因是历史思考全量回传;压缩后通常明显提速,若报错请改回「全量」
           </div>
