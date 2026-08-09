@@ -9,7 +9,7 @@ describe("跨会话全文搜索", () => {
   it("按关键词命中标题与消息正文/工具输出", () => {
     const dir = mkdtempSync(join(tmpdir(), "hanalite-search-"));
     const db = Db.fromPaths({ dataDir: dir } as never);
-    const a = db.createSession("夜玲珑的秘密", "agent_x");
+    const a = db.createSession("测试会话标题", "agent_x");
     db.appendMessage({ id: "m1", sessionId: a.id, role: "user", parts: [{ type: "text", text: "记得那只白狐吗" }], createdAt: 0 });
     db.appendMessage({
       id: "m2",
@@ -24,7 +24,7 @@ describe("跨会话全文搜索", () => {
     db.appendMessage({ id: "m3", sessionId: b.id, role: "user", parts: [{ type: "text", text: "今天天气不错" }], createdAt: 0 });
 
     // 标题命中
-    const byTitle = searchSessions(db, "玲珑");
+    const byTitle = searchSessions(db, "会话");
     expect(byTitle.map((h) => h.session.id)).toEqual([a.id]);
     expect(byTitle[0].matches).toBe(-1);
     // 正文命中

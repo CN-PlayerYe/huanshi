@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { nextHeartbeatAt, inQuietWindow, buildHeartbeatMessage, mergeHeartbeat, DEFAULT_HEARTBEAT } from "../server/heartbeat";
 import type { AgentDef } from "../shared/types";
 
-const agent: AgentDef = { id: "a", name: "星回", description: "", systemPrompt: "x", memoryEnabled: false };
+const agent: AgentDef = { id: "a", name: "测试人格", description: "", systemPrompt: "x", memoryEnabled: false };
 
 describe("心跳节奏", () => {
   it("默认:每 3 小时一跳,23:00-7:00 静默", () => {
@@ -43,7 +43,7 @@ describe("心跳消息", () => {
       lastBeatAt: now.getTime() - 3 * 3600_000,
       lastUserAt: now.getTime() - 2 * 3600_000,
       spaceStatus: "3 个文件,最近动过「心跳设计草案.md」",
-      homeDir: "/data/workspace/星回",
+      homeDir: "/data/workspace/测试人格",
       isBedtime: true,
       agent,
     });
@@ -64,7 +64,7 @@ describe("心跳消息", () => {
   });
 });
 
-describe("动态间隔(星回规格 §一)", () => {
+describe("动态间隔(心跳规格 §一)", () => {
   it("主人刚聊完(30 分钟内)→ 间隔拉长到 ≥6h", async () => {
     const cfg = mergeHeartbeat({ intervalHours: 3 });
     const now = Date.now();
@@ -93,7 +93,7 @@ describe("动态间隔(星回规格 §一)", () => {
       lastBeatAt: now.getTime() - 7200_000,
       lastUserAt: now.getTime() - 3600_000,
       spaceStatus: "3 个文件",
-      homeDir: "/data/workspace/星回",
+      homeDir: "/data/workspace/测试人格",
       isBedtime: false,
       footprint: "你上次写下的念头:「想看玲珑的《窗与信》」",
       agent,

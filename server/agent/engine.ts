@@ -52,7 +52,7 @@ const WRITE_TOOLS = new Set(["file_write", "file_append", "memory_retain", "run_
 const NETWORK_TOOLS = new Set(["fetch_url", "search_web"]);
 
 const MAX_HISTORY_MESSAGES = 30;
-/** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(夜玲珑等野生人格遇到过 1.4MB/88 秒) */
+/** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(野生人格遇到过 1.4MB/88 秒) */
 const MAX_HISTORY_UNLIMITED = 400;
 /** 单条 assistant 最多回放的工具结果数(迁移会话可能出现上百个工具调用,全量回放会撑爆 payload) */
 const MAX_TOOL_RESULTS = 15;
@@ -936,7 +936,7 @@ export async function generateOptions(providerCfg: ModelConfig, messages: ChatMe
         {
           role: "system",
           content:
-            "你是剧情推进助手。基于对话最后的状态,构思 2-3 个简短、有戏剧张力的下一步剧情选项(每个不超过 15 字,第一人称或祈使句)。只输出 JSON 数组,如 [\"追问夜玲珑的身世\", \"带她去山顶看日出\"]。不要输出其他内容。",
+            "你是剧情推进助手。基于对话最后的状态,构思 2-3 个简短、有戏剧张力的下一步剧情选项(每个不超过 15 字,第一人称或祈使句)。只输出 JSON 数组,如 [\"追问她的身世\", \"带她去山顶看日出\"]。不要输出其他内容。",
         },
         ...history,
       ],

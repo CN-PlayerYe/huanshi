@@ -56,7 +56,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
 
   const memory = new MemoryService(settings.memory, paths.dataDir);
 
-  // 清理误入记忆库的心跳消息(避免污染人格身份,如夜玲珑误以为自己是星回)
+  // 清理误入记忆库的心跳消息(避免污染人格身份,如人格身份污染)
   try {
     void cleanHeartbeatMemories(memory, db.listAgents().filter((a) => a.isolatedMemory).map((a) => a.id)).then((n) => {
       if (n > 0) console.log(`[hanalite] 已清理 ${n} 条误入记忆的心跳消息`);

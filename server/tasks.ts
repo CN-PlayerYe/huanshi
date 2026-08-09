@@ -221,7 +221,7 @@ export class Scheduler {
       };
       await this.engine.runChat(session, agent, message, onEvent, ctrl.signal, undefined, opts);
       const interrupted = ctrl.signal.aborted;
-      // 产出检测(星回规格 §一):有自发产出 → 空跳清零;无事发生 → 空跳 +1(下次间隔翻倍)
+      // 产出检测(心跳规格 §一):有自发产出 → 空跳清零;无事发生 → 空跳 +1(下次间隔翻倍)
       const hasOutput = !interrupted && finalText.trim().length > 20;
       const blankBeats = hasOutput ? 0 : (task.blankBeats ?? 0) + 1;
       this.saveFresh(task.id, {

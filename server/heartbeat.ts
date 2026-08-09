@@ -30,7 +30,7 @@ export function inQuietWindow(now: Date, cfg: Required<HeartbeatConfig>): boolea
 }
 
 /**
- * 动态间隔(星回规格 §一):根据主人活跃度与空跳次数自动调整。
+ * 动态间隔(心跳规格 §一):根据主人活跃度与空跳次数自动调整。
  * - 主人刚聊完(30 分钟内)→ 间隔拉长到 ≥6h(避免任务化)
  * - 主人久未出现(>24h)→ 间隔加密到 ≤2h(院子空了,看家)
  * - 连续空跳 → 间隔翻倍(防空转)
@@ -125,7 +125,7 @@ export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
 }
 
 /**
- * 心念续接(星回规格 §二):读取人格空间里的"足迹"——
+ * 心念续接(心跳规格 §二):读取人格空间里的"足迹"——
  * 优先「待定之页.md」,其次最近修改的 .md/.txt 笔记,取开头片段。
  */
 export function readFootprint(dir: string): string {
