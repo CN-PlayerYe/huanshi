@@ -93,6 +93,8 @@ export function ChatView() {
         <select
           value={activeSession?.agentId ?? ""}
           onChange={(e) => {
+            // 记住上次使用的人格:下次新会话默认用它(而不是永远小盏)
+            useApp.setState({ lastAgentId: e.target.value });
             if (activeSessionId) {
               void api.setSessionAgent(activeSessionId, e.target.value);
               void useApp.getState().refreshSessions();

@@ -74,6 +74,8 @@ export const useApp = create<AppState>((set, get) => ({
   /** 归档会话(主列表隐藏,可恢复) */
   archivedSessions: [],
   activeSessionId: null,
+  /** 上次使用的人格:新会话默认用它(而不是永远默认第一个),重启后回退默认 */
+  lastAgentId: null as string | null,
   messagesBySession: {},
   sending: false,
   view: "chat",
@@ -133,7 +135,9 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   async newSession() {
-    const { session } = await api.createSession(undefined, get().agents[0]?.id);
+    // 新会话默认用“上次使用的人格”,而不是永远默认第一个(小盏)
+    const agentId = get().lastAgentId ?? get().agents[0]?.id;
+    const { session } = await api.createSession(undefined, agentId);
     await get().refreshSessions();
     set({ activeSessionId: session.id, messagesBySession: { ...get().messagesBySession, [session.id]: [] } });
     return session;
