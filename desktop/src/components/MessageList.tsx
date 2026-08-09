@@ -329,7 +329,7 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   return (
     <div className="message-list" ref={ref}>
       {messages.map((m, i) => (
-        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} onRemoveTool={(msgId) => void removeTools(m.id, msgId)} />
+        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} onRemoveTool={(msgId) => void removeTools(activeSessionId ?? "", msgId)} />
       ))}
       {options.length > 0 && !streaming && (
         <div className="chat-options">
