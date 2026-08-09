@@ -1554,7 +1554,7 @@ export function SettingsView() {
                   checked={agentForm.historyUnlimited === true || (agentForm.historyContextPct ?? 100) >= 100}
                   onChange={(e) => setAgentForm({ ...agentForm, historyUnlimited: e.target.checked, historyContextPct: e.target.checked ? 100 : undefined })}
                 />
-                历史上下文全部保留(100% = 全部历史;仅当请求体超 200KB 时自动压缩:先删思考与工具输出,正文尽量保留)
+                历史上下文全部保留(100% = 全部历史;仅当请求体超过「记忆」区的保命线上限时自动压缩:先删思考与工具输出,正文尽量保留;上限可在记忆区调整)
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "stretch" }}>
                 <span style={{ fontSize: 12.5 }}>

@@ -23,7 +23,7 @@ export class Scheduler {
     private engine: AgentEngine,
     private getAgent: (id: string) => AgentDef | undefined,
     /** 任务执行完成回调(用于桌面通知) */
-    private onDone?: (e: { taskName: string; ok: boolean; result: string }) => void,
+    private onDone?: (e: { taskName: string; ok: boolean; result: string; sessionId?: string }) => void,
     private workspaceDir = "workspace",
     /** 主人最近一次发消息的时间(心跳打断用) */
     private lastUserAtFn?: () => number | undefined,
@@ -128,7 +128,7 @@ export class Scheduler {
         lastStatus: "ok",
         lastResult: finalText || "(无文本输出)",
       });
-      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "" });
+      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "", sessionId: session.id });
     } catch (err) {
       this.saveFresh(task.id, {
         lastRunAt: Date.now(),
@@ -230,7 +230,7 @@ export class Scheduler {
         lastResult: interrupted ? "(被主人打断,已收工)" : finalText || "(安静地待了一会儿)",
         blankBeats,
       });
-      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "安静活动" });
+      this.onDone?.({ taskName: task.name, ok: true, result: finalText || "安静活动", sessionId: task.sessionId });
     } catch (err) {
       const aborted = ctrl.signal.aborted;
       this.saveFresh(task.id, {

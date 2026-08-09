@@ -415,6 +415,13 @@ function connectWs(backendUrl: string): void {
           useApp.getState().showToast(`${ok ? "✅" : "⚠️"} 任务「${name}」${ok ? "已完成" : "执行失败"}`);
           // 任务执行可能新建了会话(心跳日记)/更新了会话 → 刷新侧栏,避免"重启才显示"
           void useApp.getState().refreshSessions();
+          // 若正在看该任务对应的会话(心跳日记),实时重拉消息,不用等重启
+          const sid = String(e.sessionId ?? "");
+          if (sid && useApp.getState().activeSessionId === sid) {
+            void api.getMessages(sid).then(({ messages }) => {
+              useApp.setState((s) => ({ messagesBySession: { ...s.messagesBySession, [sid]: messages } }));
+            });
+          }
           // 桌面通知(人格主动找你)
           try {
             if ("Notification" in window && Notification.permission === "granted") {

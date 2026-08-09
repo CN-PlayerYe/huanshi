@@ -144,8 +144,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     engine,
     (id) => db.getAgent(id),
     (e) => {
-      // 任务完成:广播给前端做桌面通知(人格主动找你)
-      broadcast({ type: "task_done", taskName: e.taskName, ok: e.ok, result: e.result.slice(0, 200) });
+      // 任务完成:广播给前端做桌面通知(人格主动找你)+ 会话 id(心跳日记实时刷新用)
+      broadcast({ type: "task_done", taskName: e.taskName, ok: e.ok, result: e.result.slice(0, 200), sessionId: e.sessionId });
     },
     workspaceDir,
     () => lastUserAt,
