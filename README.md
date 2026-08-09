@@ -1,0 +1,143 @@
+# 幻世 🏔
+
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Electron](https://img.shields.io/badge/Electron-26-47848F)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+
+> **HuanShi (幻世)** — a local-first AI companion desktop app with long-term memory and living personas.
+> Each persona has its own memory, permissions and can grow freely. Heartbeats let them act on their own;
+> group chats bring multiple personas into one conversation. Everything stays on your machine.
+>
+> *(README 以中文为主,欢迎 English PR 补充英文文档)*
+
+一个**有记忆、有人格**的私人 AI 助手桌面应用。灵感来自 [openhanako](https://github.com/liliMozi/openhanako),从零实现、更轻量、本地方优先。
+
+- **数据随你走**:安装路径、数据目录全部可自定义,绿色版、安装版任选
+- **Hindsight 长期记忆**:接入 [Vectorize.io Hindsight](https://hindsight.vectorize.io) 语义记忆;没配置时自动回退内置本地记忆,离线可用
+- **多模型**:OpenAI 兼容(DeepSeek / Moonshot / Qwen…)、Anthropic(Claude)、Ollama 本地
+- **人格会成长**:每个人格独立记忆、独立权限、可以"原生态"自由生长
+
+> 这不是 HanaAgent 的 fork,而是同理念的独立实现。HanaAgent 是数千 commits 的庞大项目,幻世是更轻、更本地、更适合日常把玩的版本。
+
+---
+一个**有记忆、有人格**的私人 AI 助手桌面应用。灵感来自 [openhanako](https://github.com/liliMozi/openhanako),从零实现、更轻量、本地方优先。
+
+- **数据随你走**:安装路径、数据目录全部可自定义,绿色版、安装版任选
+- **Hindsight 长期记忆**:接入 [Vectorize.io Hindsight](https://hindsight.vectorize.io) 语义记忆;没配置时自动回退内置本地记忆,离线可用
+- **多模型**:OpenAI 兼容(DeepSeek / Moonshot / Qwen…)、Anthropic(Claude)、Ollama 本地
+- **人格会成长**:每个人格独立记忆、独立权限、可以"原生态"自由生长
+
+> 这不是 HanaAgent 的 fork,而是同理念的独立实现。HanaAgent 是数千 commits 的庞大项目,幻世是更轻、更本地、更适合日常把玩的版本。
+
+---
+
+## ✨ 功能全景
+
+| 模块 | 说明 |
+|------|------|
+| 💬 聊天 | 流式回复、Markdown 渲染、会话管理(新建/重命名/归档/删除) |
+| 🎭 人格 | 内置小盏/小尺/小墨,可自建;每个人格独立记忆、独立权限、独立风格 |
+| 👥 群聊 | 一个会话多个人格同场登场,轮流发言,各说各话 |
+| 🧠 记忆 | Hindsight 语义记忆 + 本地记忆双后端,自动回退;记忆保留上限可调(0=无限) |
+| 🔧 工具 | 读写文件、执行命令、抓网页、检索/保存记忆;人格级权限(高危命令/路径白名单可放开) |
+| 🖼 视觉 | 聊天中直接发图片,多模态模型看图回答 |
+| 🎙 语音 | 语音输入(Windows 本地识别)、朗读回复、免按键"通话"模式 |
+| ⏰ 定时任务 | 让某个人格定时主动找你(如每天早报),完成时桌面通知 |
+| 🔍 搜索 | 跨会话全文搜索历史对话 |
+| 📝 摘要 | 长会话自动摘要压缩(自动+手动),上下文永远不爆 |
+| 📖 世界观 | 会话级"世界观文档",可生成/编辑/撤销,人格按世界观行事 |
+| 🎬 剧情选项 | 回复结束后 AI 给出下一步选项,点一下继续,像玩互动小说 |
+| 🗂 归档 | 会话归档不删除,随时恢复;彻底删除需二次确认 |
+| 💾 备份 | 一键备份全部数据到「幻世备份」文件夹,恢复前自动留快照 |
+| 📲 网页版 | 开启局域网访问后,手机浏览器直接聊天(零安装) |
+| 🎨 外观 | 暗色/亮色/水墨主题,强调色、背景图、透明度自由调 |
+
+## 🚀 安装与启动
+
+**下载**:到 [GitHub Releases](https://github.com/CN-PlayerYe/huanshi/releases) 下载 `Setup-0.1.0.exe`(安装版)或 `0.1.0-portable.exe`(绿色版)。
+
+**安装版**:运行 `Setup-0.1.0.exe`,向导里可自定义安装目录;桌面与开始菜单生成「幻世」快捷方式。
+
+**绿色版**:解压 `0.1.0-portable.exe`(或 win-unpacked 目录),双击 `幻世.exe` 即用;exe 旁放 `data/` 目录或 `portable.txt` 即进入便携模式,数据跟随应用目录走。
+
+> ⚠️ 未签名,首次运行 Windows SmartScreen 可能拦截:点 **更多信息 → 仍要运行**。装有 360 等安全软件时,若提示拦截,把幻世加入信任区即可。
+
+## ⚙️ 首次配置
+
+1. 打开应用 → **设置 → 模型**,添加提供商:
+   - **DeepSeek / Moonshot 等**:OpenAI 兼容,填 Base URL(如 `https://api.deepseek.com/v1`)+ API Key + 模型名
+   - **Claude**:Anthropic,填 key 与模型名
+   - **Ollama 本地**:留空默认 `http://localhost:11434/v1`,填本地模型名
+2. 点「测试」确认连通,设为当前模型
+3. 回到聊天页,开聊。
+
+## 📁 数据目录与备份
+
+所有会话、人格、记忆、文件都存在**数据目录**,默认 `%USERPROFILE%\.huanshi`。可自定义:环境变量 `HANA_HOME` / 启动参数 `--data-dir` / 便携模式 / 设置页(设置 → 数据目录)。
+
+**备份**(强烈建议定期):设置 → **数据备份/恢复** → 立即备份,数据复制到数据目录同级的「幻世备份」文件夹;需要时点「恢复」,恢复前会自动留一份当前快照。
+
+## 🧠 Hindsight 记忆(可选)
+
+1. 本地 Docker 跑 Hindsight daemon,或注册 [Hindsight Cloud](https://ui.hindsight.vectorize.io)
+2. 设置 → 记忆 → 选 **Hindsight**,填 Base URL / API Key / Bank ID
+3. 未配置或服务不可用时会**自动回退本地记忆**,一切照常。
+
+记忆会自动:对话前召回相关内容、对话后沉淀为经历;Agent 也能主动检索/保存记忆;设置页可手动触发反思。
+
+## 📥 从 Cherry Studio 迁移
+
+设置 → **从 Cherry Studio 迁移对话**:自动探测数据目录(或手动填),一键把 **Agent 人格、会话、全部对话(正文/思考/工具调用)** 迁入。只读迁移,不动 Cherry Studio 数据;模型配置需重新设置。
+
+## 🛠 人格进阶玩法
+
+- **原生态人格**:编辑人格 → 高级选项 → 关闭「跟随全局风格」,人格自由生长,不受风格模板影响
+- **全权限 Agent**:打开「允许执行高危命令」「不受路径白名单限制」,它拥有完整命令+文件权限(慎用)
+- **无限记忆**:编辑人格 → 打开「历史上下文不限长度」,或设置 → 记忆把保留上限填 0
+- **群聊**:会话顶部「👥 群聊」勾选 2+ 个人格,同场对话
+- **定时任务**:设置 → 定时任务,让某个人格每天固定时间主动汇报
+
+## ❓ 常见问题
+
+- **启动被拦截?** SmartScreen 点"仍要运行";360 弹窗加信任区。
+- **数据在哪?** 设置 → 数据目录 直接看;或打开「幻世备份」文件夹。
+- **模型不回复?** 检查设置 → 模型是否已设为当前、API Key 是否有效,点「测试」。
+- **语音识别不准?** 语音输入走 Windows 本地识别,可在系统设置里训练自己的声音;朗读音色在 设置 → 语音 里换。
+- **网页版怎么用?** 设置 → 开启「局域网访问」,手机连同一 WiFi,打开显示的地址(如 `http://192.168.x.x:端口`)。
+
+## 🏗 开发者
+
+```bash
+npm install
+npm run dev              # 开发模式(Electron + Vite)
+npm test                 # Vitest 测试
+npm run typecheck        # 类型检查
+npm run dist             # 打包:NSIS 安装器 + portable 绿色版
+```
+
+架构:`electron/` 主进程 · `server/` 后端(Hono + SSE + WebSocket)· `desktop/` React 渲染进程 · `shared/` 共享类型 · `tests/` 单测。详见代码注释。
+
+## 🧪 测试与类型检查
+
+```bash
+npm test          # 全部单元测试
+npm run typecheck # TypeScript 类型检查
+```
+
+## 📄 许可证
+
+Apache License 2.0
+
+---
+
+## 🧋 打赏区(不点也行,点了更好)
+
+开发不易,如果幻世让你开心过,欢迎打赏——
+
+- 🥤 **打赏一杯奶茶**:让我续命写下一版
+- 🚬 **打赏一包烟**:让我边抽边改 bug
+- 🎮 **打赏一张显卡**:~~(划掉)~~ 算了,你打赏不起,我也用不上
+
+> 不强迫,纯自愿。觉得好用,帮忙把幻世推荐给一个朋友,就是最好的打赏。🌙

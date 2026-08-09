@@ -1,0 +1,49 @@
+{
+  "name": "huanshi",
+  "productName": "幻世",
+  "version": "0.1.0",
+  "description": "一个有记忆、有人格的私人 AI 助手(类 HanaAgent),支持自定义数据目录与 Hindsight 长期记忆",
+  "main": "dist-electron/electron/main.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev:renderer": "vite",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.node.json",
+    "start": "npm run build && cross-env NODE_ENV=production electron .",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:electron": "wait-on tcp:5173 && npm run build:main && cross-env NODE_ENV=development electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "build": "npm run build:main && npm run build:renderer",
+    "dist": "npm run build && electron-builder --win",
+    "dist:portable": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@hono/node-ws": "^1.1.0",
+    "@vectorize-io/hindsight-client": "^0.8.6",
+    "hono": "^4.7.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "ws": "^8.18.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0",
+    "wait-on": "^8.0.2"
+  }
+}
