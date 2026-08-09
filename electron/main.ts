@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from "electron";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -55,6 +55,25 @@ function themeBg(theme: string): string {
 
 /** 中文应用菜单(文件/编辑/视图/帮助),菜单行为为系统标准:点击弹出、再次点击收起 */
 function installMenu(win: BrowserWindow): void {
+  // 右键菜单:正文选中文字后右键 → “复制”(用 clipboard 硬写,不依赖 selection,100% 有效)
+  // 避免 Electron 默认右键菜单不可靠/被吞导致“右键点不出东西、复制无效”
+  win.webContents.on("context-menu", (_e, params) => {
+    const items: Electron.MenuItemConstructorOptions[] = [];
+    if (params.isEditable) {
+      items.push(
+        { role: "undo", label: "撤销" },
+        { type: "separator" },
+        { role: "cut", label: "剪切" },
+        { role: "copy", label: "复制" },
+        { role: "paste", label: "粘贴" },
+        { role: "selectAll", label: "全选" },
+      );
+    } else if (params.selectionText) {
+      items.push({ label: "复制", click: () => clipboard.writeText(params.selectionText) });
+    }
+    items.push({ label: "全选", click: () => win.webContents.selectAll() });
+    Menu.buildFromTemplate(items).popup({ window: win });
+  });
   const send = (action: string) => () => win.webContents.send("menu", action);
   const template: Electron.MenuItemConstructorOptions[] = [
     {
