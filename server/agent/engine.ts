@@ -21,9 +21,9 @@ export function resolveModel(
 }
 
 /** 请求体保命线上限(字节):settings.requestBodyLimitKB(0=不限制,undefined=用默认) */
-function bodyLimitOf(settings: { requestBodyLimitKB?: number }): number | undefined {
+function bodyLimitOf(settings: Record<string, unknown>): number | undefined {
   const kb = settings.requestBodyLimitKB;
-  if (kb === undefined) return undefined;
+  if (typeof kb !== "number") return undefined;
   return kb === 0 ? 0 : kb * 1024;
 }
 
