@@ -9,3 +9,4 @@ release/
 data/
 *.local.json
 tmp/
+reasonix.toml
