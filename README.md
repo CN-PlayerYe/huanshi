@@ -1,4 +1,4 @@
-# 幻世 HanaLite 🏔
+# 幻世 🏔
 
 一个**有记忆、有人格**的私人 AI 助手桌面应用。灵感来自 [openhanako](https://github.com/liliMozi/openhanako),从零实现、更轻量、本地方优先。
 
