@@ -25,6 +25,8 @@ interface AppState {
   showToast(msg: string): void;
   clearToast(): void;
   activeSessionId: string | null;
+  /** 上次使用的人格:新会话默认用它(而不是永远默认第一个) */
+  lastAgentId: string | null;
   messagesBySession: Record<string, ChatMessage[]>;
   sending: boolean;
   view: "chat" | "settings";
