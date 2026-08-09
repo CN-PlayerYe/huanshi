@@ -236,8 +236,8 @@ export type StreamEvent =
   | { type: "context_trimmed"; keptMessages: number; reason: string }
   /** 剧情选项分支:回复完成后 AI 给出的下一步选项 */
   | { type: "options"; sessionId: string; options: string[] }
-  /** 定时任务执行完成(桌面通知) */
-  | { type: "task_done"; taskName: string; ok: boolean; result: string };
+  /** 定时任务执行完成(桌面通知);sessionId 用于心跳日记会话实时刷新 */
+  | { type: "task_done"; taskName: string; ok: boolean; result: string; sessionId?: string };
 
 // ---- 默认值 ----
 
