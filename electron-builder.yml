@@ -1,0 +1,36 @@
+appId: com.hanalite.app
+productName: 幻世
+copyright: Copyright © 2026 幻世
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist-electron/**/*
+  - dist-renderer/**/*
+  - package.json
+asar: true
+compression: normal
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+
+# NSIS 安装器:允许用户选择安装路径(自定义安装路径)
+# 安装目录名取 package.json 的 name(幻世);快捷方式/开始菜单用 shortcutName
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 幻世
+
+# 绿色版:解压即用,数据目录跟随 exe 旁 data/(portable 模式)
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+artifactName: ${productName}-Setup-${version}.${ext}
