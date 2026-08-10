@@ -148,6 +148,16 @@ export function SettingsView() {
     }
   };
 
+  /** 作息模板:一键应用到所有心跳任务(合并保留各自的安全边界等设置) */
+  const applyRoutine = async (label: string, hb: { intervalHours: number; quietStart: number; quietEnd: number; bedtimeHour: number; maxMinutes: number }) => {
+    const hbTasks = tasks.filter((t) => t.kind === "heartbeat");
+    for (const t of hbTasks) {
+      await api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), ...hb } });
+    }
+    await refreshTasks();
+    setTaskMsg(hbTasks.length ? `✅ 已应用「${label}」作息到 ${hbTasks.length} 个心跳任务` : "没有心跳任务,先添加一个");
+  };
+
   useEffect(() => {
     // 局域网访问信息
     void api.network().then((r) => {
@@ -1205,11 +1215,23 @@ export function SettingsView() {
                 prompt: "(心跳任务:消息由系统在每次心跳时动态生成)",
               });
               await refreshTasks();
-              setTaskMsg("✅ 已添加「💓 心跳」任务(每 3 小时,23:00-7:00 静默)。点「⚙️ 边界」可调安全边界。");
+              setTaskMsg("✅ 已添加「💓 心跳」任务(每 3 小时,23:00-7:00 静默)。点「⚙️ 节奏」可调参数。");
             }}
           >
             💓 一键添加「心跳」任务(每 3 小时,自主醒来)
           </button>
+          <div className="field-row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "var(--text-dim)", alignSelf: "center" }}>作息模板(一键应用到全部心跳任务):</span>
+            <button className="btn secondary sm" onClick={() => void applyRoutine("标准", { intervalHours: 3, quietStart: 23, quietEnd: 7, bedtimeHour: 21, maxMinutes: 10 })}>
+              ☀️ 标准(3h · 23-7 静默)
+            </button>
+            <button className="btn secondary sm" onClick={() => void applyRoutine("早鸟", { intervalHours: 2, quietStart: 21, quietEnd: 6, bedtimeHour: 20, maxMinutes: 10 })}>
+              🌅 早鸟(2h · 21-6 静默)
+            </button>
+            <button className="btn secondary sm" onClick={() => void applyRoutine("夜猫", { intervalHours: 4, quietStart: 3, quietEnd: 12, bedtimeHour: 23, maxMinutes: 15 })}>
+              🌙 夜猫(4h · 3-12 静默)
+            </button>
+          </div>
           {taskMsg && <span style={{ fontSize: 12.5, color: "var(--ok)" }}>{taskMsg}</span>}
         </div>
         {tasks.map((t) => (
@@ -1325,6 +1347,42 @@ export function SettingsView() {
                       value={t.heartbeat?.maxMinutes ?? 10}
                       onChange={(e) =>
                         void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), maxMinutes: Math.max(1, Number(e.target.value) || 10) } }).then(refreshTasks)
+                      }
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 100 }}>
+                    <label>静默起(时)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={t.heartbeat?.quietStart ?? 23}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietStart: Math.min(23, Math.max(0, Number(e.target.value) || 23)) } }).then(refreshTasks)
+                      }
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 100 }}>
+                    <label>静默止(时)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={t.heartbeat?.quietEnd ?? 7}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietEnd: Math.min(23, Math.max(0, Number(e.target.value) || 7)) } }).then(refreshTasks)
+                      }
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 100 }}>
+                    <label>睡前提示(时)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={t.heartbeat?.bedtimeHour ?? 21}
+                      onChange={(e) =>
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), bedtimeHour: Math.min(23, Math.max(0, Number(e.target.value) || 21)) } }).then(refreshTasks)
                       }
                     />
                   </div>

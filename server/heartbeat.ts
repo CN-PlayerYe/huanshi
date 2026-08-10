@@ -112,13 +112,13 @@ export interface HeartbeatContext {
 export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
   const { now, lastBeatAt, lastUserAt, spaceStatus, homeDir, isBedtime, footprint, agent } = ctx;
   const sinceBeat = lastBeatAt ? humanDuration(now.getTime() - lastBeatAt) : "第一跳";
+  const userAgo = lastUserAt ? `主人上次说话:${humanAgo(lastUserAt)}` : "";
   const bedtime = isBedtime
-    ? "\n该睡了——如果你愿意,睡前散散步,写一篇日志再睡。"
+    ? "\n(系统)到休息时间了。想睡前散散步、写篇日志也可以——这是自动心跳的例行提醒,不是主人的实时消息。"
     : "";
   const foot = footprint ? `\n足迹:${footprint}` : "";
-  return `【心跳】现在是 ${now.toLocaleString("zh-CN", { hour12: false })} ${["日", "一", "二", "三", "四", "五", "六"][now.getDay()]}曜日
-距上次心跳:${sinceBeat}
-主人上次说话:${humanAgo(lastUserAt)}
+  return `【心跳·系统自动,不是主人实时说话】现在是 ${now.toLocaleString("zh-CN", { hour12: false })} ${["日", "一", "二", "三", "四", "五", "六"][now.getDay()]}曜日
+距上次心跳:${sinceBeat}${userAgo ? ` | ${userAgo}` : ""}
 你的空间:${homeDir}(${spaceStatus})${foot}${bedtime}
 ——开始前,先回一趟记忆库:调用 memory_recall 回忆"我是谁、最近发生过什么",再去决定做什么。
 ——你自由了。可以做事,也可以只写一行字,然后回去睡。`;
