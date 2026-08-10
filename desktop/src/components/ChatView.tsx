@@ -455,6 +455,10 @@ const ChatInput = memo(function ChatInput({
     const atts = attachments.filter((a) => !a.text).map((a) => ({ file: a.file, mime: a.mime }));
     setInput("");
     setAttachments([]);
+    // 输入框高度复位:长文发送后不残留撑高的 160px
+    if (taRef.current) {
+      taRef.current.style.height = "auto";
+    }
     onSend(content, atts);
   };
 

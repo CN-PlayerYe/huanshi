@@ -410,7 +410,9 @@ function connectWs(backendUrl: string): void {
     }
     ws.onmessage = (ev) => {
       try {
-        const e = JSON.parse(String(ev.data)) as { type?: string; [k: string]: unknown };
+        const raw = JSON.parse(String(ev.data)) as { event?: Record<string, unknown> } | Record<string, unknown>;
+        // 后端广播包了一层 { event: e },兼容两种形态(否则 task_done 永远收不到,心跳消息不实时刷新)
+        const e = (raw && typeof raw === "object" && "event" in raw && raw.event ? raw.event : raw) as { type?: string; [k: string]: unknown };
         if (e.type === "options") {
           const sid = String(e.sessionId ?? "");
           const opts = Array.isArray(e.options) ? (e.options as string[]) : [];
