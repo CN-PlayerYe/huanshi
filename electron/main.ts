@@ -135,9 +135,8 @@ function createWindow(bgColor: string): void {
     minHeight: 600,
     backgroundColor: bgColor,
     title: "幻世",
-    // 自绘标题栏:去掉 Windows 原生白色标题栏,颜色跟随主题(应用内 .titlebar 提供拖拽区)
+    // 自绘标题栏:去掉 Windows 原生白色标题栏,颜色跟随主题(应用内 .titlebar 提供拖拽区与窗口按钮)
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: bgColor, symbolColor: "#888888", height: 40 },
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -247,12 +246,15 @@ $r.Dispose()`;
       mainWindow?.setOpacity(v);
     });
 
-    // 自绘标题栏按钮区颜色跟随聊天区遮罩(透明度联动;overlay 是系统层,尽力接近)
-    ipcMain.on("set-titlebar-overlay", (_e, color: string) => {
-      if (typeof color === "string" && color) {
-        mainWindow?.setTitleBarOverlay({ color, symbolColor: "#888888", height: 40 });
-      }
+    // 自绘窗口控制按钮(最小化/最大化/关闭):不用系统 titleBarOverlay,
+    // 避免 Windows 原生按钮 tooltip 双显错位;按钮在渲染层 .titlebar-controls
+    ipcMain.on("window-minimize", () => mainWindow?.minimize());
+    ipcMain.on("window-maximize", () => {
+      if (!mainWindow) return;
+      if (mainWindow.isMaximized()) mainWindow.unmaximize();
+      else mainWindow.maximize();
     });
+    ipcMain.on("window-close", () => mainWindow?.close());
 
     const settings = serverHandle.getSettings();
     lastThemeBg = themeBg(settings.theme ?? "ink");

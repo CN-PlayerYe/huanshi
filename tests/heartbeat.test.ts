@@ -47,7 +47,8 @@ describe("心跳消息", () => {
       isBedtime: true,
       agent,
     });
-    expect(msg).toContain("【心跳】");
+    expect(msg).toContain("【心跳");
+    expect(msg).toContain("不是主人实时");
     expect(msg).toContain("距上次心跳");
     expect(msg).toContain("主人上次说话");
     expect(msg).toContain("你自由了");

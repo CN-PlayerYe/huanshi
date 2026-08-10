@@ -138,6 +138,22 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
 
   // ---- 定时任务调度器 ----
   let lastUserAt: number | undefined;
+  // 重启后恢复"主人最后说话时间":取所有会话最后一条非心跳 user 消息(心跳是系统代发,不算)
+  try {
+    for (const s of db.listSessions(true)) {
+      const msgs = db.getMessages(s.id);
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.role !== "user") continue;
+        const partsStr = JSON.stringify(m.parts ?? []);
+        if (partsStr.includes("【心跳")) continue; // 系统代发的心跳邀请,不是主人说话
+        lastUserAt = Math.max(lastUserAt ?? 0, m.createdAt);
+        break; // 该会话里最新的一条 user 消息(从尾往前第一条)
+      }
+    }
+  } catch {
+    /* 恢复失败不阻塞启动 */
+  }
   const workspaceDir = settings.toolWhitelistDir || join(paths.dataDir, "workspace");
   const scheduler = new Scheduler(
     db,

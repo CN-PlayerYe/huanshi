@@ -167,6 +167,37 @@ select {
   color: var(--text-dim);
   opacity: 0.8;
 }
+/* 自绘窗口控制按钮(替代系统 titleBarOverlay,避免 tooltip 双显错位) */
+.titlebar-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+  align-items: center;
+}
+.tb-btn {
+  width: 38px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tb-btn:hover {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+}
+.tb-close:hover {
+  background: #e81123;
+  color: #fff;
+}
 
 .main {
   flex: 1;
@@ -332,6 +363,7 @@ select {
 
 .session-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -362,6 +394,36 @@ select {
 .session-item .time {
   font-size: 11px;
   opacity: 0.6;
+}
+
+/* 最后消息预览:心跳/后台任务新内容侧栏一眼可见 */
+.session-item .session-preview {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+  padding-left: 2px;
+}
+
+/* 未读红点:后台任务(心跳)完成而没看该会话时显示 */
+.unread-badge {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  margin-left: 6px;
+  border-radius: 8px;
+  background: var(--accent, #e86830);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .session-menu {

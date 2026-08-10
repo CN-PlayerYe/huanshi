@@ -1,4 +1,4 @@
-// 最小 Electron 探针:只创建窗口,不加载业务代码。用于区分"Electron 环境问题" vs "幻世代码问题"
+// 最小 Electron 探针:只创建窗口,不加载业务代码。用于区分"Electron 环境问题" vs "HanaLite 代码问题"
 const { app, BrowserWindow } = require("electron");
 const fs = require("fs");
 const log = (m) => fs.appendFileSync("C:/tmp/electron-probe.log", new Date().toISOString() + " " + m + "\n");

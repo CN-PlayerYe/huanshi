@@ -17,6 +17,8 @@ interface AppState {
   archivedSessions: SessionMeta[];
   /** 递增触发输入框重新聚焦(删除消息/弹窗关闭等) */
   focusTick: number;
+  /** 未读计数:后台任务(心跳等)完成而用户没看该会话时 +1,选中会话后清零 */
+  unreadBySession: Record<string, number>;
   /** 剧情选项:每个会话最近一次的 AI 选项 */
   sessionOptions: Record<string, string[]>;
   clearOptions(): void;
@@ -76,6 +78,8 @@ export const useApp = create<AppState>((set, get) => ({
   /** 归档会话(主列表隐藏,可恢复) */
   archivedSessions: [],
   activeSessionId: null,
+  /** 后台任务未读计数 */
+  unreadBySession: {},
   /** 上次使用的人格:新会话默认用它(而不是永远默认第一个),重启后回退默认 */
   lastAgentId: null as string | null,
   messagesBySession: {},
@@ -129,7 +133,11 @@ export const useApp = create<AppState>((set, get) => ({
 
   async selectSession(id) {
     // 无条件切回聊天视图(如从设置页「打开心跳日记」);即使会话已缓存也要切视图
-    set({ activeSessionId: id, view: "chat" });
+    set((s) => {
+      const unread = { ...s.unreadBySession };
+      delete unread[id];
+      return { activeSessionId: id, view: "chat", unreadBySession: unread };
+    });
     if (!get().messagesBySession[id]) {
       const { messages } = await api.getMessages(id);
       set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));
@@ -410,7 +418,9 @@ function connectWs(backendUrl: string): void {
     }
     ws.onmessage = (ev) => {
       try {
-        const e = JSON.parse(String(ev.data)) as { type?: string; [k: string]: unknown };
+        const raw = JSON.parse(String(ev.data)) as { event?: Record<string, unknown> } | Record<string, unknown>;
+        // 后端广播包了一层 { event: e },兼容两种形态(否则 task_done 永远收不到,心跳消息不实时刷新)
+        const e = (raw && typeof raw === "object" && "event" in raw && raw.event ? raw.event : raw) as { type?: string; [k: string]: unknown };
         if (e.type === "options") {
           const sid = String(e.sessionId ?? "");
           const opts = Array.isArray(e.options) ? (e.options as string[]) : [];
@@ -427,6 +437,11 @@ function connectWs(backendUrl: string): void {
             void api.getMessages(sid).then(({ messages }) => {
               useApp.setState((s) => ({ messagesBySession: { ...s.messagesBySession, [sid]: messages } }));
             });
+          } else if (sid) {
+            // 没在看该会话 → 未读 +1,侧栏红点提示(多个心跳同时完成也能逐个标出)
+            useApp.setState((s) => ({
+              unreadBySession: { ...s.unreadBySession, [sid]: (s.unreadBySession[sid] ?? 0) + 1 },
+            }));
           }
           // 桌面通知(人格主动找你)
           try {

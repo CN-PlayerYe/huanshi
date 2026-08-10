@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, type Settings } from "../shared/types";
  *   1. 环境变量 HANA_HOME / HANALITE_HOME
  *   2. 启动参数 --data-dir <path>
  *   3. portable 模式:可执行文件旁的 data-dir.txt 指向的目录,或 exe 旁 data/ 目录
- *   4. 重定向文件 %APPDATA%/HanaLite/data-dir.txt(旧版路径,兼容老用户;新版为 %APPDATA%/幻世)
+ *   4. 重定向文件 %APPDATA%/HanaLite/data-dir.txt(设置页修改数据目录时写入)
  *   5. 默认 ~/.huanshi
  */
 

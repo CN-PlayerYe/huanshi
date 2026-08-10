@@ -24,7 +24,7 @@ describe("跨会话全文搜索", () => {
     db.appendMessage({ id: "m3", sessionId: b.id, role: "user", parts: [{ type: "text", text: "今天天气不错" }], createdAt: 0 });
 
     // 标题命中
-    const byTitle = searchSessions(db, "玲珑");
+    const byTitle = searchSessions(db, "会话");
     expect(byTitle.map((h) => h.session.id)).toEqual([a.id]);
     expect(byTitle[0].matches).toBe(-1);
     // 正文命中

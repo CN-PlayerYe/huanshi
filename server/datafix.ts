@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../shared/types";
+import type { ChatMessage, SessionMeta } from "../shared/types";
 import type { Db } from "./storage";
 
 /**
@@ -50,6 +50,27 @@ export function fixEmbeddedThinking(db: Db): number {
  */
 export function fixLegacyHeartbeatSessions(db: Db): number {
   let archived = 0;
+  // ① 同名「💓 X 心跳日记」重复(旧版 sessionId 未持久化导致反复重建):
+  //    每个标题只保留最新一份(+ 任务正在使用的),其余归档(数据保留)
+  const taskSessionIds = new Set(db.listTasks().map((t) => t.sessionId).filter((x): x is string => Boolean(x)));
+  const all = db.listSessions(true).filter((s) => !s.archived && (s.title || "").includes("心跳日记"));
+  const byTitle = new Map<string, SessionMeta[]>();
+  for (const s of all) {
+    const key = (s.title || "").trim();
+    const arr = byTitle.get(key) ?? [];
+    arr.push(s);
+    byTitle.set(key, arr);
+  }
+  for (const arr of byTitle.values()) {
+    if (arr.length <= 1) continue;
+    arr.sort((a, b) => b.updatedAt - a.updatedAt);
+    for (let i = 1; i < arr.length; i++) {
+      if (taskSessionIds.has(arr[i].id)) continue;
+      db.updateSession(arr[i].id, { archived: true });
+      archived++;
+    }
+  }
+  // ② 旧碎片:「💓 心跳 <时间>」等非"心跳日记"格式 → 归档
   for (const s of db.listSessions(true)) {
     if (s.archived) continue;
     const t = s.title || "";

@@ -169,7 +169,7 @@ export function importCherryStudio(db: Db, opts: ImportOptions): ImportStats {
   }
 }
 
-/** Cherry 的 agent id 可能带前缀/非法字符,规范化并避免与幻世内置冲突 */
+/** Cherry 的 agent id 可能带前缀/非法字符,规范化并避免与 HanaLite 内置冲突 */
 function normalizeAgentId(id: string): string {
   const clean = id.replace(/[^a-zA-Z0-9_-]/g, "-");
   if (!clean) return newId("agent");

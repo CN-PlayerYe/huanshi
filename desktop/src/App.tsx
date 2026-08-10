@@ -83,7 +83,6 @@ export default function App() {
     // 标题栏(左侧 drag 区 + 右上按钮区)跟随聊天区遮罩:透明度滑块 0-100% 实时联动
     const titlebarBg = hexToRgba(t.bg, appearance.chatOpacity ?? 1);
     root.setProperty("--titlebar-bg", titlebarBg);
-    window.hanalite?.setTitleBarOverlay(titlebarBg);
     const body = document.body;
     if (appearance.bgImage) {
       // 背景图作为底层装饰:界面保持默认不透明,想沉浸可在外观里手动调聊天区透明度
@@ -118,9 +117,14 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* 自绘标题栏:透明拖拽区,背景透出主题/背景图;窗口按钮由 titleBarOverlay 提供 */}
+      {/* 自绘标题栏:透明拖拽区 + 自绘窗口控制按钮(最小化/最大化/关闭) */}
       <div className="titlebar">
         <span className="titlebar-title">幻世</span>
+        <div className="titlebar-controls">
+          <button className="tb-btn" title="最小化" onClick={() => window.hanalite?.windowMinimize()}>─</button>
+          <button className="tb-btn" title="最大化" onClick={() => window.hanalite?.windowMaximize()}>□</button>
+          <button className="tb-btn tb-close" title="关闭" onClick={() => window.hanalite?.windowClose()}>✕</button>
+        </div>
       </div>
       <Sidebar />
       <main className="main">{view === "chat" ? <ChatView /> : <SettingsView />}</main>

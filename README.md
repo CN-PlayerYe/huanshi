@@ -1,27 +1,5 @@
 # 幻世 🏔
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Electron](https://img.shields.io/badge/Electron-26-47848F)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
-
-> **HuanShi (幻世)** — a local-first AI companion desktop app with long-term memory and living personas.
-> Each persona has its own memory, permissions and can grow freely. Heartbeats let them act on their own;
-> group chats bring multiple personas into one conversation. Everything stays on your machine.
->
-> *(README 以中文为主,欢迎 English PR 补充英文文档)*
-
-一个**有记忆、有人格**的私人 AI 助手桌面应用。灵感来自 [openhanako](https://github.com/liliMozi/openhanako),从零实现、更轻量、本地方优先。
-
-- **数据随你走**:安装路径、数据目录全部可自定义,绿色版、安装版任选
-- **Hindsight 长期记忆**:接入 [Vectorize.io Hindsight](https://hindsight.vectorize.io) 语义记忆;没配置时自动回退内置本地记忆,离线可用
-- **多模型**:OpenAI 兼容(DeepSeek / Moonshot / Qwen…)、Anthropic(Claude)、Ollama 本地
-- **人格会成长**:每个人格独立记忆、独立权限、可以"原生态"自由生长
-
-> 这不是 HanaAgent 的 fork,而是同理念的独立实现。HanaAgent 是数千 commits 的庞大项目,幻世是更轻、更本地、更适合日常把玩的版本。
-
----
 一个**有记忆、有人格**的私人 AI 助手桌面应用。灵感来自 [openhanako](https://github.com/liliMozi/openhanako),从零实现、更轻量、本地方优先。
 
 - **数据随你走**:安装路径、数据目录全部可自定义,绿色版、安装版任选
@@ -56,11 +34,9 @@
 
 ## 🚀 安装与启动
 
-**下载**:到 [GitHub Releases](https://github.com/CN-PlayerYe/huanshi/releases) 下载 `Setup-0.1.0.exe`(安装版)或 `0.1.0-portable.exe`(绿色版)。
+**安装版**:运行 `幻世-Setup-0.1.0.exe`,向导里可自定义安装目录;桌面与开始菜单生成「幻世」快捷方式。
 
-**安装版**:运行 `Setup-0.1.0.exe`,向导里可自定义安装目录;桌面与开始菜单生成「幻世」快捷方式。
-
-**绿色版**:解压 `0.1.0-portable.exe`(或 win-unpacked 目录),双击 `幻世.exe` 即用;exe 旁放 `data/` 目录或 `portable.txt` 即进入便携模式,数据跟随应用目录走。
+**绿色版**:解压 `幻世-0.1.0-portable.exe`(或 win-unpacked 目录),双击 `幻世.exe` 即用;exe 旁放 `data/` 目录或 `portable.txt` 即进入便携模式,数据跟随应用目录走。
 
 > ⚠️ 未签名,首次运行 Windows SmartScreen 可能拦截:点 **更多信息 → 仍要运行**。装有 360 等安全软件时,若提示拦截,把幻世加入信任区即可。
 

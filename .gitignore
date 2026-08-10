@@ -10,3 +10,5 @@ data/
 *.local.json
 tmp/
 reasonix.toml
+tmp-release*.json
+.reasonix/
