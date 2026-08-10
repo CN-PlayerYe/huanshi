@@ -41,7 +41,8 @@ export interface SessionMeta {
   archived: boolean;
   /** AI 自动摘要:早期对话的压缩,发送时注入给模型,兼顾速度与连续性 */
   summary?: string;
-  /** 生成摘要时的消息总数(用于判断是否需要更新) */
+  /** 最后一条消息的文本预览(侧栏显示用,心跳/后台任务新内容一眼可见) */
+  lastPreview?: string;  /** 生成摘要时的消息总数(用于判断是否需要更新) */
   summaryCount?: number;
   /** 世界观设定文档:由 AI 维护的长篇设定(人物/世界观/关系),不随会话滚动丢失 */
   lore?: string;

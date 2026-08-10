@@ -11,3 +11,4 @@ data/
 tmp/
 reasonix.toml
 tmp-release*.json
+.reasonix/

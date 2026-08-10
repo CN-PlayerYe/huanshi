@@ -18,6 +18,7 @@ export function Sidebar() {
   const archivedSessions = useApp((s) => s.archivedSessions);
   const agents = useApp((s) => s.agents);
   const activeSessionId = useApp((s) => s.activeSessionId);
+  const unreadBySession = useApp((s) => s.unreadBySession);
   const systemInfo = useApp((s) => s.systemInfo);
   const view = useApp((s) => s.view);
   const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
@@ -180,9 +181,13 @@ export function Sidebar() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span className="title">{s.title}</span>
+                    <span className="title">
+                      {s.title}
+                      {unreadBySession[s.id] ? <span className="unread-badge">{unreadBySession[s.id]}</span> : null}
+                    </span>
                   )}
                   <span className="time">{fmtTime(s.updatedAt)}</span>
+                  {s.lastPreview ? <div className="session-preview">{s.lastPreview}</div> : null}
                   <span className="session-menu" onClick={(e) => e.stopPropagation()}>
                     <button className="session-menu-btn" onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}>
                       ⋯

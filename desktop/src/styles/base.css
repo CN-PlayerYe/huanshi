@@ -363,6 +363,7 @@ select {
 
 .session-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -393,6 +394,36 @@ select {
 .session-item .time {
   font-size: 11px;
   opacity: 0.6;
+}
+
+/* 最后消息预览:心跳/后台任务新内容侧栏一眼可见 */
+.session-item .session-preview {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+  padding-left: 2px;
+}
+
+/* 未读红点:后台任务(心跳)完成而没看该会话时显示 */
+.unread-badge {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  margin-left: 6px;
+  border-radius: 8px;
+  background: var(--accent, #e86830);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .session-menu {

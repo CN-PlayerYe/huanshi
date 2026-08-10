@@ -71,6 +71,25 @@ export class Db {
   listSessions(includeArchived = false): SessionMeta[] {
     const all = this.sessions.read();
     const list = includeArchived ? all : all.filter((s) => !s.archived);
+    // 附上最后一条消息的文本预览:侧栏(及多任务心跳)新内容一眼可见
+    for (const s of list) {
+      try {
+        const msgs = this.messagesFile(s.id).read();
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const text = (msgs[i].parts ?? [])
+            .filter((p) => p.type === "text")
+            .map((p) => p.text ?? "")
+            .join(" ")
+            .trim();
+          if (text) {
+            s.lastPreview = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+            break;
+          }
+        }
+      } catch {
+        /* 消息文件缺失/损坏:预览留空 */
+      }
+    }
     return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
