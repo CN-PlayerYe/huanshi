@@ -138,10 +138,9 @@ export const useApp = create<AppState>((set, get) => ({
       delete unread[id];
       return { activeSessionId: id, view: "chat", unreadBySession: unread };
     });
-    if (!get().messagesBySession[id]) {
-      const { messages } = await api.getMessages(id);
-      set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));
-    }
+    // 总是拉取最新消息:心跳/后台任务会持续往会话写入,缓存会导致"侧栏预览新于正文"(旧缓存停在上一跳)
+    const { messages } = await api.getMessages(id);
+    set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));
   },
 
   async newSession() {
