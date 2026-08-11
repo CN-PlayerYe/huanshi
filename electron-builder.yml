@@ -8,6 +8,7 @@ files:
   - dist-electron/**/*
   - dist-renderer/**/*
   - package.json
+  - build/icon.png # 系统托盘图标(打包进 asar)
 asar: true
 compression: normal
 
