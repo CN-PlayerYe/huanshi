@@ -39,6 +39,8 @@ export interface SessionMeta {
   createdAt: number;
   updatedAt: number;
   archived: boolean;
+  /** 隐藏(隐私保险):从所有列表消失,消息文件移出 db/ 到 .私藏/;设置里可恢复 */
+  hidden?: boolean;
   /** AI 自动摘要:早期对话的压缩,发送时注入给模型,兼顾速度与连续性 */
   summary?: string;
   /** 最后一条消息的文本预览(侧栏显示用,心跳/后台任务新内容一眼可见) */

@@ -44,6 +44,9 @@ interface AppState {
   deleteSession(id: string): Promise<void>;
   archiveSession(id: string): Promise<void>;
   unarchiveSession(id: string): Promise<void>;
+  /** 隐私保险:隐藏会话(从所有列表消失,数据保留,设置里可恢复) */
+  hideSession(id: string): Promise<void>;
+  unhideSession(id: string): Promise<void>;
   /** 刷新归档列表(含恢复/删除后) */
   refreshArchived(): Promise<void>;
   renameSession(id: string, title: string): Promise<void>;
@@ -169,6 +172,17 @@ export const useApp = create<AppState>((set, get) => ({
 
   async unarchiveSession(id) {
     await api.unarchiveSession(id);
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
+  },
+
+  async hideSession(id) {
+    await api.hideSession(id);
+    if (get().activeSessionId === id) set({ activeSessionId: null });
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
+  },
+
+  async unhideSession(id) {
+    await api.unhideSession(id);
     await Promise.all([get().refreshSessions(), get().refreshArchived()]);
   },
 
