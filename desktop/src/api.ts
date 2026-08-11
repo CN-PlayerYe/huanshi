@@ -86,6 +86,10 @@ export const api = {
   stripTools: (sessionId: string, messageId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${messageId}/strip-tools`, { method: "POST" }),
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
   unarchiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unarchive`, { method: "POST" }),
+  /** 隐私保险:隐藏会话(从所有列表消失+消息文件移出 db/,设置里可恢复) */
+  hideSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/hide`, { method: "POST" }),
+  unhideSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unhide`, { method: "POST" }),
+  listHiddenSessions: () => request<{ sessions: SessionMeta[] }>("/api/sessions/hidden"),
   createBackup: () => request<{ ok: boolean; backupDir: string }>("/api/backup", { method: "POST" }),
   listBackups: () =>
     request<{ backups: { name: string; dir: string; size: number; mtime: number }[] }>("/api/backups"),

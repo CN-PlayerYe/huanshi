@@ -69,7 +69,7 @@ export class Db {
   // ---- Sessions ----
 
   listSessions(includeArchived = false): SessionMeta[] {
-    const all = this.sessions.read();
+    const all = this.sessions.read().filter((s) => !s.hidden); // 隐藏会话从所有列表消失(隐私保险)
     const list = includeArchived ? all : all.filter((s) => !s.archived);
     // 附上最后一条消息的文本预览:侧栏(及多任务心跳)新内容一眼可见
     for (const s of list) {
@@ -140,6 +140,44 @@ export class Db {
       /* ignore */
     }
     this.messageCache.delete(id);
+  }
+
+  /** 隐藏会话(隐私保险):标记 hidden + 消息文件移出 db/ 到 .私藏/(翻数据目录也看不到内容) */
+  hideSession(id: string): SessionMeta | undefined {
+    const s = this.getSession(id);
+    if (!s) return undefined;
+    this.updateSession(id, { hidden: true });
+    try {
+      mkdirSync(join(this.dataDir, ".私藏"), { recursive: true });
+      const from = join(this.dataDir, "db", `messages-${id}.json`);
+      const to = join(this.dataDir, ".私藏", `messages-${id}.json`);
+      if (existsSync(from)) renameSync(from, to);
+    } catch {
+      /* 移动失败不影响标记 */
+    }
+    this.messageCache.delete(id);
+    return s;
+  }
+
+  /** 恢复隐藏会话:取消 hidden + 消息文件移回 db/ */
+  unhideSession(id: string): SessionMeta | undefined {
+    const s = this.getSession(id);
+    if (!s) return undefined;
+    this.updateSession(id, { hidden: false });
+    try {
+      const from = join(this.dataDir, ".私藏", `messages-${id}.json`);
+      const to = join(this.dataDir, "db", `messages-${id}.json`);
+      if (existsSync(from)) renameSync(from, to);
+    } catch {
+      /* ignore */
+    }
+    this.messageCache.delete(id);
+    return s;
+  }
+
+  /** 列出隐藏会话(设置里低调入口,供恢复/真删) */
+  listHiddenSessions(): SessionMeta[] {
+    return this.sessions.read().filter((s) => s.hidden === true).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   // ---- Messages ----

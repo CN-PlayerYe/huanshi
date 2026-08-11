@@ -429,6 +429,19 @@ ${tools || "- (无工具)"}
     return c.json({ ok: true });
   });
 
+  // ---- 隐私保险:隐藏会话(归档里"删除"=隐藏;从所有列表消失+消息文件移出 db/) ----
+  app.get("/api/sessions/hidden", (c) => c.json({ sessions: deps.db.listHiddenSessions() }));
+
+  app.post("/api/sessions/:id/hide", (c) => {
+    const s = deps.db.hideSession(c.req.param("id"));
+    return c.json({ ok: Boolean(s) });
+  });
+
+  app.post("/api/sessions/:id/unhide", (c) => {
+    const s = deps.db.unhideSession(c.req.param("id"));
+    return c.json({ ok: Boolean(s) });
+  });
+
   app.post("/api/sessions/:id/archive", (c) => {
     const s = deps.db.updateSession(c.req.param("id"), { archived: true });
     return c.json({ ok: Boolean(s) });
@@ -494,6 +507,9 @@ ${tools || "- (无工具)"}
   });
 
   app.get("/api/sessions/:id/messages", (c) => {
+    const s = deps.db.getSession(c.req.param("id"));
+    // 防君子:隐藏会话对普通读取不可见(消息文件也已移出 db/)
+    if (s?.hidden) return c.json({ messages: [] });
     return c.json({ messages: deps.db.getMessages(c.req.param("id")) });
   });
 

@@ -28,6 +28,7 @@ export function Sidebar() {
   const deleteSession = useApp((s) => s.deleteSession);
   const archiveSession = useApp((s) => s.archiveSession);
   const unarchiveSession = useApp((s) => s.unarchiveSession);
+  const hideSession = useApp((s) => s.hideSession);
   const renameSession = useApp((s) => s.renameSession);
   const setView = useApp((s) => s.setView);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -280,19 +281,19 @@ export function Sidebar() {
                     <div className="session-actions">
                       <button title="恢复" onClick={() => void unarchiveSession(s.id)}>↩</button>
                       <button
-                        title="彻底删除"
+                        title="隐藏(从所有列表消失,数据保留;设置→数据目录可恢复)"
                         className="danger"
                         onClick={() => {
                           if (window.hanalite?.confirmDialog) {
-                            void window.hanalite.confirmDialog(`彻底删除会话「${s.title || "未命名"}」?归档内容将无法恢复。`).then((ok) => {
-                              if (ok) void deleteSession(s.id);
+                            void window.hanalite.confirmDialog(`隐藏会话「${s.title || "未命名"}」?它将从所有列表消失(数据保留,可在 设置→数据目录 恢复)。`).then((ok) => {
+                              if (ok) void hideSession(s.id);
                             });
-                          } else if (confirm(`彻底删除会话「${s.title || "未命名"}」?`)) {
-                            void deleteSession(s.id);
+                          } else if (confirm(`隐藏会话「${s.title || "未命名"}」?`)) {
+                            void hideSession(s.id);
                           }
                         }}
                       >
-                        ✕
+                        🔒
                       </button>
                     </div>
                   </div>

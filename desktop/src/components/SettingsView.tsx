@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ModelConfig, ProviderKind, TaskDef } from "@shared/types";
+import type { ModelConfig, ProviderKind, SessionMeta, TaskDef } from "@shared/types";
 import { api, apiBase } from "../api";
 import { useApp } from "../store";
 
@@ -79,9 +79,13 @@ export function SettingsView() {
   const changeDataDir = useApp((s) => s.changeDataDir);
   const saveAgent = useApp((s) => s.saveAgent);
   const deleteAgent = useApp((s) => s.deleteAgent);
+  const deleteSession = useApp((s) => s.deleteSession);
+  const unhideSession = useApp((s) => s.unhideSession);
 
   const [newProviderOpen, setNewProviderOpen] = useState(false);
   const [dataDirInput, setDataDirInput] = useState(systemInfo?.dataDir ?? "");
+  const [hiddenSessions, setHiddenSessions] = useState<SessionMeta[]>([]);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
   const [reflectText, setReflectText] = useState("");
   const [agentForm, setAgentForm] = useState<{
     id?: string;
@@ -148,6 +152,15 @@ export function SettingsView() {
     }
   };
 
+  /** 加载隐藏会话列表(隐私保险入口) */
+  const loadHidden = async () => {
+    try {
+      setHiddenSessions((await api.listHiddenSessions()).sessions);
+    } catch {
+      /* ignore */
+    }
+  };
+
   /** 作息模板:一键应用到所有心跳任务(合并保留各自的安全边界等设置) */
   const applyRoutine = async (label: string, hb: { intervalHours: number; quietStart: number; quietEnd: number; bedtimeHour: number; maxMinutes: number }) => {
     const hbTasks = tasks.filter((t) => t.kind === "heartbeat");
@@ -169,6 +182,7 @@ export function SettingsView() {
       }
     }).catch(() => undefined);
     void refreshTasks();
+    void loadHidden();
     if (!taskForm.agentId && agents.length) setTaskForm((f) => ({ ...f, agentId: agents[0].id }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents.length]);
@@ -407,6 +421,41 @@ export function SettingsView() {
             )}
           </div>
         </div>
+        {/* 隐私保险:隐藏会话的恢复/真删入口(低调,不显眼) */}
+        <div className="status-line" style={{ marginTop: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>🔒 隐藏会话({hiddenSessions.length})</span>
+          <button className="btn secondary sm" style={{ marginLeft: "auto" }} onClick={() => setHiddenOpen((v) => !v)}>
+            {hiddenOpen ? "收起" : "查看"}
+          </button>
+        </div>
+        {hiddenOpen && (
+          <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--text-dim)" }}>
+            <div style={{ marginBottom: 6 }}>从所有列表消失的会话(数据保留)。可恢复,或彻底删除。</div>
+            {hiddenSessions.length === 0 && <div>暂无隐藏会话。</div>}
+            {hiddenSessions.map((s) => (
+              <div key={s.id} className="status-line" style={{ gap: 8 }}>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title || "未命名会话"}</span>
+                <button className="btn secondary sm" onClick={() => void unhideSession(s.id).then(loadHidden)}>
+                  恢复
+                </button>
+                <button
+                  className="btn danger sm"
+                  onClick={() => {
+                    if (window.hanalite?.confirmDialog) {
+                      void window.hanalite.confirmDialog(`彻底删除会话「${s.title || "未命名"}」?此操作不可恢复。`).then((ok) => {
+                        if (ok) void deleteSession(s.id).then(loadHidden);
+                      });
+                    } else if (confirm(`彻底删除会话「${s.title || "未命名"}」?`)) {
+                      void deleteSession(s.id).then(loadHidden);
+                    }
+                  }}
+                >
+                  真删
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ---- 记忆 ---- */}

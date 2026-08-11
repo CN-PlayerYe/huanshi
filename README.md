@@ -34,9 +34,9 @@
 
 ## 🚀 安装与启动
 
-**安装版**:运行 `Setup-0.1.3.exe`(最新版见 [Releases](https://github.com/CN-PlayerYe/huanshi/releases)),向导里可自定义安装目录;桌面与开始菜单生成「幻世」快捷方式。
+**安装版**:运行 `幻世-Setup-0.1.0.exe`,向导里可自定义安装目录;桌面与开始菜单生成「幻世」快捷方式。
 
-**绿色版**:解压 `0.1.3-portable.exe`(最新版见 [Releases](https://github.com/CN-PlayerYe/huanshi/releases))(或 win-unpacked 目录),双击 `幻世.exe` 即用;exe 旁放 `data/` 目录或 `portable.txt` 即进入便携模式,数据跟随应用目录走。
+**绿色版**:解压 `幻世-0.1.0-portable.exe`(或 win-unpacked 目录),双击 `幻世.exe` 即用;exe 旁放 `data/` 目录或 `portable.txt` 即进入便携模式,数据跟随应用目录走。
 
 > ⚠️ 未签名,首次运行 Windows SmartScreen 可能拦截:点 **更多信息 → 仍要运行**。装有 360 等安全软件时,若提示拦截,把幻世加入信任区即可。
 

@@ -44,6 +44,9 @@ interface AppState {
   deleteSession(id: string): Promise<void>;
   archiveSession(id: string): Promise<void>;
   unarchiveSession(id: string): Promise<void>;
+  /** 隐私保险:隐藏会话(从所有列表消失,数据保留,设置里可恢复) */
+  hideSession(id: string): Promise<void>;
+  unhideSession(id: string): Promise<void>;
   /** 刷新归档列表(含恢复/删除后) */
   refreshArchived(): Promise<void>;
   renameSession(id: string, title: string): Promise<void>;
@@ -138,10 +141,9 @@ export const useApp = create<AppState>((set, get) => ({
       delete unread[id];
       return { activeSessionId: id, view: "chat", unreadBySession: unread };
     });
-    if (!get().messagesBySession[id]) {
-      const { messages } = await api.getMessages(id);
-      set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));
-    }
+    // 总是拉取最新消息:心跳/后台任务会持续往会话写入,缓存会导致"侧栏预览新于正文"(旧缓存停在上一跳)
+    const { messages } = await api.getMessages(id);
+    set((s) => ({ messagesBySession: { ...s.messagesBySession, [id]: messages } }));
   },
 
   async newSession() {
@@ -170,6 +172,17 @@ export const useApp = create<AppState>((set, get) => ({
 
   async unarchiveSession(id) {
     await api.unarchiveSession(id);
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
+  },
+
+  async hideSession(id) {
+    await api.hideSession(id);
+    if (get().activeSessionId === id) set({ activeSessionId: null });
+    await Promise.all([get().refreshSessions(), get().refreshArchived()]);
+  },
+
+  async unhideSession(id) {
+    await api.unhideSession(id);
     await Promise.all([get().refreshSessions(), get().refreshArchived()]);
   },
 

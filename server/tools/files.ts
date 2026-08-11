@@ -68,6 +68,73 @@ export const fileTools: Tool[] = [
       return lines.join("\n") || "(空目录)";
     },
   },
+  {
+    name: "search_files",
+    description:
+      "在指定目录内递归搜索文本文件中的关键词(内容或文件名),返回匹配文件、行号与片段。适合在笔记库/知识库(如 Obsidian)里快速定位内容,不用逐个文件翻。",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "要搜索的关键词" },
+        directory: { type: "string", description: "搜索根目录(绝对路径或相对工作目录),默认工作目录" },
+        extensions: { type: "array", items: { type: "string" }, description: "只搜这些扩展名,如 [\".md\", \".txt\"];默认 .md/.txt/.json/.csv/.log" },
+        maxResults: { type: "number", description: "最多返回匹配条数,默认 20" },
+        nameOnly: { type: "boolean", description: "只按文件名匹配,不读内容,更快", default: false },
+      },
+      required: ["query"],
+    },
+    async run(input, ctx) {
+      const query = String(input.query ?? "").trim().toLowerCase();
+      if (!query) throw new ToolError("缺少搜索关键词 query");
+      const dir = input.directory ? resolvePath(String(input.directory), ctx.cwd) : ctx.cwd;
+      const maxResults = Math.min(100, Math.max(1, Number(input.maxResults) || 20));
+      const nameOnly = input.nameOnly === true;
+      const exts = Array.isArray(input.extensions) ? input.extensions.map(String) : [".md", ".txt", ".json", ".csv", ".log"];
+      const hits: string[] = [];
+      const searchWalk = async (d: string, depth: number): Promise<void> => {
+        if (hits.length >= maxResults || depth > 8) return;
+        let entries: import("node:fs").Dirent[];
+        try {
+          entries = await readdir(d, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const e of entries) {
+          if (hits.length >= maxResults) return;
+          const full = join(d, e.name);
+          if (e.isDirectory()) {
+            if (e.name.startsWith(".") || e.name === "node_modules" || e.name === ".git") continue;
+            await searchWalk(full, depth + 1);
+          } else if (e.isFile()) {
+            const low = e.name.toLowerCase();
+            if (!exts.some((x) => low.endsWith(x.toLowerCase()))) continue;
+            if (nameOnly) {
+              if (low.includes(query)) hits.push(`${full} (文件名匹配)`);
+              continue;
+            }
+            try {
+              const st = await stat(full);
+              if (st.size > 512 * 1024) continue; // 跳过超大文件(多半是二进制/资料)
+              const text = (await readFile(full, "utf8")).slice(0, 256 * 1024).toLowerCase();
+              if (text.includes(query)) {
+                const idx = text.indexOf(query);
+                const lineStart = text.lastIndexOf("\n", idx) + 1;
+                const lineEnd = text.indexOf("\n", idx);
+                const snippet = text.slice(lineStart, lineEnd < 0 ? lineStart + 120 : lineEnd).trim().slice(0, 120);
+                const lineNo = text.slice(0, idx).split("\n").length;
+                hits.push(`${full}:${lineNo} ${snippet}`);
+              }
+            } catch {
+              /* 读失败跳过(可能被占用/二进制) */
+            }
+          }
+        }
+      };
+      await searchWalk(dir, 0);
+      if (!hits.length) return `在 ${dir} 中没有找到包含「${String(input.query)}」的文本文件。`;
+      return `${hits.slice(0, maxResults).map((h) => `- ${h}`).join("\n")}\n(共找到 ${hits.length} 条,显示前 ${maxResults} 条)`;
+    },
+  },
 ];
 
 async function walk(dir: string, level: number, maxDepth: number, out: string[]): Promise<void> {

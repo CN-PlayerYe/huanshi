@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -41,6 +41,9 @@ let serverHandle: ServerHandle | null = null;
 // 窗口引用必须保持模块级,否则可能被 GC 回收导致窗口自动关闭
 let mainWindow: BrowserWindow | null = null;
 let lastThemeBg = "#f2eddf";
+let tray: Tray | null = null;
+/** 退出流程标志:只有托盘菜单「退出」才真正关闭窗口 */
+let isQuitting = false;
 
 // 各主题对应的窗口背景色(避免加载白闪 / 边框与主题一致)
 const THEME_BG: Record<string, string> = {
@@ -148,8 +151,13 @@ function createWindow(bgColor: string): void {
     log("window closed");
     mainWindow = null;
   });
-  mainWindow.on("close", () => {
+  // 关闭窗口 → 最小化到系统托盘(不退出):幻世后台继续跑,心跳不中断
+  mainWindow.on("close", (e) => {
     log("window close event");
+    if (!isQuitting && tray) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
   });
   // 窗口获得系统焦点时,确保键盘事件进入页面(避免点击后 caret 不出现/打字无效)
   mainWindow.on("focus", () => {
@@ -260,6 +268,30 @@ $r.Dispose()`;
     lastThemeBg = themeBg(settings.theme ?? "ink");
     createWindow(lastThemeBg);
     installMenu(mainWindow!);
+    // 系统托盘:关闭窗口最小化到托盘,幻世后台继续跑(心跳不断);托盘菜单可打开/退出
+    try {
+      const iconPath = join(app.getAppPath(), "build", "icon.png");
+      const icon = nativeImage.createFromPath(iconPath);
+      tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 16, height: 16 }));
+      tray.setToolTip("幻世 — 由璇玑驱动");
+      const showWin = () => {
+        if (!mainWindow) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      };
+      tray.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: "打开幻世", click: showWin },
+          { type: "separator" },
+          { label: "退出", click: () => app.quit() },
+        ]),
+      );
+      tray.on("click", showWin);
+      log("tray created");
+    } catch (err) {
+      log(`tray failed: ${(err as Error).message}`);
+    }
     log("window created");
   } catch (err) {
     log(`bootstrap failed: ${(err as Error).stack ?? String(err)}`);
@@ -288,11 +320,13 @@ app.on("activate", () => {
   }
 });
 
+// 托盘模式:窗口被隐藏不算"全部关闭",不退出(心跳后台继续);真正退出走 before-quit
 app.on("window-all-closed", () => {
-  app.quit();
+  /* 不退出,交给托盘/退出流程 */
 });
 
 // 退出时关闭后端
 app.on("before-quit", () => {
+  isQuitting = true;
   void serverHandle?.close().catch(() => undefined);
 });
