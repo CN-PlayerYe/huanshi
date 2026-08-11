@@ -308,6 +308,7 @@ export function Sidebar() {
           <span className={`dot${systemInfo?.hindsightConnected ? "" : " off"}`} />
           记忆:{systemInfo?.hindsightConnected ? "Hindsight" : "本地"}
         </div>
+        <div className="sidebar-credit" title="幻世的星盘,由璇玑转动">✦ 由璇玑驱动</div>
         <button className="foot-btn" onClick={() => setView(view === "settings" ? "chat" : "settings")}>
           <span>⚙️</span> 设置
         </button>

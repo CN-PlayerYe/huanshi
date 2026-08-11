@@ -111,6 +111,7 @@ export default function App() {
       <div className="boot">
         <img src={logo} className="boot-logo" alt="幻世" />
         <div className="boot-text">幻世 正在启动…</div>
+        <div className="boot-credit">✦ 由璇玑驱动 ✦</div>
       </div>
     );
   }
