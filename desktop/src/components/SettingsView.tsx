@@ -109,6 +109,8 @@ export function SettingsView() {
   const [providerModels, setProviderModels] = useState<string[]>([]); // 从 API 拉到的该 provider 可用模型
   const [modelsLoading, setModelsLoading] = useState(false);
   const [ttsModels, setTtsModels] = useState<string[]>([]); // TTS 从 API 拉到的模型
+  const [ttsModelCustom, setTtsModelCustom] = useState(false); // TTS 模型选「自定义…」时显示输入框
+  const [ttsVoiceCustom, setTtsVoiceCustom] = useState(false); // TTS 音色同上
 
   /** 拉取某 provider 的可用模型(API 已接通则用实拉列表,失败/未配置时回退内置常见模型) */
   const loadProviderModels = async (providerId?: string) => {
@@ -1174,19 +1176,35 @@ export function SettingsView() {
             </div>
             <div className="field-row">
               <div className="field" style={{ flex: 2 }}>
-                <label>模型(克隆模型名,如 tts-1 / 你的克隆模型)</label>
-                <input
-                  type="text"
-                  value={settings.tts?.model ?? ""}
-                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
-                  placeholder="tts-1"
-                  list="tts-models"
-                />
-                <datalist id="tts-models">
-                  {[...TTS_MODELS, ...ttsModels].map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
+                <label>模型(拉取后可滚动选全部;或用克隆模型)</label>
+                {ttsModelCustom ? (
+                  <input
+                    type="text"
+                    value={settings.tts?.model ?? ""}
+                    onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
+                    placeholder="自定义模型名"
+                    onBlur={() => { if (!settings.tts?.model) setTtsModelCustom(false); }}
+                  />
+                ) : (
+                  <select
+                    value={settings.tts?.model ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__custom__") {
+                        setTtsModelCustom(true);
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: "" } });
+                      } else {
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: v || undefined } });
+                      }
+                    }}
+                  >
+                    <option value="">默认</option>
+                    {[...TTS_MODELS, ...ttsModels].map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    <option value="__custom__">✏️ 自定义输入…</option>
+                  </select>
+                )}
               </div>
               <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
                 <button
@@ -1213,18 +1231,34 @@ export function SettingsView() {
             <div className="field-row">
               <div className="field">
                 <label>音色 voice</label>
-                <input
-                  type="text"
-                  value={settings.tts?.voice ?? ""}
-                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
-                  placeholder="alloy / 克隆音色 id"
-                  list="tts-voices"
-                />
-                <datalist id="tts-voices">
-                  {TTS_VOICES.map((v) => (
-                    <option key={v} value={v} />
-                  ))}
-                </datalist>
+                {ttsVoiceCustom ? (
+                  <input
+                    type="text"
+                    value={settings.tts?.voice ?? ""}
+                    onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
+                    placeholder="克隆音色 id"
+                    onBlur={() => { if (!settings.tts?.voice) setTtsVoiceCustom(false); }}
+                  />
+                ) : (
+                  <select
+                    value={settings.tts?.voice ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__custom__") {
+                        setTtsVoiceCustom(true);
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: "" } });
+                      } else {
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: v || undefined } });
+                      }
+                    }}
+                  >
+                    <option value="">默认</option>
+                    {TTS_VOICES.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                    <option value="__custom__">✏️ 自定义输入…</option>
+                  </select>
+                )}
               </div>
               <div className="field">
                 <label>&nbsp;</label>
