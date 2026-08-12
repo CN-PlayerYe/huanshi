@@ -247,7 +247,13 @@ export class AgentEngine {
     for (const agent of agents) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
-      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
+      // 群聊也注入长期记忆:野生人格没有 systemPrompt,靠这里"想起自己是谁、最近发生过什么"
+      const memScope = agent.isolatedMemory ? agent.id : undefined;
+      const memories = agent.memoryEnabled ? await memory.recall(userContent, 6, memScope) : [];
+      const memoryBlock = memories.length
+        ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+        : "";
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock, agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
