@@ -45,6 +45,23 @@ const COMMON_MODELS = [
 /** 常见 TTS 模型与音色(OpenAI 兼容;模型可拉取,音色无通用 API 只能内置) */
 const TTS_MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts", "cosyvoice-v1", "doubao-tts"];
 const TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "longxiaochun", "zh_female"];
+/** Edge TTS 常用中文音色(微软神经网络语音) */
+const EDGE_VOICES = [
+  "zh-CN-XiaoxiaoNeural",
+  "zh-CN-XiaoyiNeural",
+  "zh-CN-YunxiNeural",
+  "zh-CN-YunjianNeural",
+  "zh-CN-XiaohanNeural",
+  "zh-CN-XiaomengNeural",
+  "zh-CN-XiaomoNeural",
+  "zh-CN-XiaoruiNeural",
+  "zh-CN-XiaoshuangNeural",
+  "zh-CN-YunfengNeural",
+  "zh-CN-YunhaoNeural",
+  "zh-CN-YunxiaNeural",
+  "zh-CN-YunyangNeural",
+  "zh-CN-YunzeNeural",
+];
 
 /** 简易 cron 描述(与后端 describeCron 一致的前端版) */
 function describeCron(expr: string): string {
@@ -1122,19 +1139,34 @@ export function SettingsView() {
       <div className="settings-section">
         <h3>🔊 朗读</h3>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
-          每条回复的 🔊 按钮朗读方式。系统语音=Windows 自带(可选音色,离线);API=OpenAI 兼容 TTS 端点,可用自己的克隆声音。
+          每条回复的 🔊 按钮朗读方式。系统语音=Windows 自带(离线);Edge TTS=微软免费神经网络语音(音质好,需联网);API=OpenAI 兼容 TTS 端点(克隆声音)。
         </p>
         <div className="field-row">
           <div className="field">
             <label>朗读引擎</label>
             <select
               value={settings.tts?.mode ?? "system"}
-              onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), mode: e.target.value as "system" | "api" } })}
+              onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), mode: e.target.value as "system" | "api" | "edge" } })}
             >
               <option value="system">系统语音(离线)</option>
+              <option value="edge">Edge TTS(免费,音质好,需联网)</option>
               <option value="api">API(自定义音色/克隆)</option>
             </select>
           </div>
+          {(settings.tts?.mode ?? "system") === "edge" && (
+            <div className="field" style={{ flex: 2 }}>
+              <label>Edge 音色(中文神经网络语音)</label>
+              <select
+                value={settings.tts?.voice ?? ""}
+                onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value || undefined } })}
+              >
+                <option value="">默认(晓伊)</option>
+                {EDGE_VOICES.map((v) => (
+                  <option key={v} value={v}>{v.replace("zh-CN-", "").replace("Neural", "")}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {(settings.tts?.mode ?? "system") === "system" && (
             <div className="field" style={{ flex: 2 }}>
               <label>系统音色(留空=默认中文语音)</label>

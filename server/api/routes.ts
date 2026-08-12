@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
@@ -193,10 +193,35 @@ export function createApp(deps: AppDeps): Hono {
   /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */
   app.post("/api/tts", async (c) => {    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
     const tts = deps.getSettings().tts;
-    if (!text?.trim() || tts?.mode !== "api" || !tts.apiBaseUrl) {
-      return c.json({ error: "未配置 API 朗读" }, 400);
+    if (!text?.trim() || !tts || !["api", "edge"].includes(tts.mode ?? "")) {
+      return c.json({ error: "未配置朗读" }, 400);
     }
-    const base = tts.apiBaseUrl.replace(/\/$/, "");
+    // Edge TTS(微软免费神经网络语音,需联网;音质明显好于 Windows 自带)
+    if (tts.mode === "edge") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { EdgeTTS } = require("node-edge-tts") as { EdgeTTS: new (o?: Record<string, unknown>) => { ttsPromise: (t: string, f: string) => Promise<void> } };
+        const voice = tts.voice || "zh-CN-XiaoyiNeural";
+        const edge = new EdgeTTS({
+          voice,
+          lang: voice.startsWith("zh") ? "zh-CN" : "en-US",
+          outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+          timeout: 20000,
+        });
+        const tmpFile = join(tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.mp3`);
+        await edge.ttsPromise(text.slice(0, 4000), tmpFile);
+        const buf = readFileSync(tmpFile);
+        try {
+          unlinkSync(tmpFile);
+        } catch {
+          /* ignore */
+        }
+        return c.newResponse(buf, { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+      } catch (err) {
+        return c.json({ error: `Edge TTS 失败:${(err as Error).message}(需联网,微软免费服务偶发波动可重试)` }, 502);
+      }
+    }
+    const base = tts.apiBaseUrl?.replace(/\/$/, "");
     try {
       const res = await fetch(`${base}/audio/speech`, {
         method: "POST",

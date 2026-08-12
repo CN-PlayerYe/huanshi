@@ -123,7 +123,7 @@ export interface Settings {
   visionProvider?: string;
   /** 朗读(TTS)配置:system=系统语音(可选手音),api=OpenAI 兼容 TTS 端点(含自己的克隆服务) */
   tts?: {
-    mode: "system" | "api";
+    mode: "system" | "api" | "edge";
     systemVoice?: string;
     apiBaseUrl?: string;
     apiKey?: string;
