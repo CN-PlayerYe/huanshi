@@ -22,13 +22,14 @@ export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveT
     .filter((p) => p.type === "text")
     .map((p) => p.text ?? "")
     .join("\n");
-  // 朗读引擎:API(OpenAI 兼容 TTS / 自建克隆)或系统语音
+  // 朗读引擎:API/Edge(走后端 TTS 合成)或系统语音
   const ttsMode = useApp((s) => s.settings?.tts?.mode ?? "system");
   const ttsVoice = useApp((s) => s.settings?.tts?.systemVoice);
+  const useApiTts = ttsMode === "api" || ttsMode === "edge";
 
   const toggleSpeak = async () => {
     if (speaking) {
-      if (ttsMode === "api") {
+      if (useApiTts) {
         audioRef.current?.pause();
       } else {
         window.speechSynthesis?.cancel();
@@ -36,8 +37,8 @@ export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveT
       setSpeaking(false);
       return;
     }
-    // API 模式:请求后端 TTS 并播放音频
-    if (ttsMode === "api") {
+    // API/Edge 模式:请求后端 TTS 并播放音频(Edge=微软免费神经网络语音)
+    if (useApiTts) {
       try {
         const blob = await api.tts(text);
         const url = URL.createObjectURL(blob);

@@ -1292,31 +1292,47 @@ export function SettingsView() {
                   </select>
                 )}
               </div>
-              <div className="field">
-                <label>&nbsp;</label>
-                <button
-                  className="btn secondary"
-                  disabled={ttsTesting}
-                  onClick={async () => {
-                    setTtsTesting(true);
-                    try {
-                      const blob = await api.tts("你好,我是幻世,很高兴认识你。");
-                      const url = URL.createObjectURL(blob);
-                      const a = new Audio(url);
-                      void a.play();
-                    } catch (err) {
-                      useApp.getState().showToast(`朗读测试失败:${(err as Error).message}`);
-                    } finally {
-                      setTtsTesting(false);
-                    }
-                  }}
-                >
-                  {ttsTesting ? "合成中…" : "🔊 试听"}
-                </button>
-              </div>
             </div>
           </>
         )}
+        {/* 通用试听(系统/Edge/API 三种模式都能试当前设置) */}
+        <div className="field-row" style={{ marginTop: 8 }}>
+          <button
+            className="btn secondary"
+            disabled={ttsTesting}
+            onClick={async () => {
+              setTtsTesting(true);
+              try {
+                const mode = settings.tts?.mode ?? "system";
+                if (mode === "api" || mode === "edge") {
+                  const blob = await api.tts("你好,我是幻世,很高兴认识你。");
+                  const url = URL.createObjectURL(blob);
+                  const a = new Audio(url);
+                  void a.play();
+                } else {
+                  // 系统语音试听
+                  if (!("speechSynthesis" in window)) throw new Error("当前环境不支持系统语音");
+                  const u = new SpeechSynthesisUtterance("你好,我是幻世,很高兴认识你。");
+                  u.lang = "zh-CN";
+                  const v = settings.tts?.systemVoice;
+                  if (v) {
+                    const voices = window.speechSynthesis.getVoices();
+                    const found = voices.find((x) => x.name === v);
+                    if (found) u.voice = found;
+                  }
+                  window.speechSynthesis.speak(u);
+                }
+              } catch (err) {
+                useApp.getState().showToast(`试听失败:${(err as Error).message}`);
+              } finally {
+                setTtsTesting(false);
+              }
+            }}
+          >
+            {ttsTesting ? "合成中…" : "🔊 试听当前设置"}
+          </button>
+          <span style={{ fontSize: 11.5, color: "var(--text-dim)", alignSelf: "center" }}>三种模式都能试听;Edge/API 需联网。</span>
+        </div>
       </div>
 
       {/* ---- 定时任务 ---- */}
