@@ -42,6 +42,10 @@ const COMMON_MODELS = [
   "qwen2.5",
 ];
 
+/** 常见 TTS 模型与音色(OpenAI 兼容;模型可拉取,音色无通用 API 只能内置) */
+const TTS_MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts", "cosyvoice-v1", "doubao-tts"];
+const TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "longxiaochun", "zh_female"];
+
 /** 简易 cron 描述(与后端 describeCron 一致的前端版) */
 function describeCron(expr: string): string {
   try {
@@ -104,6 +108,7 @@ export function SettingsView() {
   const [modelCustom, setModelCustom] = useState(false); // 模型下拉选「自定义输入…」时显示文本框
   const [providerModels, setProviderModels] = useState<string[]>([]); // 从 API 拉到的该 provider 可用模型
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [ttsModels, setTtsModels] = useState<string[]>([]); // TTS 从 API 拉到的模型
 
   /** 拉取某 provider 的可用模型(API 已接通则用实拉列表,失败/未配置时回退内置常见模型) */
   const loadProviderModels = async (providerId?: string) => {
@@ -1168,15 +1173,44 @@ export function SettingsView() {
               </div>
             </div>
             <div className="field-row">
-              <div className="field">
+              <div className="field" style={{ flex: 2 }}>
                 <label>模型(克隆模型名,如 tts-1 / 你的克隆模型)</label>
                 <input
                   type="text"
                   value={settings.tts?.model ?? ""}
                   onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
                   placeholder="tts-1"
+                  list="tts-models"
                 />
+                <datalist id="tts-models">
+                  {[...TTS_MODELS, ...ttsModels].map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </div>
+              <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
+                <button
+                  className="btn secondary"
+                  disabled={!settings.tts?.apiBaseUrl || !settings.tts?.apiKey}
+                  onClick={async () => {
+                    try {
+                      const r = await api.fetchTTSModels();
+                      if (r.ok && r.models?.length) {
+                        setTtsModels(r.models);
+                        useApp.getState().showToast(`已拉取 ${r.models.length} 个 TTS 模型`);
+                      } else {
+                        useApp.getState().showToast(`拉取失败:${r.error ?? "未知"}(使用内置常见模型)`);
+                      }
+                    } catch (err) {
+                      useApp.getState().showToast(`拉取失败:${(err as Error).message}`);
+                    }
+                  }}
+                >
+                  ↻ 拉取模型
+                </button>
+              </div>
+            </div>
+            <div className="field-row">
               <div className="field">
                 <label>音色 voice</label>
                 <input
@@ -1184,7 +1218,13 @@ export function SettingsView() {
                   value={settings.tts?.voice ?? ""}
                   onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
                   placeholder="alloy / 克隆音色 id"
+                  list="tts-voices"
                 />
+                <datalist id="tts-voices">
+                  {TTS_VOICES.map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
               </div>
               <div className="field">
                 <label>&nbsp;</label>

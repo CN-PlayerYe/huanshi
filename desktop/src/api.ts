@@ -165,6 +165,7 @@ export const api = {
     return (await res.json()) as { file: string; mime: string; name?: string; text?: string };
   },
   /** API 朗读:文本 → 音频 Blob */
+  fetchTTSModels: () => request<{ ok: boolean; models?: string[]; error?: string }>("/api/tts/models"),
   async tts(text: string): Promise<Blob> {
     const res = await fetch(base + "/api/tts", {
       method: "POST",

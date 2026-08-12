@@ -178,9 +178,20 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ file: rel, mime: mime || "application/octet-stream", name: f.name || name, text });
   });
 
+  /** 拉取 TTS 可用模型(基于已填的 apiBaseUrl+apiKey;失败回退内置常见 TTS 模型) */
+  app.get("/api/tts/models", async (c) => {
+    const tts = deps.getSettings().tts;
+    if (!tts?.apiBaseUrl || !tts.apiKey) return c.json({ ok: false, error: "未配置 TTS API" });
+    try {
+      const models = await fetchModelList({ baseUrl: tts.apiBaseUrl, apiKey: tts.apiKey, model: tts.model || "", kind: "openai" });
+      return c.json({ ok: true, models });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message });
+    }
+  });
+
   /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */
-  app.post("/api/tts", async (c) => {
-    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
+  app.post("/api/tts", async (c) => {    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
     const tts = deps.getSettings().tts;
     if (!text?.trim() || tts?.mode !== "api" || !tts.apiBaseUrl) {
       return c.json({ error: "未配置 API 朗读" }, 400);
