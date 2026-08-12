@@ -263,6 +263,22 @@ export class AgentEngine {
         },
       ];
       const provider = createProvider(resolveModel(agent, settings));
+      // 群聊只读工具:记忆检索/读取/搜索/时间——不写文件、不执行命令(群聊是"说话"场景)
+      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime"]);
+      const tools = registry
+        .list()
+        .filter((t) => GROUP_READONLY.has(t.name))
+        .map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
+      const toolCtx: ToolContext = {
+        cwd: settings.toolWhitelistDir || join(dataDir, "workspace"),
+        allowedWriteDirs: [join(dataDir, "workspace"), settings.toolWhitelistDir].filter(Boolean),
+        dataDir,
+        env: process.env,
+        memory: agent.memoryEnabled ? memory : null,
+        allowDangerousCommands: false,
+        unrestrictedPaths: false,
+        agentId: agent.isolatedMemory ? agent.id : undefined,
+      };
       const assistant: ChatMessage = {
         id: newId("msg"),
         sessionId: session.id,
@@ -275,14 +291,49 @@ export class AgentEngine {
       await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
       let textBuf = "";
       try {
-        for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
-          if (chunk.delta) {
-            textBuf += chunk.delta;
-            await onEvent({ type: "delta", content: chunk.delta });
+        // 工具调用循环(与单人对话一致):模型可请求只读工具,结果回传后继续发言
+        let iteration = 0;
+        let stop = false;
+        while (!stop && iteration < MAX_TOOL_ITERATIONS) {
+          iteration++;
+          let toolCalls: ProviderToolCall[] = [];
+          let iterText = "";
+          let iterThinking = "";
+          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
+            if (chunk.delta) {
+              textBuf += chunk.delta;
+              iterText += chunk.delta;
+              await onEvent({ type: "delta", content: chunk.delta });
+            }
+            if (chunk.thinking) {
+              iterThinking += chunk.thinking;
+              await onEvent({ type: "thinking", content: chunk.thinking });
+            }
+            if (chunk.toolCalls) toolCalls = chunk.toolCalls;
+          }
+          if (!toolCalls.length) {
+            stop = true;
+            break;
+          }
+          // 回传本轮回复 + 工具调用(带思考,DeepSeek thinking 要求)
+          providerMessages.push({
+            role: "assistant",
+            content: iterText,
+            toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+            reasoningContent: iterThinking || undefined,
+          });
+          for (const tc of toolCalls) {
+            const part = { id: tc.id, name: tc.name, input: tc.arguments, status: "running" as const, startedAt: Date.now() };
+            await onEvent({ type: "tool_start", tool: part });
+            const output = await registry.run(tc.name, safeParseArgs(tc.arguments), toolCtx);
+            const donePart = { ...part, status: "done" as const, output, finishedAt: Date.now() };
+            await onEvent({ type: "tool_end", tool: donePart });
+            assistant.parts.push({ type: "tool", tool: donePart });
+            providerMessages.push({ role: "tool", toolCallId: tc.id, content: output.slice(0, MAX_TOOL_OUTPUT) });
           }
         }
         if (textBuf) assistant.parts.push({ type: "text", text: textBuf });
-        else assistant.parts.push({ type: "text", text: "(沉默不语)" });
+        else if (!assistant.parts.length) assistant.parts.push({ type: "text", text: "(沉默不语)" });
       } catch (err) {
         assistant.parts = [{ type: "text", text: `出错了:${(err as Error).message}` }];
       }
