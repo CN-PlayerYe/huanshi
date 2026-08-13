@@ -159,6 +159,8 @@ export function SettingsView() {
   const [csInfo, setCsInfo] = useState("");
   const [tasks, setTasks] = useState<TaskDef[]>([]);
   const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
+  /** 正在编辑的定时任务(cron 类型,改名称/时间/提示词) */
+  const [editTask, setEditTask] = useState<{ id: string; name: string; schedule: string; prompt: string } | null>(null);
   const [systemVoices, setSystemVoices] = useState<{ name: string; lang: string }[]>([]);
   const [ttsTesting, setTtsTesting] = useState(false);
   const cardFileRef = useRef<HTMLInputElement>(null);
@@ -1425,6 +1427,11 @@ export function SettingsView() {
                   ⚙️ 边界
                 </button>
               )}
+              {t.kind !== "heartbeat" && (
+                <button className="btn secondary sm" title="编辑此任务(名称/时间/提示词)" onClick={() => setEditTask(editTask?.id === t.id ? null : { id: t.id, name: t.name, schedule: t.schedule, prompt: t.prompt })}>
+                  ✏️ 编辑
+                </button>
+              )}
               {t.kind === "heartbeat" && t.sessionId && (
                 <button className="btn secondary sm" title="打开这本心跳日记" onClick={() => void selectSession(t.sessionId!)}>
                   📖 打开日记
@@ -1582,6 +1589,41 @@ export function SettingsView() {
                   </div>
                 )
               : t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
+            {editTask?.id === t.id && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 8 }}>
+                <div className="field-row" style={{ flexWrap: "wrap" }}>
+                  <div className="field" style={{ minWidth: 140 }}>
+                    <label>任务名称</label>
+                    <input type="text" value={editTask.name} onChange={(e) => setEditTask({ ...editTask, name: e.target.value })} />
+                  </div>
+                  <div className="field" style={{ minWidth: 130 }}>
+                    <label>时间(cron)</label>
+                    <input type="text" value={editTask.schedule} onChange={(e) => setEditTask({ ...editTask, schedule: e.target.value })} placeholder="0 9 * * *" />
+                  </div>
+                  <div className="field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+                    <button
+                      className="btn sm"
+                      disabled={!editTask.name.trim() || !editTask.schedule.trim() || !editTask.prompt.trim()}
+                      onClick={() =>
+                        void api
+                          .updateTask(editTask.id, { name: editTask.name.trim(), schedule: editTask.schedule.trim(), prompt: editTask.prompt.trim() })
+                          .then(refreshTasks)
+                          .then(() => setEditTask(null))
+                      }
+                    >
+                      保存
+                    </button>
+                    <button className="btn secondary sm" onClick={() => setEditTask(null)}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+                <div className="field" style={{ marginTop: 6 }}>
+                  <label>提示词(人格执行的内容)</label>
+                  <textarea value={editTask.prompt} onChange={(e) => setEditTask({ ...editTask, prompt: e.target.value })} rows={3} style={{ fontSize: 12.5 }} />
+                </div>
+              </div>
+            )}
           </div>
         ))}
         <div className="provider-card" style={{ marginTop: 12 }}>
