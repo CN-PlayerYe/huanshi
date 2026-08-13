@@ -299,7 +299,7 @@ export class AgentEngine {
           let toolCalls: ProviderToolCall[] = [];
           let iterText = "";
           let iterThinking = "";
-          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
+          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: agent.temperature ?? 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
             if (chunk.delta) {
               textBuf += chunk.delta;
               iterText += chunk.delta;
@@ -529,7 +529,7 @@ export class AgentEngine {
         let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
-          { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
+          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;

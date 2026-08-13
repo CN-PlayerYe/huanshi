@@ -121,6 +121,7 @@ export function SettingsView() {
     isolatedMemory?: boolean;
     provider?: string;
     model?: string;
+    temperature?: number;
   } | null>(null);
   const [modelCustom, setModelCustom] = useState(false); // 模型下拉选「自定义输入…」时显示文本框
   const [providerModels, setProviderModels] = useState<string[]>([]); // 从 API 拉到的该 provider 可用模型
@@ -1667,7 +1668,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model }); if (a.provider) void loadProviderModels(a.provider); }}>
+                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model, temperature: a.temperature }); if (a.provider) void loadProviderModels(a.provider); }}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1751,6 +1752,28 @@ export function SettingsView() {
                 {modelsLoading && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>拉取模型列表中…</span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>常见模型直接选,不用手写;写论文/多任务可为每个人格配不同模型,对话、心跳、群聊都按各自模型工作。</p>
+            </div>
+            <div className="field">
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>温度({agentForm.temperature ?? 0.7})——低=严谨稳定,高=灵活大胆</span>
+                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                  {agentForm.temperature == null || agentForm.temperature >= 0.7 ? (agentForm.temperature ?? 0.7) >= 1.3 ? "🤪 疯子模式" : "平衡" : "严谨"}
+                </span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
+                value={agentForm.temperature ?? 0.7}
+                onChange={(e) => setAgentForm({ ...agentForm, temperature: Number(e.target.value) })}
+                style={{ width: "100%" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-dim)" }}>
+                <span>0 严谨(论文/数据分析)</span>
+                <span>0.7 平衡(默认)</span>
+                <span>1.3+ 灵活/疯子</span>
+              </div>
             </div>
             <div className="agent-opts">
               <label>
