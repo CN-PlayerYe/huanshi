@@ -344,14 +344,15 @@ export function createApp(deps: AppDeps): Hono {
       ? { ...deps.db.getAgent(body.id)!, ...body }
       : createCustomAgent(body);
     deps.db.saveAgent(agent);
-    // 出生档案:在人格的工作区生成一份"出生档案.md",让它知道自己的来处与能力
-    try {
-      const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
-      // 出生档案写入人格的专属空间(院子)workspace/<名字>/,而不是 workspace 根
-      const home = join(ws, agent.name);
-      mkdirSync(home, { recursive: true });
-      const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
-      const birth = `# ${agent.name} 的出生档案
+    // 出生档案:仅在【新建】人格时生成(编辑时不重新生成,避免覆盖人格自己写的版本)
+    if (!body.id) {
+      try {
+        const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
+        // 出生档案写入人格的专属空间(院子)workspace/<名字>/,而不是 workspace 根
+        const home = join(ws, agent.name);
+        mkdirSync(home, { recursive: true });
+        const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
+        const birth = `# ${agent.name} 的出生档案
 
 > 本文件由幻世在创建人格时自动生成,存放在你的专属空间(院子),你可以随时阅读它了解自己。
 
@@ -371,9 +372,10 @@ ${tools || "- (无工具)"}
 
 ## 我的来处
 我诞生于「幻世」——一个有记忆、有人格的私人 AI 助手。`;
-      writeFileSync(join(home, `${agent.name}-出生档案.md`), birth, "utf8");
-    } catch {
-      // 出生档案生成失败不影响保存
+        writeFileSync(join(home, `${agent.name}-出生档案.md`), birth, "utf8");
+      } catch {
+        // 出生档案生成失败不影响保存
+      }
     }
     return c.json({ agent });
   });
