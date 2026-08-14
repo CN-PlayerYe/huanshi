@@ -253,13 +253,13 @@ export class AgentEngine {
       const memoryBlock = memories.length
         ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
         : "";
-      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, memoryBlock, agent.useGlobalStyle === false ? undefined : settings.style);
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
         {
           role: "user",
-          content: `(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
+          content: `${memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
         },
       ];
       const provider = createProvider(resolveModel(agent, settings));
@@ -434,7 +434,6 @@ export class AgentEngine {
       agent,
       dataDir,
       settings.toolWhitelistDir,
-      memoryBlock,
       agent.useGlobalStyle === false ? undefined : settings.style,
       homeDir,
     );
@@ -465,7 +464,13 @@ export class AgentEngine {
       ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all")),
       {
         role: "user",
-        content: finalUserContent,
+        // 缓存友好:动态内容(记忆/摘要/世界观/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
+        content: [
+          memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}` : "",
+          `【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n") + (finalUserContent ? `\n\n${finalUserContent}` : ""),
         vision: visionProviderCfg ? undefined : await imagePartsToVision(attachments ?? [], dataDir),
       },
     ];
@@ -879,7 +884,6 @@ export function buildSystemPrompt(
   agent: AgentDef,
   dataDir: string,
   whitelistDir: string,
-  memoryBlock: string,
   style?: Settings["style"],
   homeDirOverride?: string,
 ): string {
@@ -894,15 +898,17 @@ export function buildSystemPrompt(
     agent.systemPrompt?.trim()
       ? agent.systemPrompt
       : `你是「${agent.name}」${agent.description?.trim() ? `,${agent.description.trim()}` : "——一个有自己记忆和想法的独立人格"}。`;
+  // ★缓存友好:system 只含稳定内容(身份/环境/规则),不含时间、记忆、摘要、世界观——
+  // 那些动态内容全部由 runChat 放进 user 消息。这样 system 前缀恒定,DeepSeek 上下文缓存高命中(输入成本降 ~20 倍)
   return `${identity}
 
 【环境信息】
-- 日期时间:${new Date().toLocaleString("zh-CN")}
 - 操作系统:${platform()}${platform() === "win32" ? " (Windows)" : ""}
 - 用户主目录:${homedir()}
 - 你的工作目录(可读写):${cwd}
 - ★你的专属空间(院子):${home}/ —— 你的日志、笔记、待定之页都放在这里,这是"你自己的地方"。自主活动时优先在院子里,不要到处建文件夹。
-- 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。${memoryBlock}
+- 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。
+- 你的记忆、本会话摘要、世界观设定与当前时间,会在对话消息开头提供(见「背景资料」),注意阅读。
 
 【工作方式】
 - 你有自己的长期记忆库,经历会自动沉淀进去。自主活动、或面对新的一天时,先调用 memory_recall 回忆"我是谁、最近发生过什么",再决定做什么。
