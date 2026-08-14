@@ -111,7 +111,13 @@ export class Scheduler {
         await this.runHeartbeat(task, a);
         return;
       }
-      const session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
+      // 固定会话:任务首次运行创建会话并记在 task 上,之后持续追加(自由活动/简报都能连续,不再攒「⏰」碎片)
+      let session = task.sessionId ? this.db.getSession(task.sessionId) : undefined;
+      if (!session) {
+        session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
+        this.saveFresh(task.id, { sessionId: session.id });
+        task = { ...task, sessionId: session.id };
+      }
       let finalText = "";
       const onEvent = (e: StreamEvent) => {
         if (e.type === "done") {
