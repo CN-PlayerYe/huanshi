@@ -1215,9 +1215,15 @@ select {
 
 .provider-card .head {
   display: flex;
+  flex-wrap: wrap; /* 按钮多(名称+启用+编辑+运行+删除)时允许换行,避免挤压重叠 */
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   margin-bottom: 10px;
+}
+
+.provider-card .head .name {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .provider-card .name {
