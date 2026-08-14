@@ -1583,12 +1583,12 @@ export function SettingsView() {
             )}
             {t.kind === "heartbeat"
               ? t.lastResult && (
-                  <div className="prompt" style={{ maxHeight: 40, fontSize: 12 }}>
+                  <div className="prompt" style={{ maxHeight: 40, fontSize: 12, overflowY: "auto" }}>
                     {t.lastResult.slice(0, 80)}
                     {t.lastResult.length > 80 ? "…(详情见 💓 心跳日记)" : ""}
                   </div>
                 )
-              : t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
+              : t.lastResult && <div className="prompt" style={{ maxHeight: 60, overflowY: "auto" }}>{t.lastResult}</div>}
             {editTask?.id === t.id && (
               <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 8 }}>
                 <div className="field-row" style={{ flexWrap: "wrap" }}>
