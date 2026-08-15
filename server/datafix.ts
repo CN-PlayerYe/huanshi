@@ -50,9 +50,27 @@ export function fixEmbeddedThinking(db: Db): number {
  */
 export function fixLegacyHeartbeatSessions(db: Db): number {
   let archived = 0;
-  // ① 同名「💓 X 心跳日记」重复(旧版 sessionId 未持久化导致反复重建):
-  //    每个标题只保留最新一份(+ 任务正在使用的),其余归档(数据保留)
   const taskSessionIds = new Set(db.listTasks().map((t) => t.sessionId).filter((x): x is string => Boolean(x)));
+  // ① 定时任务碎片:「⏰」任务会话(自由活动等),每个 人格+任务名 只保留最新一份(任务指向的),其余归档
+  const taskSessions = db.listSessions(true).filter((s) => !s.archived && (s.title || "").startsWith("⏰"));
+  const byTask = new Map<string, SessionMeta[]>();
+  for (const s of taskSessions) {
+    const key = `${s.agentId}|${(s.title || "").trim()}`;
+    const arr = byTask.get(key) ?? [];
+    arr.push(s);
+    byTask.set(key, arr);
+  }
+  for (const arr of byTask.values()) {
+    if (arr.length <= 1) continue;
+    arr.sort((a, b) => b.updatedAt - a.updatedAt);
+    for (let i = 1; i < arr.length; i++) {
+      if (taskSessionIds.has(arr[i].id)) continue;
+      db.updateSession(arr[i].id, { archived: true });
+      archived++;
+    }
+  }
+  // ② 同名「💓 X 心跳日记」重复(旧版 sessionId 未持久化导致反复重建):
+  //    每个标题只保留最新一份(+ 任务正在使用的),其余归档(数据保留)
   const all = db.listSessions(true).filter((s) => !s.archived && (s.title || "").includes("心跳日记"));
   const byTitle = new Map<string, SessionMeta[]>();
   for (const s of all) {
