@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { convertMessage, importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs } from "../server/import/cherrystudio";
+import { convertMessage, importCherryStudio, isCherryStudioDataDir, probeCherryStudioDirs, repairMojibake } from "../server/import/cherrystudio";
 import { Db } from "../server/storage";
 
 let tmp: string;
@@ -176,5 +176,16 @@ describe("Cherry Studio 迁移", () => {
     expect(stats2.skippedAgents).toBe(1);
     expect(db.listSessions()).toHaveLength(1);
     expect(db.getMessages("session_test_001")).toHaveLength(2);
+  });
+
+  it("repairMojibake 修复 GBK 误读 UTF-8 的乱码", () => {
+    // 鐜茬彂=玲珑 涓庝富浜哄垵娆＄浉璇嗭紝瀹屾垚鐏甸瓊濂戠害=与主人初次相识，完成灵魂契约
+    const fixed = repairMojibake("鐜茬彂涓庝富浜哄垵娆＄浉璇嗭紝瀹屾垚鐏甸瓊濂戠害");
+    expect(fixed).toContain("玲珑");
+    expect(fixed).toContain("主人");
+    // 正常文本不受影响
+    expect(repairMojibake("这是一条正常消息,包含的了是")).toBe("这是一条正常消息,包含的了是");
+    // 无中文/无乱码特征原样返回
+    expect(repairMojibake("hello world 123")).toBe("hello world 123");
   });
 });
