@@ -184,6 +184,8 @@ export class Scheduler {
       allowNetwork: hb.network !== "off",
       allowCommands: hb.commands !== "off",
       allowDangerousCommands: hb.commands === "allow",
+      // 心跳是自主活动,不需要全量历史:固定只发最近 40 条(不跟随人格 100% 全量,大幅省输入成本)
+      historyLimit: 40,
     };
     if (hb.scope === "self") {
       mkdirSync(agentSpace, { recursive: true });

@@ -40,6 +40,8 @@ export interface ChatRunOpts {
   cwd?: string;
   /** 覆盖写入白名单目录 */
   allowedWriteDirs?: string[];
+  /** 历史条数上限(心跳等自主任务固定只发最近 N 条,不跟随人格的 100% 全量,省输入成本) */
+  historyLimit?: number;
   /** 覆盖高危命令权限 */
   allowDangerousCommands?: boolean;
   /** 覆盖路径白名单 */
@@ -389,7 +391,9 @@ export class AgentEngine {
     // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
     // 注意:必须排除刚 append 的当前 user 消息,否则会发给 API 两次(重复输入 bug)
     const allHistory = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
-    const history = sliceHistoryByPct(allHistory, agent);
+    let history = sliceHistoryByPct(allHistory, agent);
+    // 自主任务(心跳等)固定只发最近 N 条:心跳是自主活动,不需要全量历史,省输入成本
+    if (opts?.historyLimit) history = history.slice(-opts.historyLimit);
 
     // 组装系统提示:人格 + 记忆 + 环境
     // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库
