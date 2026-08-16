@@ -199,7 +199,7 @@ export function importCherryStudio(db: Db, opts: ImportOptions): ImportStats {
       }
     }
 
-    // ---- 主库补迁:cherrystudio.sqlite 里的 agent 会话消息(agents.db 之外的数据,如夜玲珑主库时代) ----
+    // ---- 主库补迁:cherrystudio.sqlite 里的 agent 会话消息(agents.db 之外的数据,如用户人格主库时代) ----
     const mainDb = join(opts.cherryDataDir, "Data", "cherrystudio.sqlite");
     if (existsSync(mainDb)) {
       const n = importMainSessions(db, mainDb, stats);
@@ -243,7 +243,7 @@ interface Block {
   [k: string]: unknown;
 }
 
-/** 主库(cherrystudio.sqlite)补迁:agents.db 之外的 agent 会话消息(如夜玲珑主库时代)。
+/** 主库(cherrystudio.sqlite)补迁:agents.db 之外的 agent 会话消息(如用户人格主库时代)。
  *  会话 → 幻世新会话;消息 data(parts JSON)→ 幻世消息;文本过乱码修复。返回导入消息数。 */
 function importMainSessions(db: Db, mainDbFile: string, stats: ImportStats): number {
   let imported = 0;
