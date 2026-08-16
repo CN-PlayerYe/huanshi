@@ -1537,7 +1537,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.quietStart ?? 23}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietStart: Math.min(23, Math.max(0, Number(e.target.value) || 23)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietStart: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
@@ -1549,7 +1549,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.quietEnd ?? 7}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietEnd: Math.min(23, Math.max(0, Number(e.target.value) || 7)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietEnd: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
@@ -1561,7 +1561,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.bedtimeHour ?? 21}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), bedtimeHour: Math.min(23, Math.max(0, Number(e.target.value) || 21)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), bedtimeHour: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
