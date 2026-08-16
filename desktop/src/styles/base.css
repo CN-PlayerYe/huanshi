@@ -404,7 +404,8 @@ select {
 }
 
 .session-item .title {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -414,6 +415,7 @@ select {
 .session-item .time {
   font-size: 11px;
   opacity: 0.6;
+  flex-shrink: 0;
 }
 
 /* 最后消息预览:心跳/后台任务新内容侧栏一眼可见 */
@@ -448,6 +450,8 @@ select {
 
 .session-menu {
   position: relative;
+  flex-shrink: 0;
+  margin-left: auto; /* ⋯ 按钮始终靠右,不被 preview 挤到左下角 */
 }
 
 .session-menu-btn {
@@ -1211,9 +1215,15 @@ select {
 
 .provider-card .head {
   display: flex;
+  flex-wrap: wrap; /* 按钮多(名称+启用+编辑+运行+删除)时允许换行,避免挤压重叠 */
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   margin-bottom: 10px;
+}
+
+.provider-card .head .name {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .provider-card .name {

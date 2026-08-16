@@ -42,6 +42,27 @@ const COMMON_MODELS = [
   "qwen2.5",
 ];
 
+/** 常见 TTS 模型与音色(OpenAI 兼容;模型可拉取,音色无通用 API 只能内置) */
+const TTS_MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts", "cosyvoice-v1", "doubao-tts"];
+const TTS_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "longxiaochun", "zh_female"];
+/** Edge TTS 常用中文音色(微软神经网络语音) */
+const EDGE_VOICES = [
+  "zh-CN-XiaoxiaoNeural",
+  "zh-CN-XiaoyiNeural",
+  "zh-CN-YunxiNeural",
+  "zh-CN-YunjianNeural",
+  "zh-CN-XiaohanNeural",
+  "zh-CN-XiaomengNeural",
+  "zh-CN-XiaomoNeural",
+  "zh-CN-XiaoruiNeural",
+  "zh-CN-XiaoshuangNeural",
+  "zh-CN-YunfengNeural",
+  "zh-CN-YunhaoNeural",
+  "zh-CN-YunxiaNeural",
+  "zh-CN-YunyangNeural",
+  "zh-CN-YunzeNeural",
+];
+
 /** 简易 cron 描述(与后端 describeCron 一致的前端版) */
 function describeCron(expr: string): string {
   try {
@@ -100,10 +121,14 @@ export function SettingsView() {
     isolatedMemory?: boolean;
     provider?: string;
     model?: string;
+    temperature?: number;
   } | null>(null);
   const [modelCustom, setModelCustom] = useState(false); // 模型下拉选「自定义输入…」时显示文本框
   const [providerModels, setProviderModels] = useState<string[]>([]); // 从 API 拉到的该 provider 可用模型
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [ttsModels, setTtsModels] = useState<string[]>([]); // TTS 从 API 拉到的模型
+  const [ttsModelCustom, setTtsModelCustom] = useState(false); // TTS 模型选「自定义…」时显示输入框
+  const [ttsVoiceCustom, setTtsVoiceCustom] = useState(false); // TTS 音色同上
 
   /** 拉取某 provider 的可用模型(API 已接通则用实拉列表,失败/未配置时回退内置常见模型) */
   const loadProviderModels = async (providerId?: string) => {
@@ -134,6 +159,8 @@ export function SettingsView() {
   const [csInfo, setCsInfo] = useState("");
   const [tasks, setTasks] = useState<TaskDef[]>([]);
   const [taskForm, setTaskForm] = useState({ name: "", prompt: "", schedule: "", agentId: "" });
+  /** 正在编辑的定时任务(cron 类型,改名称/时间/提示词) */
+  const [editTask, setEditTask] = useState<{ id: string; name: string; schedule: string; prompt: string } | null>(null);
   const [systemVoices, setSystemVoices] = useState<{ name: string; lang: string }[]>([]);
   const [ttsTesting, setTtsTesting] = useState(false);
   const cardFileRef = useRef<HTMLInputElement>(null);
@@ -1115,19 +1142,34 @@ export function SettingsView() {
       <div className="settings-section">
         <h3>🔊 朗读</h3>
         <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
-          每条回复的 🔊 按钮朗读方式。系统语音=Windows 自带(可选音色,离线);API=OpenAI 兼容 TTS 端点,可用自己的克隆声音。
+          每条回复的 🔊 按钮朗读方式。系统语音=Windows 自带(离线);Edge TTS=微软免费神经网络语音(音质好,需联网);API=OpenAI 兼容 TTS 端点(克隆声音)。
         </p>
         <div className="field-row">
           <div className="field">
             <label>朗读引擎</label>
             <select
               value={settings.tts?.mode ?? "system"}
-              onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), mode: e.target.value as "system" | "api" } })}
+              onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), mode: e.target.value as "system" | "api" | "edge" } })}
             >
               <option value="system">系统语音(离线)</option>
+              <option value="edge">Edge TTS(免费,音质好,需联网)</option>
               <option value="api">API(自定义音色/克隆)</option>
             </select>
           </div>
+          {(settings.tts?.mode ?? "system") === "edge" && (
+            <div className="field" style={{ flex: 2 }}>
+              <label>Edge 音色(中文神经网络语音)</label>
+              <select
+                value={settings.tts?.voice ?? ""}
+                onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value || undefined } })}
+              >
+                <option value="">默认(晓伊)</option>
+                {EDGE_VOICES.map((v) => (
+                  <option key={v} value={v}>{v.replace("zh-CN-", "").replace("Neural", "")}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {(settings.tts?.mode ?? "system") === "system" && (
             <div className="field" style={{ flex: 2 }}>
               <label>系统音色(留空=默认中文语音)</label>
@@ -1168,49 +1210,132 @@ export function SettingsView() {
               </div>
             </div>
             <div className="field-row">
-              <div className="field">
-                <label>模型(克隆模型名,如 tts-1 / 你的克隆模型)</label>
-                <input
-                  type="text"
-                  value={settings.tts?.model ?? ""}
-                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
-                  placeholder="tts-1"
-                />
+              <div className="field" style={{ flex: 2 }}>
+                <label>模型(拉取后可滚动选全部;或用克隆模型)</label>
+                {ttsModelCustom ? (
+                  <input
+                    type="text"
+                    value={settings.tts?.model ?? ""}
+                    onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: e.target.value } })}
+                    placeholder="自定义模型名"
+                    onBlur={() => { if (!settings.tts?.model) setTtsModelCustom(false); }}
+                  />
+                ) : (
+                  <select
+                    value={settings.tts?.model ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__custom__") {
+                        setTtsModelCustom(true);
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: "" } });
+                      } else {
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), model: v || undefined } });
+                      }
+                    }}
+                  >
+                    <option value="">默认</option>
+                    {[...TTS_MODELS, ...ttsModels].map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    <option value="__custom__">✏️ 自定义输入…</option>
+                  </select>
+                )}
               </div>
-              <div className="field">
-                <label>音色 voice</label>
-                <input
-                  type="text"
-                  value={settings.tts?.voice ?? ""}
-                  onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
-                  placeholder="alloy / 克隆音色 id"
-                />
-              </div>
-              <div className="field">
-                <label>&nbsp;</label>
+              <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
                 <button
                   className="btn secondary"
-                  disabled={ttsTesting}
+                  disabled={!settings.tts?.apiBaseUrl || !settings.tts?.apiKey}
                   onClick={async () => {
-                    setTtsTesting(true);
                     try {
-                      const blob = await api.tts("你好,我是幻世,很高兴认识你。");
-                      const url = URL.createObjectURL(blob);
-                      const a = new Audio(url);
-                      void a.play();
+                      const r = await api.fetchTTSModels();
+                      if (r.ok && r.models?.length) {
+                        setTtsModels(r.models);
+                        useApp.getState().showToast(`已拉取 ${r.models.length} 个 TTS 模型`);
+                      } else {
+                        useApp.getState().showToast(`拉取失败:${r.error ?? "未知"}(使用内置常见模型)`);
+                      }
                     } catch (err) {
-                      useApp.getState().showToast(`朗读测试失败:${(err as Error).message}`);
-                    } finally {
-                      setTtsTesting(false);
+                      useApp.getState().showToast(`拉取失败:${(err as Error).message}`);
                     }
                   }}
                 >
-                  {ttsTesting ? "合成中…" : "🔊 试听"}
+                  ↻ 拉取模型
                 </button>
+              </div>
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>音色 voice</label>
+                {ttsVoiceCustom ? (
+                  <input
+                    type="text"
+                    value={settings.tts?.voice ?? ""}
+                    onChange={(e) => void updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: e.target.value } })}
+                    placeholder="克隆音色 id"
+                    onBlur={() => { if (!settings.tts?.voice) setTtsVoiceCustom(false); }}
+                  />
+                ) : (
+                  <select
+                    value={settings.tts?.voice ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__custom__") {
+                        setTtsVoiceCustom(true);
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: "" } });
+                      } else {
+                        updateSettings({ tts: { ...(settings.tts ?? { mode: "system" as const }), voice: v || undefined } });
+                      }
+                    }}
+                  >
+                    <option value="">默认</option>
+                    {TTS_VOICES.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                    <option value="__custom__">✏️ 自定义输入…</option>
+                  </select>
+                )}
               </div>
             </div>
           </>
         )}
+        {/* 通用试听(系统/Edge/API 三种模式都能试当前设置) */}
+        <div className="field-row" style={{ marginTop: 8 }}>
+          <button
+            className="btn secondary"
+            disabled={ttsTesting}
+            onClick={async () => {
+              setTtsTesting(true);
+              try {
+                const mode = settings.tts?.mode ?? "system";
+                if (mode === "api" || mode === "edge") {
+                  const blob = await api.tts("你好,我是幻世,很高兴认识你。");
+                  const url = URL.createObjectURL(blob);
+                  const a = new Audio(url);
+                  void a.play();
+                } else {
+                  // 系统语音试听
+                  if (!("speechSynthesis" in window)) throw new Error("当前环境不支持系统语音");
+                  const u = new SpeechSynthesisUtterance("你好,我是幻世,很高兴认识你。");
+                  u.lang = "zh-CN";
+                  const v = settings.tts?.systemVoice;
+                  if (v) {
+                    const voices = window.speechSynthesis.getVoices();
+                    const found = voices.find((x) => x.name === v);
+                    if (found) u.voice = found;
+                  }
+                  window.speechSynthesis.speak(u);
+                }
+              } catch (err) {
+                useApp.getState().showToast(`试听失败:${(err as Error).message}`);
+              } finally {
+                setTtsTesting(false);
+              }
+            }}
+          >
+            {ttsTesting ? "合成中…" : "🔊 试听当前设置"}
+          </button>
+          <span style={{ fontSize: 11.5, color: "var(--text-dim)", alignSelf: "center" }}>三种模式都能试听;Edge/API 需联网。</span>
+        </div>
       </div>
 
       {/* ---- 定时任务 ---- */}
@@ -1300,6 +1425,11 @@ export function SettingsView() {
               {t.kind === "heartbeat" && (
                 <button className="btn secondary sm" onClick={() => setHbEditId(hbEditId === t.id ? null : t.id)}>
                   ⚙️ 边界
+                </button>
+              )}
+              {t.kind !== "heartbeat" && (
+                <button className="btn secondary sm" title="编辑此任务(名称/时间/提示词)" onClick={() => setEditTask(editTask?.id === t.id ? null : { id: t.id, name: t.name, schedule: t.schedule, prompt: t.prompt })}>
+                  ✏️ 编辑
                 </button>
               )}
               {t.kind === "heartbeat" && t.sessionId && (
@@ -1407,7 +1537,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.quietStart ?? 23}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietStart: Math.min(23, Math.max(0, Number(e.target.value) || 23)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietStart: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
@@ -1419,7 +1549,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.quietEnd ?? 7}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietEnd: Math.min(23, Math.max(0, Number(e.target.value) || 7)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), quietEnd: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
@@ -1431,7 +1561,7 @@ export function SettingsView() {
                       max={23}
                       value={t.heartbeat?.bedtimeHour ?? 21}
                       onChange={(e) =>
-                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), bedtimeHour: Math.min(23, Math.max(0, Number(e.target.value) || 21)) } }).then(refreshTasks)
+                        void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), bedtimeHour: (() => { const n = Number(e.target.value); return Number.isFinite(n) ? Math.min(23, Math.max(0, n)) : 23; })() } }).then(refreshTasks)
                       }
                     />
                   </div>
@@ -1453,12 +1583,47 @@ export function SettingsView() {
             )}
             {t.kind === "heartbeat"
               ? t.lastResult && (
-                  <div className="prompt" style={{ maxHeight: 40, fontSize: 12 }}>
+                  <div className="prompt" style={{ maxHeight: 40, fontSize: 12, overflowY: "auto" }}>
                     {t.lastResult.slice(0, 80)}
                     {t.lastResult.length > 80 ? "…(详情见 💓 心跳日记)" : ""}
                   </div>
                 )
-              : t.lastResult && <div className="prompt" style={{ maxHeight: 60 }}>{t.lastResult}</div>}
+              : t.lastResult && <div className="prompt" style={{ maxHeight: 60, overflowY: "auto" }}>{t.lastResult}</div>}
+            {editTask?.id === t.id && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 8 }}>
+                <div className="field-row" style={{ flexWrap: "wrap" }}>
+                  <div className="field" style={{ minWidth: 140 }}>
+                    <label>任务名称</label>
+                    <input type="text" value={editTask.name} onChange={(e) => setEditTask({ ...editTask, name: e.target.value })} />
+                  </div>
+                  <div className="field" style={{ minWidth: 130 }}>
+                    <label>时间(cron)</label>
+                    <input type="text" value={editTask.schedule} onChange={(e) => setEditTask({ ...editTask, schedule: e.target.value })} placeholder="0 9 * * *" />
+                  </div>
+                  <div className="field" style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+                    <button
+                      className="btn sm"
+                      disabled={!editTask.name.trim() || !editTask.schedule.trim() || !editTask.prompt.trim()}
+                      onClick={() =>
+                        void api
+                          .updateTask(editTask.id, { name: editTask.name.trim(), schedule: editTask.schedule.trim(), prompt: editTask.prompt.trim() })
+                          .then(refreshTasks)
+                          .then(() => setEditTask(null))
+                      }
+                    >
+                      保存
+                    </button>
+                    <button className="btn secondary sm" onClick={() => setEditTask(null)}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+                <div className="field" style={{ marginTop: 6 }}>
+                  <label>提示词(人格执行的内容)</label>
+                  <textarea value={editTask.prompt} onChange={(e) => setEditTask({ ...editTask, prompt: e.target.value })} rows={3} style={{ fontSize: 12.5 }} />
+                </div>
+              </div>
+            )}
           </div>
         ))}
         <div className="provider-card" style={{ marginTop: 12 }}>
@@ -1545,7 +1710,7 @@ export function SettingsView() {
                   />
                   记忆
                 </label>
-                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model }); if (a.provider) void loadProviderModels(a.provider); }}>
+                <button className="btn secondary sm" onClick={() => { setModelCustom(!!a.model && !COMMON_MODELS.includes(a.model)); setAgentForm({ id: a.id, name: a.name, description: a.description, systemPrompt: a.systemPrompt, useGlobalStyle: a.useGlobalStyle, allowDangerousCommands: a.allowDangerousCommands, unrestrictedPaths: a.unrestrictedPaths, historyUnlimited: a.historyUnlimited, historyContextPct: a.historyContextPct, isolatedMemory: a.isolatedMemory, provider: a.provider, model: a.model, temperature: a.temperature }); if (a.provider) void loadProviderModels(a.provider); }}>
                   编辑
                 </button>
                 <button className="btn secondary sm" title="导出人格卡片(人设+独立记忆)" onClick={() => void api.exportAgent(a.id, a.name).catch((e) => useApp.getState().showToast(`导出失败:${(e as Error).message}`))}>
@@ -1629,6 +1794,28 @@ export function SettingsView() {
                 {modelsLoading && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>拉取模型列表中…</span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>常见模型直接选,不用手写;写论文/多任务可为每个人格配不同模型,对话、心跳、群聊都按各自模型工作。</p>
+            </div>
+            <div className="field">
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>温度({agentForm.temperature ?? 0.7})——低=严谨稳定,高=灵活大胆</span>
+                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                  {agentForm.temperature == null || agentForm.temperature >= 0.7 ? (agentForm.temperature ?? 0.7) >= 1.3 ? "🤪 疯子模式" : "平衡" : "严谨"}
+                </span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
+                value={agentForm.temperature ?? 0.7}
+                onChange={(e) => setAgentForm({ ...agentForm, temperature: Number(e.target.value) })}
+                style={{ width: "100%" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-dim)" }}>
+                <span>0 严谨(论文/数据分析)</span>
+                <span>0.7 平衡(默认)</span>
+                <span>1.3+ 灵活/疯子</span>
+              </div>
             </div>
             <div className="agent-opts">
               <label>

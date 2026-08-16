@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../store";
 import type { SessionMeta } from "@shared/types";
@@ -36,6 +36,14 @@ export function Sidebar() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
+  // 默认折叠:人格分组初始化时全部收起(侧栏更干净),用户展开的组保留
+  const groupInitRef = useRef(false);
+  useEffect(() => {
+    if (!groupInitRef.current && agents.length) {
+      groupInitRef.current = true;
+      setCollapsed(new Set(agents.map((a) => a.id)));
+    }
+  }, [agents]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchHits, setSearchHits] = useState<{ session: SessionMeta; matches: number }[]>([]);
   const [searching, setSearching] = useState(false);
@@ -188,7 +196,6 @@ export function Sidebar() {
                     </span>
                   )}
                   <span className="time">{fmtTime(s.updatedAt)}</span>
-                  {s.lastPreview ? <div className="session-preview">{s.lastPreview}</div> : null}
                   <span className="session-menu" onClick={(e) => e.stopPropagation()}>
                     <button className="session-menu-btn" onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}>
                       ⋯
@@ -254,6 +261,7 @@ export function Sidebar() {
                       </div>
                     )}
                   </span>
+                  {s.lastPreview ? <div className="session-preview">{s.lastPreview}</div> : null}
                 </div>
               ))}
           </div>

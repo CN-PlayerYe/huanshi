@@ -34,17 +34,19 @@ describe("toProviderMsg 历史消息转换", () => {
 });
 
 describe("buildSystemPrompt", () => {
-  it("包含人格、环境与记忆块", () => {
+  it("包含人格、环境(缓存友好:不含动态记忆)", () => {
     const agent = defaultAgents()[0];
-    const prompt = buildSystemPrompt(agent, "C:\\data", "C:\\work", "\n\n【长期记忆】\n- 用户喜欢咖啡");
+    const prompt = buildSystemPrompt(agent, "C:\\data", "C:\\work");
     expect(prompt).toContain("小盏");
     expect(prompt).toContain("C:\\work");
-    expect(prompt).toContain("用户喜欢咖啡");
+    // 缓存优化:记忆/时间等动态内容不再进 system(保持前缀稳定,DeepSeek 缓存高命中)
+    expect(prompt).not.toContain("用户喜欢咖啡");
+    expect(prompt).not.toContain("【当前时间】");
   });
 
   it("无记忆块时正常", () => {
     const agent = defaultAgents()[0];
-    const prompt = buildSystemPrompt(agent, "C:\\data", "", "");
+    const prompt = buildSystemPrompt(agent, "C:\\data", "");
     expect(prompt).not.toContain("【长期记忆】");
   });
 });

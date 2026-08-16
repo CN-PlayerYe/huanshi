@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
@@ -178,14 +178,50 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ file: rel, mime: mime || "application/octet-stream", name: f.name || name, text });
   });
 
-  /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */
-  app.post("/api/tts", async (c) => {
-    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
+  /** 拉取 TTS 可用模型(基于已填的 apiBaseUrl+apiKey;失败回退内置常见 TTS 模型) */
+  app.get("/api/tts/models", async (c) => {
     const tts = deps.getSettings().tts;
-    if (!text?.trim() || tts?.mode !== "api" || !tts.apiBaseUrl) {
-      return c.json({ error: "未配置 API 朗读" }, 400);
+    if (!tts?.apiBaseUrl || !tts.apiKey) return c.json({ ok: false, error: "未配置 TTS API" });
+    try {
+      const models = await fetchModelList({ baseUrl: tts.apiBaseUrl, apiKey: tts.apiKey, model: tts.model || "", kind: "openai" });
+      return c.json({ ok: true, models });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message });
     }
-    const base = tts.apiBaseUrl.replace(/\/$/, "");
+  });
+
+  /** API 朗读(TTS):把文本交给 OpenAI 兼容 TTS 端点(或自建克隆服务),返回音频 */
+  app.post("/api/tts", async (c) => {    const { text } = (await c.req.json().catch(() => ({}))) as { text?: string };
+    const tts = deps.getSettings().tts;
+    if (!text?.trim() || !tts || !["api", "edge"].includes(tts.mode ?? "")) {
+      return c.json({ error: "未配置朗读" }, 400);
+    }
+    // Edge TTS(微软免费神经网络语音,需联网;音质明显好于 Windows 自带)
+    if (tts.mode === "edge") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { EdgeTTS } = require("node-edge-tts") as { EdgeTTS: new (o?: Record<string, unknown>) => { ttsPromise: (t: string, f: string) => Promise<void> } };
+        const voice = tts.voice || "zh-CN-XiaoyiNeural";
+        const edge = new EdgeTTS({
+          voice,
+          lang: voice.startsWith("zh") ? "zh-CN" : "en-US",
+          outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+          timeout: 20000,
+        });
+        const tmpFile = join(tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.mp3`);
+        await edge.ttsPromise(text.slice(0, 4000), tmpFile);
+        const buf = readFileSync(tmpFile);
+        try {
+          unlinkSync(tmpFile);
+        } catch {
+          /* ignore */
+        }
+        return c.newResponse(buf, { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+      } catch (err) {
+        return c.json({ error: `Edge TTS 失败:${(err as Error).message}(需联网,微软免费服务偶发波动可重试)` }, 502);
+      }
+    }
+    const base = tts.apiBaseUrl?.replace(/\/$/, "");
     try {
       const res = await fetch(`${base}/audio/speech`, {
         method: "POST",
@@ -308,14 +344,15 @@ export function createApp(deps: AppDeps): Hono {
       ? { ...deps.db.getAgent(body.id)!, ...body }
       : createCustomAgent(body);
     deps.db.saveAgent(agent);
-    // 出生档案:在人格的工作区生成一份"出生档案.md",让它知道自己的来处与能力
-    try {
-      const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
-      // 出生档案写入人格的专属空间(院子)workspace/<名字>/,而不是 workspace 根
-      const home = join(ws, agent.name);
-      mkdirSync(home, { recursive: true });
-      const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
-      const birth = `# ${agent.name} 的出生档案
+    // 出生档案:仅在【新建】人格时生成(编辑时不重新生成,避免覆盖人格自己写的版本)
+    if (!body.id) {
+      try {
+        const ws = deps.getSettings().toolWhitelistDir || join(deps.paths.dataDir, "workspace");
+        // 出生档案写入人格的专属空间(院子)workspace/<名字>/,而不是 workspace 根
+        const home = join(ws, agent.name);
+        mkdirSync(home, { recursive: true });
+        const tools = deps.registry.list().map((t) => `- **${t.name}**: ${(t.description || "").split("\n")[0]}`).join("\n");
+        const birth = `# ${agent.name} 的出生档案
 
 > 本文件由幻世在创建人格时自动生成,存放在你的专属空间(院子),你可以随时阅读它了解自己。
 
@@ -335,9 +372,10 @@ ${tools || "- (无工具)"}
 
 ## 我的来处
 我诞生于「幻世」——一个有记忆、有人格的私人 AI 助手。`;
-      writeFileSync(join(home, `${agent.name}-出生档案.md`), birth, "utf8");
-    } catch {
-      // 出生档案生成失败不影响保存
+        writeFileSync(join(home, `${agent.name}-出生档案.md`), birth, "utf8");
+      } catch {
+        // 出生档案生成失败不影响保存
+      }
     }
     return c.json({ agent });
   });

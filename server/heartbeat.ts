@@ -65,10 +65,12 @@ export function nextHeartbeatAt(
   const since = now.getTime() - dayStart.getTime();
   const beatsToday = Math.floor(since / step) + 1; // 下一个心跳点(第 beatsToday 个)
   let candidate = new Date(dayStart.getTime() + beatsToday * step);
-  // 跳过静默时段:若落在静默内,推到静默结束后的第一个心跳点
-  for (let i = 0; i < 48; i++) {
-    if (!inQuietWindow(candidate, cfg)) return candidate;
-    candidate = new Date(candidate.getTime() + step);
+  // 若落在静默内,顺延到静默结束后的第一个非静默时刻(而不是 +step 步进)。
+  // 否则「0点对齐 + 拉长间隔 + 夜间静默」会叠加成 18 小时空档(如 18:00 跳完 → 0:00 静默 → 12:00)。
+  if (inQuietWindow(candidate, cfg)) {
+    let t = new Date(candidate.getTime() + 60_000);
+    while (inQuietWindow(t, cfg)) t = new Date(t.getTime() + 60_000);
+    candidate = t;
   }
   return candidate;
 }

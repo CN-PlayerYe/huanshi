@@ -68,6 +68,8 @@ export interface AgentDef {
   provider?: string;
   /** 人格级模型名(如 "deepseek-v4-flash"),留空=跟随全局 mainModel */
   model?: string;
+  /** 人格温度(0-2):低=严谨/稳定,高=灵活/大胆;默认 0.7(单人)/0.8(群聊) */
+  temperature?: number;
   /** 允许执行高危命令(该 Agent 拥有完整命令权限) */
   allowDangerousCommands?: boolean;
   /** 文件写入不受白名单限制(该 Agent 拥有完整文件权限) */
@@ -123,7 +125,7 @@ export interface Settings {
   visionProvider?: string;
   /** 朗读(TTS)配置:system=系统语音(可选手音),api=OpenAI 兼容 TTS 端点(含自己的克隆服务) */
   tts?: {
-    mode: "system" | "api";
+    mode: "system" | "api" | "edge";
     systemVoice?: string;
     apiBaseUrl?: string;
     apiKey?: string;

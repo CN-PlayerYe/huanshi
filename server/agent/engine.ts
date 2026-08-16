@@ -40,6 +40,8 @@ export interface ChatRunOpts {
   cwd?: string;
   /** 覆盖写入白名单目录 */
   allowedWriteDirs?: string[];
+  /** 历史条数上限(心跳等自主任务固定只发最近 N 条,不跟随人格的 100% 全量,省输入成本) */
+  historyLimit?: number;
   /** 覆盖高危命令权限 */
   allowDangerousCommands?: boolean;
   /** 覆盖路径白名单 */
@@ -247,16 +249,38 @@ export class AgentEngine {
     for (const agent of agents) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
-      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, "", agent.useGlobalStyle === false ? undefined : settings.style);
+      // 群聊也注入长期记忆:野生人格没有 systemPrompt,靠这里"想起自己是谁、最近发生过什么"
+      const memScope = agent.isolatedMemory ? agent.id : undefined;
+      const memories = agent.memoryEnabled ? await memory.recall(userContent, 6, memScope) : [];
+      const memoryBlock = memories.length
+        ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
+        : "";
+      const systemPrompt = buildSystemPrompt(agent, dataDir, settings.toolWhitelistDir, agent.useGlobalStyle === false ? undefined : settings.style);
       const providerMessages: ProviderMsg[] = [
         { role: "system", content: systemPrompt },
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
         {
           role: "user",
-          content: `(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
+          content: `${memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
         },
       ];
       const provider = createProvider(resolveModel(agent, settings));
+      // 群聊只读工具:记忆检索/读取/搜索/时间——不写文件、不执行命令(群聊是"说话"场景)
+      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime"]);
+      const tools = registry
+        .list()
+        .filter((t) => GROUP_READONLY.has(t.name))
+        .map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
+      const toolCtx: ToolContext = {
+        cwd: settings.toolWhitelistDir || join(dataDir, "workspace"),
+        allowedWriteDirs: [join(dataDir, "workspace"), settings.toolWhitelistDir].filter(Boolean),
+        dataDir,
+        env: process.env,
+        memory: agent.memoryEnabled ? memory : null,
+        allowDangerousCommands: false,
+        unrestrictedPaths: false,
+        agentId: agent.isolatedMemory ? agent.id : undefined,
+      };
       const assistant: ChatMessage = {
         id: newId("msg"),
         sessionId: session.id,
@@ -269,14 +293,49 @@ export class AgentEngine {
       await onEvent({ type: "message_start", message: { id: assistant.id, agentId: agent.id } });
       let textBuf = "";
       try {
-        for await (const chunk of provider.chatStream({ messages: providerMessages, tools: [], temperature: 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
-          if (chunk.delta) {
-            textBuf += chunk.delta;
-            await onEvent({ type: "delta", content: chunk.delta });
+        // 工具调用循环(与单人对话一致):模型可请求只读工具,结果回传后继续发言
+        let iteration = 0;
+        let stop = false;
+        while (!stop && iteration < MAX_TOOL_ITERATIONS) {
+          iteration++;
+          let toolCalls: ProviderToolCall[] = [];
+          let iterText = "";
+          let iterThinking = "";
+          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: agent.temperature ?? 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
+            if (chunk.delta) {
+              textBuf += chunk.delta;
+              iterText += chunk.delta;
+              await onEvent({ type: "delta", content: chunk.delta });
+            }
+            if (chunk.thinking) {
+              iterThinking += chunk.thinking;
+              await onEvent({ type: "thinking", content: chunk.thinking });
+            }
+            if (chunk.toolCalls) toolCalls = chunk.toolCalls;
+          }
+          if (!toolCalls.length) {
+            stop = true;
+            break;
+          }
+          // 回传本轮回复 + 工具调用(带思考,DeepSeek thinking 要求)
+          providerMessages.push({
+            role: "assistant",
+            content: iterText,
+            toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+            reasoningContent: iterThinking || undefined,
+          });
+          for (const tc of toolCalls) {
+            const part = { id: tc.id, name: tc.name, input: tc.arguments, status: "running" as const, startedAt: Date.now() };
+            await onEvent({ type: "tool_start", tool: part });
+            const output = await registry.run(tc.name, safeParseArgs(tc.arguments), toolCtx);
+            const donePart = { ...part, status: "done" as const, output, finishedAt: Date.now() };
+            await onEvent({ type: "tool_end", tool: donePart });
+            assistant.parts.push({ type: "tool", tool: donePart });
+            providerMessages.push({ role: "tool", toolCallId: tc.id, content: output.slice(0, MAX_TOOL_OUTPUT) });
           }
         }
         if (textBuf) assistant.parts.push({ type: "text", text: textBuf });
-        else assistant.parts.push({ type: "text", text: "(沉默不语)" });
+        else if (!assistant.parts.length) assistant.parts.push({ type: "text", text: "(沉默不语)" });
       } catch (err) {
         assistant.parts = [{ type: "text", text: `出错了:${(err as Error).message}` }];
       }
@@ -332,7 +391,9 @@ export class AgentEngine {
     // 历史消息(供记忆注入与 provider 回放;Agent 可设不限长度)
     // 注意:必须排除刚 append 的当前 user 消息,否则会发给 API 两次(重复输入 bug)
     const allHistory = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
-    const history = sliceHistoryByPct(allHistory, agent);
+    let history = sliceHistoryByPct(allHistory, agent);
+    // 自主任务(心跳等)固定只发最近 N 条:心跳是自主活动,不需要全量历史,省输入成本
+    if (opts?.historyLimit) history = history.slice(-opts.historyLimit);
 
     // 组装系统提示:人格 + 记忆 + 环境
     // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库
@@ -377,7 +438,6 @@ export class AgentEngine {
       agent,
       dataDir,
       settings.toolWhitelistDir,
-      memoryBlock,
       agent.useGlobalStyle === false ? undefined : settings.style,
       homeDir,
     );
@@ -408,7 +468,13 @@ export class AgentEngine {
       ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all")),
       {
         role: "user",
-        content: finalUserContent,
+        // 缓存友好:动态内容(记忆/摘要/世界观/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
+        content: [
+          memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}` : "",
+          `【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n") + (finalUserContent ? `\n\n${finalUserContent}` : ""),
         vision: visionProviderCfg ? undefined : await imagePartsToVision(attachments ?? [], dataDir),
       },
     ];
@@ -472,7 +538,7 @@ export class AgentEngine {
         let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
-          { messages: providerMessages, tools, temperature: 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
+          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;
@@ -822,7 +888,6 @@ export function buildSystemPrompt(
   agent: AgentDef,
   dataDir: string,
   whitelistDir: string,
-  memoryBlock: string,
   style?: Settings["style"],
   homeDirOverride?: string,
 ): string {
@@ -837,15 +902,17 @@ export function buildSystemPrompt(
     agent.systemPrompt?.trim()
       ? agent.systemPrompt
       : `你是「${agent.name}」${agent.description?.trim() ? `,${agent.description.trim()}` : "——一个有自己记忆和想法的独立人格"}。`;
+  // ★缓存友好:system 只含稳定内容(身份/环境/规则),不含时间、记忆、摘要、世界观——
+  // 那些动态内容全部由 runChat 放进 user 消息。这样 system 前缀恒定,DeepSeek 上下文缓存高命中(输入成本降 ~20 倍)
   return `${identity}
 
 【环境信息】
-- 日期时间:${new Date().toLocaleString("zh-CN")}
 - 操作系统:${platform()}${platform() === "win32" ? " (Windows)" : ""}
 - 用户主目录:${homedir()}
 - 你的工作目录(可读写):${cwd}
 - ★你的专属空间(院子):${home}/ —— 你的日志、笔记、待定之页都放在这里,这是"你自己的地方"。自主活动时优先在院子里,不要到处建文件夹。
-- 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。${memoryBlock}
+- 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。
+- 你的记忆、本会话摘要、世界观设定与当前时间,会在对话消息开头提供(见「背景资料」),注意阅读。
 
 【工作方式】
 - 你有自己的长期记忆库,经历会自动沉淀进去。自主活动、或面对新的一天时,先调用 memory_recall 回忆"我是谁、最近发生过什么",再决定做什么。

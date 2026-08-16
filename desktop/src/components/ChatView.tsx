@@ -13,6 +13,7 @@ export function ChatView() {
   const agents = useApp((s) => s.agents);
   const sending = useApp((s) => s.sending);
   const settings = useApp((s) => s.settings);
+  const lastAgentId = useApp((s) => s.lastAgentId);
   const sendMessage = useApp((s) => s.sendMessage);
   const stop = useApp((s) => s.stop);
 
@@ -91,13 +92,22 @@ export function ChatView() {
       <div className="chat-head">
         <span className="session-title">{activeSession?.title ?? "新会话"}</span>
         <select
-          value={activeSession?.agentId ?? ""}
+          value={activeSession?.agentId ?? lastAgentId ?? ""}
           onChange={(e) => {
-            // 记住上次使用的人格:下次新会话默认用它(而不是永远小盏)
-            useApp.setState({ lastAgentId: e.target.value });
+            const aid = e.target.value;
+            // 记住上次使用的人格(持久化):下次新会话默认用它
+            useApp.setState({ lastAgentId: aid });
+            try {
+              localStorage.setItem("huanshi.lastAgent", aid);
+            } catch {
+              /* ignore */
+            }
             if (activeSessionId) {
-              void api.setSessionAgent(activeSessionId, e.target.value);
+              void api.setSessionAgent(activeSessionId, aid);
               void useApp.getState().refreshSessions();
+            } else if (aid) {
+              // 初始界面(还没打开任何会话):选人格 = 直接新建该人格的会话并进入
+              void useApp.getState().newSession();
             }
           }}
           title="切换人格"

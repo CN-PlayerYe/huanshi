@@ -1,9 +1,45 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { newId, type AgentDef, type ChatMessage, type SessionMeta } from "../../shared/types";
 import type { Db } from "../storage";
+import { createCustomAgent } from "../agents";
+import * as iconv from "iconv-lite";
+
+/** 修复 mojibake:UTF-8 文本被误按 GB18030 解码的乱码(如 鐜茬彂=玲珑)。
+ *  方向:乱码 Unicode → 按 GB18030 编码回字节(= 原始 UTF-8 字节)→ 再按 UTF-8 解码。
+ *  自检测:修复后不再含乱码特征字且无替换符才采用,否则原样(防止误修正常文本)。 */
+const MOJIBAKE_CHARS = /[杩鐜鍙鏂鎴缁閭鎯浠杩樼敤鏄鍝綆]/u;
+export function repairMojibake(text: string): string {
+  if (!text || !/[\u4e00-\u9fff]/.test(text)) return text;
+  // 乱码特征:GBK 误读 UTF-8 的高频字(杩=这 鐜=玲 鍙=可 鏂=文 鎴=我 缁=给 閭=那 鎯=情 杩樻槸=还是 鐢=用 鏄=是)
+  if (!MOJIBAKE_CHARS.test(text)) return text;
+  try {
+    const bytes = iconv.encode(text, "gb18030"); // 乱码 → 原始 UTF-8 字节
+    const decoded = iconv.decode(bytes, "utf-8");
+    // 修复干净(无乱码特征字、无替换符)才采用
+    if (decoded && !MOJIBAKE_CHARS.test(decoded) && !decoded.includes("\uFFFD")) return decoded;
+  } catch {
+    /* ignore */
+  }
+  return text;
+}
+
+/** 只读打开 SQLite,WAL 模式下直开可能失败(Cherry 正在运行占用 -wal/-shm):失败自动复制副本再开 */
+function openSqliteReadonly(dbFile: string): DatabaseSync {
+  try {
+    return new DatabaseSync(dbFile, { readOnly: true });
+  } catch {
+    const tmp = mkdtempSync(join(tmpdir(), "cherry-import-"));
+    const base = basename(dbFile);
+    for (const ext of ["", "-wal", "-shm"]) {
+      const f = dbFile + ext;
+      if (existsSync(f)) copyFileSync(f, join(tmp, base + ext));
+    }
+    return new DatabaseSync(join(tmp, base), { readOnly: true });
+  }
+}
 
 /**
  * Cherry Studio(v1 架构)Agent 对话迁移器。
@@ -97,7 +133,7 @@ export function importCherryStudio(db: Db, opts: ImportOptions): ImportStats {
   };
   const skipExisting = opts.skipExisting ?? true;
 
-  const sqlite = new DatabaseSync(dbFile, { readOnly: true });
+  const sqlite = openSqliteReadonly(dbFile);
 
   try {
     // ---- Agents / 人格 ----
@@ -163,6 +199,13 @@ export function importCherryStudio(db: Db, opts: ImportOptions): ImportStats {
       }
     }
 
+    // ---- 主库补迁:cherrystudio.sqlite 里的 agent 会话消息(agents.db 之外的数据,如用户人格主库时代) ----
+    const mainDb = join(opts.cherryDataDir, "Data", "cherrystudio.sqlite");
+    if (existsSync(mainDb)) {
+      const n = importMainSessions(db, mainDb, stats);
+      if (n > 0) console.log(`[cherry] 主库补迁:${n} 条消息`);
+    }
+
     return stats;
   } finally {
     sqlite.close();
@@ -200,6 +243,89 @@ interface Block {
   [k: string]: unknown;
 }
 
+/** 主库(cherrystudio.sqlite)补迁:agents.db 之外的 agent 会话消息(如用户人格主库时代)。
+ *  会话 → 幻世新会话;消息 data(parts JSON)→ 幻世消息;文本过乱码修复。返回导入消息数。 */
+function importMainSessions(db: Db, mainDbFile: string, stats: ImportStats): number {
+  let imported = 0;
+  const sqlite = openSqliteReadonly(mainDbFile);
+  try {
+    const mainAgents = sqlite.prepare("SELECT id,name,description FROM agent").all() as { id: string; name: string; description?: string }[];
+    const agentIdMap = new Map<string, string>();
+    for (const ma of mainAgents) {
+      let target = db.listAgents().find((a) => a.name === ma.name);
+      if (!target) {
+        target = createCustomAgent({ name: ma.name, description: ma.description || `从 Cherry 主库迁入的「${ma.name}」` });
+        db.saveAgent(target);
+        stats.agents++;
+      }
+      agentIdMap.set(ma.id, target.id);
+    }
+    const sessions = sqlite.prepare("SELECT id,name,agent_id FROM agent_session").all() as { id: string; name: string; agent_id: string }[];
+    const sessionMap = new Map<string, string>();
+    const existingTitles = new Set(db.listSessions().map((s) => s.title));
+    for (const s of sessions) {
+      const aid = agentIdMap.get(s.agent_id);
+      if (!aid) continue;
+      const name = s.name?.trim();
+      if (!name) continue; // 无标题的空会话不迁
+      const title = `${name}(主库)`;
+      if (existingTitles.has(title)) continue; // 已迁过,不重复建
+      existingTitles.add(title);
+      sessionMap.set(s.id, db.createSession(title, aid).id);
+      stats.sessions++;
+    }
+    for (const s of sessions) {
+      const sid = sessionMap.get(s.id);
+      if (!sid) continue;
+      const rows = sqlite
+        .prepare("SELECT id,role,data,created_at FROM agent_session_message WHERE session_id=? ORDER BY created_at")
+        .all(s.id) as { id: string; role: string; data: string; created_at?: number }[];
+      for (const r of rows) {
+        let parts: ChatMessage["parts"] = [];
+        try {
+          const parsed = JSON.parse(r.data || "{}");
+          const rawParts = Array.isArray(parsed?.parts) ? parsed.parts : [];
+          parts = rawParts.map((p: { type?: string; text?: string; tool?: { name?: string; input?: unknown; output?: string }; name?: string }) => {
+            if (p?.type === "text") return { type: "text" as const, text: repairMojibake(String(p.text ?? "")) };
+            if (p?.type === "thinking" || p?.type === "reasoning") return { type: "thinking" as const, text: repairMojibake(String(p.text ?? "")) };
+            if (p?.type === "tool") {
+              return {
+                type: "tool" as const,
+                tool: {
+                  id: `m_${r.id}_${Math.random().toString(36).slice(2, 6)}`,
+                  name: p.tool?.name ?? "tool",
+                  input: JSON.stringify(p.tool?.input ?? {}),
+                  output: repairMojibake(String(p.tool?.output ?? "")),
+                  status: "done" as const,
+                  startedAt: Date.now(),
+                  finishedAt: Date.now(),
+                },
+              };
+            }
+            if (p?.type === "data-error") return { type: "text" as const, text: `[调用出错:${p.name ?? "未知"}]` };
+            return { type: "text" as const, text: repairMojibake(String(JSON.stringify(p) ?? "")) };
+          });
+        } catch {
+          parts = [{ type: "text", text: repairMojibake(r.data || "") }];
+        }
+        if (!parts.length) parts = [{ type: "text", text: "" }];
+        db.appendMessage({
+          id: newId("msg"),
+          sessionId: sid,
+          role: r.role === "user" ? "user" : "assistant",
+          parts,
+          createdAt: r.created_at || Date.now(),
+        });
+        imported++;
+        stats.messages++;
+      }
+    }
+  } finally {
+    sqlite.close();
+  }
+  return imported;
+}
+
 export function convertMessage(rm: RawMessage, sessionId: string, includeThinking: boolean): ChatMessage | null {
   let parsed: { message?: { model?: { name?: string } | string }; blocks?: Block[] };
   try {
@@ -214,17 +340,17 @@ export function convertMessage(rm: RawMessage, sessionId: string, includeThinkin
   const textBuf: string[] = [];
   for (const b of blocks) {
     if (b.type === "main_text") {
-      if (b.content?.trim()) textBuf.push(b.content.trim());
+      if (b.content?.trim()) textBuf.push(repairMojibake(b.content.trim()));
     } else if (b.type === "thinking") {
       if (includeThinking && b.content?.trim()) {
         // 思考存为独立 part(回放时作为 reasoning_content 原样回传,DeepSeek 要求)
-        parts.push({ type: "thinking", text: b.content.trim() });
+        parts.push({ type: "thinking", text: repairMojibake(b.content.trim()) });
       }
     } else if (b.type === "tool") {
       const meta = b.metadata?.rawMcpToolResponse;
       const toolName = meta?.tool?.name ?? b.metadata?.toolName ?? "tool";
       const args = meta?.arguments ?? {};
-      const response = extractToolResponse(meta?.response);
+      const response = repairMojibake(extractToolResponse(meta?.response));
       const startedAt = now;
       parts.push({
         type: "tool",

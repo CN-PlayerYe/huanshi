@@ -77,6 +77,14 @@ export class OpenAICompatibleProvider implements ChatProvider {
           // 400 偶发解析失败:原样重试一次
           continue;
         }
+        // 内容安全审核拒绝(阿里百炼等):给用户看得懂的原因,而不是原始 JSON
+        if (body.includes("data_inspection_failed") || body.includes("inappropriate content") || body.includes("内容安全")) {
+          throw new ProviderError(
+            `⚠️ 内容安全审核未通过:模型服务商认为输入(或会话历史中的某句话)可能含不当内容。\n解决办法:①删除触发的那条消息(点击消息 ✕);②换用审核较宽松的模型(如 DeepSeek)。`,
+            res.status,
+            body,
+          );
+        }
         throw new ProviderError(`模型请求失败(HTTP ${res.status}): ${body.slice(0, 500)}`, res.status, body);
       }
 

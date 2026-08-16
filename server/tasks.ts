@@ -111,7 +111,13 @@ export class Scheduler {
         await this.runHeartbeat(task, a);
         return;
       }
-      const session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
+      // 固定会话:任务首次运行创建会话并记在 task 上,之后持续追加(自由活动/简报都能连续,不再攒「⏰」碎片)
+      let session = task.sessionId ? this.db.getSession(task.sessionId) : undefined;
+      if (!session) {
+        session = this.db.createSession(`⏰ ${task.name}`, task.agentId);
+        this.saveFresh(task.id, { sessionId: session.id });
+        task = { ...task, sessionId: session.id };
+      }
       let finalText = "";
       const onEvent = (e: StreamEvent) => {
         if (e.type === "done") {
@@ -178,6 +184,8 @@ export class Scheduler {
       allowNetwork: hb.network !== "off",
       allowCommands: hb.commands !== "off",
       allowDangerousCommands: hb.commands === "allow",
+      // 心跳是自主活动,不需要全量历史:固定只发最近 40 条(不跟随人格 100% 全量,大幅省输入成本)
+      historyLimit: 40,
     };
     if (hb.scope === "self") {
       mkdirSync(agentSpace, { recursive: true });

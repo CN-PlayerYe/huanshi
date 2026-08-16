@@ -33,6 +33,19 @@ describe("心跳节奏", () => {
     expect(next.getHours()).toBeGreaterThanOrEqual(7);
     expect(next.getHours()).toBeLessThan(23);
   });
+
+  it("刚聊完拉长 + 夜间静默不叠加成 18h 空档(静默一结束就跳)", () => {
+    const cfg = mergeHeartbeat({ intervalHours: 4, quietStart: 23, quietEnd: 7 });
+    // 18:00 触发,主人刚说过话(真实 now 前 3 分钟)→ 间隔拉长到 6h
+    // 旧逻辑:0点对齐→0:00静默→+6h步进→12:00(18h 空档);新逻辑:静默一结束(7:00)就跳
+    const t = new Date(new Date().setHours(18, 0, 0, 0));
+    if (t.getTime() > Date.now()) t.setDate(t.getDate() - 1); // 已过的今天(或昨天)18:00
+    const next = nextHeartbeatAt(t, cfg, { lastUserAt: Date.now() - 3 * 60_000 });
+    const gap = (next.getTime() - t.getTime()) / 3600_000;
+    expect(gap).toBeLessThan(14); // 不再 18h
+    expect(next.getHours()).toBe(7); // 静默(23-7)一结束就跳,而非 12:00
+    expect(inQuietWindow(next, cfg)).toBe(false);
+  });
 });
 
 describe("心跳消息", () => {

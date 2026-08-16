@@ -1,7 +1,7 @@
 {
   "name": "huanshi",
   "productName": "幻世",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "一个有记忆、有人格的私人 AI 助手(类 HanaAgent),支持自定义数据目录与 Hindsight 长期记忆",
   "main": "dist-electron/electron/main.js",
   "private": true,
@@ -24,6 +24,8 @@
     "@hono/node-ws": "^1.1.0",
     "@vectorize-io/hindsight-client": "^0.8.6",
     "hono": "^4.7.0",
+    "iconv-lite": "^0.7.3",
+    "node-edge-tts": "1.2.10",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
