@@ -79,7 +79,7 @@ export class ToolRegistry {
       const result = await tool.run(input, ctx);
       return typeof result === "string" ? result : JSON.stringify(result);
     } catch (err: any) {
-      return `【调用失败】${err?.message ?? String(err)}\n（该次调用未成功。请如实记录失败,不要虚构其内容或结果。）`;
+      return `工具执行出错:${err?.message ?? String(err)}`;
     }
   }
 }
