@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>幻世 · 网页版</title>
+<style>
+  :root {
+    --bg: #17181c; --panel: #1e2026; --line: #2c2f38; --text: #e8e6e1; --dim: #9a9aa5;
+    --accent: #8b9dc3; --user-bubble: #2b3a52; --assist-bubble: #26282f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; gap: 8px; align-items: center; padding: 10px 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel); flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; margin-right: auto; font-weight: 600; }
+  header select, header button {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; font-size: 13px; max-width: 130px;
+  }
+  header button { cursor: pointer; }
+  #sessionList {
+    display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); flex-shrink: 0; background: var(--panel);
+  }
+  #sessionList .chip {
+    flex-shrink: 0; font-size: 12px; color: var(--dim); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 20px; padding: 4px 10px; cursor: pointer;
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #sessionList .chip.active { color: var(--text); border-color: var(--accent); }
+  #messages { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 86%; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--user-bubble); border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--assist-bubble); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; font-size: 12px; color: var(--dim); background: none; }
+  .msg.thinking { align-self: flex-start; font-size: 12px; color: var(--dim); font-style: italic; background: none; }
+  .msg.tool { align-self: flex-start; font-size: 12px; color: var(--dim); background: var(--bg); border: 1px dashed var(--line); max-width: 100%; }
+  .msg .name { font-size: 11px; color: var(--accent); margin-bottom: 4px; display: block; }
+  .typing { color: var(--dim); font-size: 13px; align-self: flex-start; }
+  footer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); flex-shrink: 0; }
+  #input {
+    flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; font-size: 15px; outline: none; resize: none;
+    max-height: 120px; font-family: inherit;
+  }
+  #input:focus { border-color: var(--accent); }
+  #send {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 0 18px; font-size: 15px; cursor: pointer; flex-shrink: 0;
+  }
+  #send:disabled { opacity: .5; cursor: not-allowed; }
+  .empty { color: var(--dim); text-align: center; margin-top: 40px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏔 幻世</h1>
+  <select id="agentSel"></select>
+  <button id="newBtn">＋新对话</button>
+</header>
+<div id="sessionList"></div>
+<div id="messages"><div class="empty">选个人格,开始聊天吧</div></div>
+<footer>
+  <textarea id="input" rows="1" placeholder="说点什么…"></textarea>
+  <button id="send">发送</button>
+</footer>
+<script>
+const $ = (s) => document.querySelector(s);
+let agents = [], sessions = [], currentSid = null, streaming = false;
+
+async function j(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function load() {
+  try {
+    agents = (await j("/api/agents")).agents;
+    sessions = (await j("/api/sessions")).sessions.filter((s) => !s.hidden);
+    const sel = $("#agentSel");
+    sel.innerHTML = "";
+    agents.forEach((a) => { const o = document.createElement("option"); o.value = a.id; o.textContent = a.name; sel.appendChild(o); });
+    renderSessions();
+    if (sessions.length) openSession(sessions[0].id);
+  } catch (e) { toast("加载失败:" + e.message); }
+}
+
+function renderSessions() {
+  const box = $("#sessionList");
+  box.innerHTML = "";
+  sessions.forEach((s) => {
+    const chip = document.createElement("div");
+    chip.className = "chip" + (s.id === currentSid ? " active" : "");
+    chip.textContent = s.title || "未命名";
+    chip.onclick = () => openSession(s.id);
+    box.appendChild(chip);
+  });
+}
+
+async function openSession(sid) {
+  currentSid = sid;
+  renderSessions();
+  const box = $("#messages");
+  box.innerHTML = "";
+  try {
+    const { messages } = await j("/api/sessions/" + sid + "/messages");
+    messages.forEach((m) => {
+      if (m.role === "user") addMsg("user", textOf(m));
+      else if (m.role === "assistant") addMsg("assistant", textOf(m), (m.parts || []).find((p) => p.type === "thinking") ? "" : null);
+    });
+    box.scrollTop = box.scrollHeight;
+  } catch { /* ignore */ }
+}
+
+function textOf(m) {
+  return (m.parts || []).filter((p) => p.type === "text").map((p) => p.text || "").join("\n");
+}
+
+function addMsg(role, text, name) {
+  const box = $("#messages");
+  const d = document.querySelector(".empty");
+  if (d) d.remove();
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  if (name) { const n = document.createElement("span"); n.className = "name"; n.textContent = name; div.appendChild(n); }
+  div.appendChild(document.createTextNode(text));
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function send() {
+  const text = $("#input").value.trim();
+  if (!text || streaming) return;
+  $("#input").value = "";
+  streaming = true;
+  $("#send").disabled = true;
+  addMsg("user", text);
+  const typing = document.createElement("div");
+  typing.className = "typing";
+  typing.textContent = "…";
+  $("#messages").appendChild(typing);
+  $("#messages").scrollTop = $("#messages").scrollHeight;
+  const agent = agents.find((a) => a.id === $("#agentSel").value) || agents[0];
+  const body = { sessionId: currentSid || undefined, agentId: agent.id, content: text };
+  try {
+    const r = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", answer = "";
+    const ansDiv = addMsg("assistant", "");
+    const replaceAnswer = () => { ansDiv.textContent = answer; $("#messages").scrollTop = $("#messages").scrollHeight; };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        const dline = block.split("\n").find((l) => l.startsWith("data:"));
+        if (!dline) continue;
+        let ev;
+        try { ev = JSON.parse(dline.slice(5)); } catch { continue; }
+        if (ev.type === "delta" && ev.delta) { answer += ev.delta; replaceAnswer(); }
+        else if (ev.type === "thinking_delta") { /* 网页版不展示思考流,省流量 */ }
+        else if (ev.type === "session_created" && ev.session) { currentSid = ev.session.id; if (!sessions.find((s) => s.id === ev.session.id)) sessions.unshift(ev.session); renderSessions(); }
+        else if (ev.type === "error") { typing.remove(); addMsg("system", "⚠ " + (ev.message || "出错了")); streaming = false; $("#send").disabled = false; return; }
+        else if (ev.type === "done") { /* 完成 */ }
+      }
+    }
+    typing.remove();
+    if (answer) replaceAnswer();
+    if (sessions.length && !sessions.find((s) => s.id === currentSid)) { }
+    refreshTitle();
+  } catch (e) {
+    typing.remove();
+    addMsg("system", "⚠ 网络错误:" + e.message);
+  }
+  streaming = false;
+  $("#send").disabled = false;
+}
+
+async function refreshTitle() {
+  try {
+    const s = (await j("/api/sessions")).sessions.find((x) => x.id === currentSid);
+    if (s) { sessions = (await j("/api/sessions")).sessions.filter((x) => !x.hidden); renderSessions(); }
+  } catch { /* ignore */ }
+}
+
+function toast(msg) {
+  const d = document.createElement("div");
+  d.className = "msg system";
+  d.textContent = msg;
+  $("#messages").appendChild(d);
+}
+
+$("#newBtn").onclick = async () => {
+  const agent = agents.find((a) => a.id === $("#agentSel").value) || agents[0];
+  const s = await j("/api/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "网页会话", agentId: agent.id }) });
+  currentSid = s.session.id;
+  sessions.unshift(s.session);
+  renderSessions();
+  openSession(currentSid);
+};
+
+$("#send").onclick = send;
+$("#input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("#input").addEventListener("input", (e) => {
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+});
+
+load();
+</script>
+</body>
+</html>
