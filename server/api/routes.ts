@@ -39,6 +39,16 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
+  // 网页版:手机/浏览器打开根路径即可聊天(README「网页版」;桌面端 file:// 不经过此路由)
+  app.get("/", (c) => {
+    try {
+      const html = readFileSync(join(__dirname, "../../../web/chat.html"), "utf-8");
+      return c.html(html);
+    } catch {
+      return c.text("幻世网页版文件缺失(web/chat.html),请使用桌面客户端。", 404);
+    }
+  });
+
   // ---- 健康与系统信息 ----
 
   app.get("/api/health", async (c) => {
