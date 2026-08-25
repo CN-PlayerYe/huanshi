@@ -108,6 +108,9 @@ function renderSessions() {
 async function openSession(sid) {
   currentSid = sid;
   renderSessions();
+  const s = sessions.find((x) => x.id === sid);
+  // 切换会话时,人格下拉跟着切到该会话的人格
+  if (s && agents.some((a) => a.id === s.agentId)) $("#agentSel").value = s.agentId;
   const box = $("#messages");
   box.innerHTML = "";
   try {
@@ -174,7 +177,7 @@ async function send() {
         if (!dline) continue;
         let ev;
         try { ev = JSON.parse(dline.slice(5)); } catch { continue; }
-        if (ev.type === "delta" && ev.delta) { answer += ev.delta; replaceAnswer(); }
+        if (ev.type === "delta" && ev.content) { answer += ev.content; replaceAnswer(); }
         else if (ev.type === "thinking_delta") { /* 网页版不展示思考流,省流量 */ }
         else if (ev.type === "session_created" && ev.session) { currentSid = ev.session.id; if (!sessions.find((s) => s.id === ev.session.id)) sessions.unshift(ev.session); renderSessions(); }
         else if (ev.type === "error") { typing.remove(); addMsg("system", "⚠ " + (ev.message || "出错了")); streaming = false; $("#send").disabled = false; return; }
