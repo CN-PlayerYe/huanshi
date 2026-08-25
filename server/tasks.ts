@@ -50,9 +50,21 @@ export class Scheduler {
     if (this.stopped) return;
     const now = Date.now();
     for (const task of this.db.listTasks()) {
+      // 并发限流:同时最多 2 个任务在跑。18 点自由活动+心跳常挤一起,若全并发启动会同时打爆
+      // 模型 API(8 个 LLM 调用并发 → 慢/限流/乱)。限流后其余任务排队,下个 tick 再补。
+      if (this.running.size >= 2) break;
       if (!task.enabled || this.running.has(task.id)) continue;
       if (task.kind === "heartbeat" && this.isHeartbeatPaused?.()) continue; // 全局暂停
       if (task.nextRunAt > now) continue;
+      // 主人 30 分钟内说过话:心跳让路,顺延到下一网格点(不打扰正在聊天的主人),不占并发名额
+      if (task.kind === "heartbeat") {
+        const lastUser = this.lastUserAtFn?.();
+        if (lastUser && now - lastUser < 30 * 60_000) {
+          const next = this.computeNext(task);
+          this.db.saveTask({ ...task, nextRunAt: next ?? task.nextRunAt + 60_000, lastStatus: "skipped" });
+          continue;
+        }
+      }
       this.running.add(task.id);
       // 防抖:立即把 nextRunAt 推到下次,避免异常导致死循环
       const next = this.computeNext(task);

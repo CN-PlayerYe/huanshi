@@ -184,7 +184,7 @@ export interface TaskDef {
   nextRunAt: number;
   lastRunAt?: number;
   lastResult?: string;
-  lastStatus?: "ok" | "error" | "running";
+  lastStatus?: "ok" | "error" | "running" | "skipped";
   /** 连续空跳次数(无自发产出),用于动态间隔翻倍 */
   blankBeats?: number;
   /** 心跳任务的固定会话(「💓 心跳日记」):每次心跳追加到同一会话,不产生碎片 */
