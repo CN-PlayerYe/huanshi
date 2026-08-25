@@ -137,3 +137,37 @@ describe("任务并发限流", () => {
     expect(["running", "ok"]).toContain(db2.getTask("t3")!.lastStatus);
   });
 });
+
+/** 避让上限:连续避让 2 次后强制执行(主人聊得再久,人格也得保持生活节奏,最长空档 = 间隔×2) */
+describe("心跳避让上限", () => {
+  it("已避让 2 次(skippedCount=2)→ 即使主人刚说过话也强制执行", async () => {
+    const db3 = new Db(mkdtempSync(join(tmpdir(), "hanalite-limit2-")));
+    db3.saveAgent(agent);
+    const task = makeHeartbeatTask({ skippedCount: 2 });
+    db3.saveTask(task);
+    let ran = false;
+    const engine = {
+      runChat: async () => {
+        ran = true;
+      },
+    } as never;
+    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000);
+    await sched.tick();
+    expect(ran).toBe(true); // 强制跳了
+    expect(["running", "ok"]).toContain(db3.getTask("t_hb")!.lastStatus); // 执行中/已启动(可能已完成)
+    expect(db3.getTask("t_hb")!.skippedCount).toBe(0); // 计数清零
+  });
+
+  it("避让一次后 skippedCount 递增(第 1 次避让 → 1)", async () => {
+    const db3 = new Db(mkdtempSync(join(tmpdir(), "hanalite-limit3-")));
+    db3.saveAgent(agent);
+    const task = makeHeartbeatTask();
+    db3.saveTask(task);
+    const engine = { runChat: async () => {} } as never;
+    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000);
+    await sched.tick();
+    const after = db3.getTask("t_hb")!;
+    expect(after.lastStatus).toBe("skipped");
+    expect(after.skippedCount).toBe(1); // 第 1 次避让
+  });
+});
