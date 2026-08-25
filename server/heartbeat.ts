@@ -43,9 +43,9 @@ export function effectiveInterval(hb: Required<HeartbeatConfig>, blankBeats: num
   }
   if (lastUserAt) {
     const hours = (Date.now() - lastUserAt) / 3600_000;
-    if (hours <= 0.5) {
-      base = Math.max(base, 6); // 刚聊完:拉长
-    } else if (hours > 24) {
+    // 不再"刚聊完拉长":主人刚说过话就按正常间隔跳(避免 4h 节奏被拉成 6h 网格,
+    // 产生 2h 的乱跳——如 16:00 触发后 18:00 又跳一次)。用户要求心跳严格按 intervalHours 走。
+    if (hours > 24) {
       base = Math.min(base, 2); // 久未出现:加密
     }
   }
