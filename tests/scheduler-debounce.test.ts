@@ -98,7 +98,7 @@ describe("心跳避让主人", () => {
         ran = true;
       },
     } as never;
-    const sched = new Scheduler(db2, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 10 * 60_000);
+    const sched = new Scheduler(db2, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 10 * 60_000, undefined, () => agent.id);
     await sched.tick();
     const after = db2.getTask("t_hb")!;
     expect(ran).toBe(false); // 心跳没有执行
@@ -151,7 +151,7 @@ describe("心跳避让上限", () => {
         ran = true;
       },
     } as never;
-    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000);
+    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000, undefined, () => agent.id);
     await sched.tick();
     expect(ran).toBe(true); // 强制跳了
     expect(["running", "ok"]).toContain(db3.getTask("t_hb")!.lastStatus); // 执行中/已启动(可能已完成)
@@ -164,10 +164,41 @@ describe("心跳避让上限", () => {
     const task = makeHeartbeatTask();
     db3.saveTask(task);
     const engine = { runChat: async () => {} } as never;
-    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000);
+    const sched = new Scheduler(db3, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000, undefined, () => agent.id);
     await sched.tick();
     const after = db3.getTask("t_hb")!;
     expect(after.lastStatus).toBe("skipped");
     expect(after.skippedCount).toBe(1); // 第 1 次避让
+  });
+});
+
+/** 人格级避让:主人和人格 A 聊天,只有 A 的心跳让路,B 的心跳照常 */
+describe("心跳人格级避让", () => {
+  it("主人在和 agentB 聊 → agentB 的心跳避让", async () => {
+    const db4 = new Db(mkdtempSync(join(tmpdir(), "hanalite-ga-")));
+    db4.saveAgent(agent);
+    const task = makeHeartbeatTask({ agentId: "agentB" });
+    db4.saveTask(task);
+    let ran = false;
+    const engine = { runChat: async () => { ran = true; } } as never;
+    // 主人在和 agentB 聊(agentId=agentB)
+    const sched = new Scheduler(db4, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000, undefined, () => "agentB");
+    await sched.tick();
+    expect(ran).toBe(false); // B 避让了
+    expect(db4.getTask("t_hb")!.lastStatus).toBe("skipped");
+  });
+
+  it("主人在和 agentB 聊 → agentA 的心跳照常执行", async () => {
+    const db4 = new Db(mkdtempSync(join(tmpdir(), "hanalite-ga2-")));
+    db4.saveAgent(agent);
+    const task = makeHeartbeatTask({ agentId: "agentA" });
+    db4.saveTask(task);
+    let ran = false;
+    const engine = { runChat: async () => { ran = true; } } as never;
+    // 主人在和 agentB 聊(agentId=agentB),agentA 的心跳不受影响
+    const sched = new Scheduler(db4, engine as never, () => agent, undefined, mkdtempSync(join(tmpdir(), "hanalite-ws-")), () => Date.now() - 5 * 60_000, undefined, () => "agentB");
+    await sched.tick();
+    expect(ran).toBe(true); // A 照常跳
+    expect(["running", "ok"]).toContain(db4.getTask("t_hb")!.lastStatus);
   });
 });

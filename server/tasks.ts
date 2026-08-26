@@ -29,6 +29,8 @@ export class Scheduler {
     private lastUserAtFn?: () => number | undefined,
     /** 全局暂停心跳:返回 true 时所有心跳任务安静 */
     private isHeartbeatPaused?: () => boolean,
+    /** 主人正在聊天的人格 id(心跳避让只对这个人格生效,其他人格照常生活) */
+    private lastUserAgentIdFn?: () => string | undefined,
   ) {}
 
   start(): void {
@@ -56,12 +58,14 @@ export class Scheduler {
       if (!task.enabled || this.running.has(task.id)) continue;
       if (task.kind === "heartbeat" && this.isHeartbeatPaused?.()) continue; // 全局暂停
       if (task.nextRunAt > now) continue;
-      // 主人 30 分钟内说过话:心跳让路,顺延到下一网格点(不打扰正在聊天的主人),不占并发名额。
+      // 主人 30 分钟内说过话且正在聊的就是这个任务的人格:心跳让路,顺延到下一网格点
+      // (不打扰正在聊天的主人),不占并发名额。其他人格的心跳照常——每只灵有自己的生活节奏。
       // 连续避让达 2 次(间隔×2 的空档)后强制执行——主人聊得再久,人格也得保持生活节奏。
       if (task.kind === "heartbeat") {
         const lastUser = this.lastUserAtFn?.();
+        const activeAgent = this.lastUserAgentIdFn?.();
         const skipped = task.skippedCount ?? 0;
-        if (lastUser && now - lastUser < 30 * 60_000 && skipped < 2) {
+        if (lastUser && now - lastUser < 30 * 60_000 && task.agentId === activeAgent && skipped < 2) {
           const next = this.computeNext(task);
           this.db.saveTask({ ...task, nextRunAt: next ?? task.nextRunAt + 60_000, lastStatus: "skipped", skippedCount: skipped + 1 });
           continue;
