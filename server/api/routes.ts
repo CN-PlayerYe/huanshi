@@ -31,7 +31,7 @@ export interface AppDeps {
   /** 事件广播(WebSocket 推送),可选 */
   broadcast?: (e: StreamEvent) => void;
   /** 主人发消息时回调(心跳打断用) */
-  onUserMessage?: () => void;
+  onUserMessage?: (agentId?: string) => void;
   /** 手动立即运行任务(走调度器,心跳任务走心跳分支) */
   onRunTask?: (taskId: string) => Promise<{ ok: boolean; result: string }>;
 }
@@ -570,7 +570,6 @@ ${tools || "- (无工具)"}
   // ---- 聊天(SSE 流式) ----
 
   app.post("/api/chat", (c) => {
-    deps.onUserMessage?.();
     return streamSSE(c, async (stream) => {
       const body = (await c.req.json().catch(() => ({}))) as ChatRequest & { title?: string };
       if (!body.content?.trim()) {
@@ -583,6 +582,9 @@ ${tools || "- (无工具)"}
         session = deps.db.createSession(body.title ?? "", body.agentId ?? firstAgentId(deps.db));
         await stream.writeSSE({ event: "session_created", data: JSON.stringify({ type: "session_created", session }) });
       }
+
+      // 主人发消息:记录时间 + 正在聊的人格(心跳避让按人格区分——和夜玲珑聊,只有夜玲珑让路)
+      deps.onUserMessage?.(session.agentId);
 
       const agent = deps.db.getAgent(session.agentId) ?? deps.db.listAgents()[0];
       if (!agent) {

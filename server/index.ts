@@ -100,9 +100,10 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     },
     isPortable: () => paths.portable,
     broadcast,
-    // 主人发消息:记录时间,心跳执行时据此打断
-    onUserMessage: () => {
+    // 主人发消息:记录时间+正在聊的人格(心跳避让按人格区分,不是全局)
+    onUserMessage: (agentId?: string) => {
       lastUserAt = Date.now();
+      if (agentId) lastUserAgentId = agentId;
     },
     // 手动立即运行:走调度器(心跳任务走心跳分支:固定日记会话/边界/打断)
     onRunTask: async (taskId) => scheduler.runNow(taskId),
@@ -138,6 +139,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
 
   // ---- 定时任务调度器 ----
   let lastUserAt: number | undefined;
+  let lastUserAgentId: string | undefined;
   // 重启后恢复"主人最后说话时间":取所有会话最后一条非心跳 user 消息(心跳是系统代发,不算)
   try {
     for (const s of db.listSessions(true)) {
@@ -166,6 +168,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     workspaceDir,
     () => lastUserAt,
     () => settings.heartbeatPaused === true,
+    () => lastUserAgentId,
   );
   scheduler.start();
 
