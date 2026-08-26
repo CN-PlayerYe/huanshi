@@ -583,7 +583,7 @@ ${tools || "- (无工具)"}
         await stream.writeSSE({ event: "session_created", data: JSON.stringify({ type: "session_created", session }) });
       }
 
-      // 主人发消息:记录时间 + 正在聊的人格(心跳避让按人格区分——和夜玲珑聊,只有夜玲珑让路)
+      // 主人发消息:记录时间 + 正在聊的人格(心跳避让按人格区分——和某个人格聊,只有它让路)
       deps.onUserMessage?.(session.agentId);
 
       const agent = deps.db.getAgent(session.agentId) ?? deps.db.listAgents()[0];
