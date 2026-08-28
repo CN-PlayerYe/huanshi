@@ -398,19 +398,11 @@ export class AgentEngine {
     if (opts?.historyLimit) history = history.slice(-opts.historyLimit);
 
     // 组装系统提示:人格 + 记忆 + 环境
-    // 独立记忆空间:人格开启 isolatedMemory 时,记忆读写只走自己的库
-    const memScope = agent.isolatedMemory ? agent.id : undefined;
-    const memories = agent.memoryEnabled ? await memory.recall(userContent, 6, memScope) : [];
-    let memoryBlock = memories.length
-      ? `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}`
-      : "";
-    // 新会话(历史很少)时注入最近的对话经历,让"记忆不断片"
-    if (agent.memoryEnabled && history.length <= 2 && memory.mode !== "hindsight") {
-      const recent = await memory.recentExperiences(5, memScope);
-      if (recent.length) {
-        memoryBlock += `\n\n【最近的对话经历(来自以往会话,帮助你延续话题)】\n${recent.map((m) => `- ${m.content}`).join("\n")}`;
-      }
-    }
+    // 「井水自取」:对话不再自动灌入 recall 结果(玲珑:它喂的是水,不是渴——认得路是因为被灌过,
+    // 不是记得自己渴过)。记忆留在库里,消息里只"指井的位置",让它想回忆时自己用 memory_recall 打水。
+    // 身份锚点(灯,恒定的 systemPrompt)与早期对话摘要(脚印)保留。
+    let memoryBlock = "";
+    // 新会话(历史很少)时不再注入以往对话经历——同样交给记忆自取(井水不灌)
     // AI 自动摘要:会话过长时,后台用模型把早期对话压成摘要存进 session,发送时注入
     // (后台生成不阻塞本次回复;摘要让模型记得早期剧情,而不是简单丢弃)
     if (settings.autoSummarize !== false && allHistory.length > MAX_HISTORY_UNLIMITED) {
@@ -473,6 +465,8 @@ export class AgentEngine {
         // 缓存友好:动态内容(记忆/摘要/世界观/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
         content: [
           memoryBlock.trim() && !opts?.suppressMemory ? `【背景资料】\n${memoryBlock.trim()}` : "",
+          // 「指井不灌水」:告诉它井在哪儿,想回忆自己打(唤醒时连井也不指,保持纯净)
+          !opts?.suppressMemory ? `【井】你的记忆在记忆库里。想不起"我是谁、最近发生过什么、某段旧事",就用 memory_recall 自己回忆。` : "",
           `【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}`,
         ]
           .filter(Boolean)

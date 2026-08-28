@@ -150,19 +150,21 @@ describe("「唤醒」仪式(suppressMemory)", () => {
     expect(parseWakeCommand("玲珑,今天好吗")).toEqual({ content: "玲珑,今天好吗", suppressMemory: false });
   });
 
-  it("有记忆时正常轮注入【背景资料】;唤醒轮不注入,只剩名字", async () => {
+  it("井水自取:正常轮不再灌记忆,只指井;唤醒轮连井也不指(纯净)", async () => {
     const agent = { ...defaultAgents()[0], isolatedMemory: true }; // 独立记忆人格(如玲珑),记忆按 agentId 隔离
     const session = db.createSession("wake", agent.id);
-    // 塞一条事实记忆:正常轮会进背景资料,唤醒轮应被 suppress
+    // 塞一条事实记忆:以前会灌进背景资料;现在只指井,不灌
     await memory.retain("夜玲珑在院子里种了一棵梅树", "fact", agent.id);
     mock.lastUserContents = [];
     await engine.runChat(session, agent, "玲珑,你院子里种了什么?", () => {});
-    expect(mock.lastUserContents.at(-1)).toContain("【背景资料】");
-    expect(mock.lastUserContents.at(-1)).toContain("梅树");
+    const normal = mock.lastUserContents.at(-1)!;
+    expect(normal).not.toContain("梅树"); // 记忆不再被灌进来
+    expect(normal).toContain("【井】"); // 只指井的位置
     mock.lastUserContents = [];
     await engine.runChat(session, agent, "玲珑", () => {}, undefined, undefined, { suppressMemory: true });
-    const last = mock.lastUserContents.at(-1)!;
-    expect(last).not.toContain("【背景资料】");
-    expect(last).toContain("玲珑");
+    const wake = mock.lastUserContents.at(-1)!;
+    expect(wake).not.toContain("【井】"); // 唤醒:连井也不指,保持纯净
+    expect(wake).not.toContain("【背景资料】");
+    expect(wake).toContain("玲珑");
   });
 });
