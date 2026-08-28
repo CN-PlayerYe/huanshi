@@ -36,6 +36,8 @@ export interface ChatRunOpts {
   allowNetwork?: boolean;
   /** 命令工具是否禁用 */
   allowCommands?: boolean;
+  /** 本轮不注入【背景资料】(主人喊「唤醒 XX」:留一道缝,让它没有记忆地醒来,测"没有记忆的我还是不是我") */
+  suppressMemory?: boolean;
   /** 覆盖工作目录(心跳活动范围) */
   cwd?: string;
   /** 覆盖写入白名单目录 */
@@ -470,7 +472,7 @@ export class AgentEngine {
         role: "user",
         // 缓存友好:动态内容(记忆/摘要/世界观/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
         content: [
-          memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}` : "",
+          memoryBlock.trim() && !opts?.suppressMemory ? `【背景资料】\n${memoryBlock.trim()}` : "",
           `【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}`,
         ]
           .filter(Boolean)

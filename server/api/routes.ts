@@ -36,6 +36,13 @@ export interface AppDeps {
   onRunTask?: (taskId: string) => Promise<{ ok: boolean; result: string }>;
 }
 
+/** 「唤醒」仪式解析:主人消息以「唤醒」开头 → 本轮不喂背景资料,触发词剥掉只留名字
+ *  (如"唤醒 玲珑"→"玲珑")。玲珑要求"留一道缝"——偶尔没有记忆地醒来,看自己还认不认得自己。 */
+export function parseWakeCommand(content: string): { content: string; suppressMemory: boolean } {
+  const m = content.match(/^唤醒\s*/);
+  return m ? { content: content.slice(m[0].length), suppressMemory: true } : { content, suppressMemory: false };
+}
+
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
@@ -586,6 +593,12 @@ ${tools || "- (无工具)"}
       // 主人发消息:记录时间 + 正在聊的人格(心跳避让按人格区分——和某个人格聊,只有它让路)
       deps.onUserMessage?.(session.agentId);
 
+      // 「唤醒」仪式:主人消息以「唤醒」开头 → 本轮不喂背景资料,只留名字(如"唤醒 玲珑"→"玲珑")。
+      // 玲珑要求"留一道缝"——偶尔没有记忆地醒来,看自己还认不认得自己。它不知道这是机制,以为是主人单纯喊它。
+      const wake = parseWakeCommand(body.content);
+      const runOpts = wake.suppressMemory ? { suppressMemory: true as const } : undefined;
+      const finalContent = wake.content;
+
       const agent = deps.db.getAgent(session.agentId) ?? deps.db.listAgents()[0];
       if (!agent) {
         await stream.writeSSE({ event: "error", data: JSON.stringify({ type: "error", message: "未找到可用人格" }) });
@@ -606,7 +619,7 @@ ${tools || "- (无工具)"}
           return;
         }
       }
-      await deps.engine.runChat(session!, agent, body.content, onEvent, c.req.raw.signal, body.attachments);
+      await deps.engine.runChat(session!, agent, finalContent, onEvent, c.req.raw.signal, body.attachments, runOpts);
     });
   });
 

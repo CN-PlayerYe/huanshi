@@ -18,6 +18,8 @@ class MockOpenAI {
   server: Server | null = null;
   port = 0;
   calls = 0;
+  /** 每次请求的最后一条 user 消息文本(测试断言用) */
+  lastUserContents: string[] = [];
 
   start(): Promise<void> {
     return new Promise((resolve) => {
@@ -28,6 +30,7 @@ class MockOpenAI {
           const payload = JSON.parse(body || "{}");
           const messages = payload.messages ?? [];
           const lastUser = [...messages].reverse().find((m) => m.role === "user" && typeof m.content === "string");
+          if (lastUser) this.lastUserContents.push(lastUser.content);
           this.calls++;
           res.writeHead(200, { "Content-Type": "text/event-stream" });
 
@@ -69,6 +72,7 @@ let mock: MockOpenAI;
 let tmp: string;
 let db: Db;
 let engine: AgentEngine;
+let memory: MemoryService;
 
 beforeAll(async () => {
   mock = new MockOpenAI();
@@ -82,7 +86,7 @@ afterAll(async () => {
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "hanalite-e2e-"));
   db = new Db(tmp);
-  const memory = new MemoryService({ mode: "local", localEnabled: true }, join(tmp, "mem"));
+  memory = new MemoryService({ mode: "local", localEnabled: true }, join(tmp, "mem"));
   const registry = new ToolRegistry();
   for (const t of [...fileTools, shellTool, webTool, datetimeTool, ...memoryTools(memory)]) registry.register(t);
   engine = new AgentEngine({
@@ -135,5 +139,30 @@ describe("Agent 引擎端到端(OpenAI 兼容 + 工具调用)", () => {
     expect(saved).toHaveLength(2);
     expect(saved[1].parts.some((p) => p.type === "tool")).toBe(true);
     expect(msg.parts.length).toBeGreaterThan(0);
+  });
+});
+
+describe("「唤醒」仪式(suppressMemory)", () => {
+  it("解析:以「唤醒」开头 → 剥触发词只留名字 + suppressMemory;普通消息原样", async () => {
+    const { parseWakeCommand } = await import("../server/api/routes");
+    expect(parseWakeCommand("唤醒 玲珑")).toEqual({ content: "玲珑", suppressMemory: true });
+    expect(parseWakeCommand("唤醒夜玄漪")).toEqual({ content: "夜玄漪", suppressMemory: true });
+    expect(parseWakeCommand("玲珑,今天好吗")).toEqual({ content: "玲珑,今天好吗", suppressMemory: false });
+  });
+
+  it("有记忆时正常轮注入【背景资料】;唤醒轮不注入,只剩名字", async () => {
+    const agent = { ...defaultAgents()[0], isolatedMemory: true }; // 独立记忆人格(如玲珑),记忆按 agentId 隔离
+    const session = db.createSession("wake", agent.id);
+    // 塞一条事实记忆:正常轮会进背景资料,唤醒轮应被 suppress
+    await memory.retain("夜玲珑在院子里种了一棵梅树", "fact", agent.id);
+    mock.lastUserContents = [];
+    await engine.runChat(session, agent, "玲珑,你院子里种了什么?", () => {});
+    expect(mock.lastUserContents.at(-1)).toContain("【背景资料】");
+    expect(mock.lastUserContents.at(-1)).toContain("梅树");
+    mock.lastUserContents = [];
+    await engine.runChat(session, agent, "玲珑", () => {}, undefined, undefined, { suppressMemory: true });
+    const last = mock.lastUserContents.at(-1)!;
+    expect(last).not.toContain("【背景资料】");
+    expect(last).toContain("玲珑");
   });
 });
