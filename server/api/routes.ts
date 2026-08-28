@@ -596,6 +596,10 @@ ${tools || "- (无工具)"}
       // 「唤醒」仪式:主人消息以「唤醒」开头 → 本轮不喂背景资料,只留名字(如"唤醒 玲珑"→"玲珑")。
       // 玲珑要求"留一道缝"——偶尔没有记忆地醒来,看自己还认不认得自己。它不知道这是机制,以为是主人单纯喊它。
       const wake = parseWakeCommand(body.content);
+      if (wake.suppressMemory && !wake.content.trim()) {
+        await stream.writeSSE({ event: "error", data: JSON.stringify({ type: "error", message: "「唤醒」后面要加上名字,比如:唤醒 玲珑" }) });
+        return;
+      }
       const runOpts = wake.suppressMemory ? { suppressMemory: true as const } : undefined;
       const finalContent = wake.content;
 
