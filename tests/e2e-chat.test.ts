@@ -168,3 +168,33 @@ describe("「唤醒」仪式(suppressMemory)", () => {
     expect(wake).toContain("玲珑");
   });
 });
+
+describe("自动事实沉淀(generateFacts)", () => {
+  it("从对话提炼事实并入库(kind=fact)", async () => {
+    const { generateFacts } = await import("../server/agent/engine");
+    const agent = { ...defaultAgents()[0], isolatedMemory: true };
+    const msgs = [
+      { id: "1", sessionId: "s", role: "user", parts: [{ type: "text", text: "我喜欢吃火锅,我叫小明" }], createdAt: 0 },
+    ] as never;
+    const text = await generateFacts(
+      { kind: "openai", baseUrl: `http://127.0.0.1:${mock.port}`, apiKey: "test", model: "mock-model" } as never,
+      msgs,
+      tmp,
+    );
+    expect(text.length).toBeGreaterThan(0); // mock 返回了提炼文本
+    // 触发逻辑:对话积累 ≥20 条时,自动把提炼结果存进事实库
+    const session = db.createSession("facts", agent.id);
+    for (let i = 0; i < 22; i++) {
+      db.appendMessage({ id: "u" + i, sessionId: session.id, role: "user", parts: [{ type: "text", text: "我们聊了点什么" + i }], createdAt: Date.now() + i });
+      db.appendMessage({ id: "a" + i, sessionId: session.id, role: "assistant", parts: [{ type: "text", text: "嗯,记下了" + i }], createdAt: Date.now() + i });
+    }
+    await engine.runChat(session, agent, "今天聊得不错", () => {});
+    // 异步沉淀:轮询等 facts 写入(factCount 推进)
+    await new Promise((r) => setTimeout(r, 1000));
+    const all = await memory.list(agent.id); // isolatedMemory:事实存在该人格自己的库里(LocalMemory 按目录隔离,条目无 agentId 字段)
+    const facts = all.filter((m) => m.kind === "fact");
+    expect(facts.length).toBeGreaterThan(0); // 自动沉淀出事实
+    const s2 = db.getSession(session.id)!;
+    expect(s2.factCount ?? 0).toBeGreaterThanOrEqual(44); // 沉淀时的消息数被记录
+  });
+});

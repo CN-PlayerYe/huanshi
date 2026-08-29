@@ -112,6 +112,54 @@ export function sliceHistoryByPct(messages: ChatMessage[], agent: AgentDef): Cha
 /** 正在生成摘要的会话(防止并发重复生成) */
 const summaryLocks = new Set<string>();
 
+/**
+ * 用模型从对话里提取"值得长期记住的事实"(人物关系/用户信息/承诺/设定)。
+ * 供自动事实沉淀:对话积累到一定量时后台提炼,存进事实记忆(不再只靠人格主动 memory_retain)。
+ * 返回每行一条事实;没有值得记的返回空。
+ */
+export async function generateFacts(
+  providerCfg: ModelConfig,
+  messages: ChatMessage[],
+  dataDir: string,
+): Promise<string> {
+  if (!providerCfg || !messages.length) return "";
+  const provider = createProvider(providerCfg);
+  const history = messages
+    .map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.parts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text ?? "")
+        .join("\n")
+        .slice(0, 1500),
+    }))
+    .filter((m) => m.content.trim());
+  if (!history.length) return "";
+  let text = "";
+  try {
+    for await (const chunk of provider.chatStream({
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是记忆管家。从下面的对话中,提取值得长期记住的事实:人物关系、主人的个人信息与偏好、重要承诺与约定、故事世界的重要设定。只输出事实本身,每条一行,简洁,中文。不要输出对话原文。没有值得记的事实就只输出一行:无。",
+        },
+        ...history,
+      ],
+      tools: [],
+      maxTokens: 600,
+    })) {
+      if (chunk.delta) text += chunk.delta;
+    }
+  } catch {
+    /* 事实提炼失败不影响主流程 */
+  }
+  return text.trim();
+}
+
+/** 正在提炼事实的会话(防止并发重复生成) */
+const factLocks = new Set<string>();
+
 /** 世界观文档生成:综合会话摘要 + 最近对话,生成/更新结构化设定文档 */
 export async function generateLore(
   providerCfg: ModelConfig,
@@ -617,6 +665,35 @@ export class AgentEngine {
         // 心跳消息是系统代发的“自主活动邀请”,不是用户的言行,不沉淀为记忆(避免污染人格身份)
         if (summary.length > 20 && !summary.startsWith("【心跳】")) {
           void memory.retain(summary, "experience", agent.isolatedMemory ? agent.id : undefined);
+        }
+      }
+
+      // 自动事实沉淀:每积累 ~20 条新对话,后台提炼一次"值得记住的事实"存进事实库
+      // (解决 facts 只靠人格主动 memory_retain、容易停在旧日期的问题——如夜玄漪的事实记忆停在 8/27)
+      if (agent.memoryEnabled && allHistory.length - (session.factCount ?? 0) >= 20) {
+        const cnt = allHistory.length;
+        if (!factLocks.has(session.id)) {
+          factLocks.add(session.id);
+          const recent = allHistory.slice(-40); // 最近 40 条足够提炼这批新事实
+          void generateFacts(providerCfg, recent, dataDir)
+            .then(async (text) => {
+              const facts = text
+                .split("\n")
+                .map((l) => l.trim())
+                .filter((l) => l && l !== "无" && l !== "无。");
+              if (facts.length) {
+                for (const fact of facts) {
+                  try {
+                    await memory.retain(fact.slice(0, 500), "fact", agent.isolatedMemory ? agent.id : undefined);
+                  } catch {
+                    /* retain 失败不影响主流程 */
+                  }
+                }
+              }
+              db.updateSession(session.id, { factCount: cnt });
+            })
+            .catch(() => undefined)
+            .finally(() => factLocks.delete(session.id));
         }
       }
 
