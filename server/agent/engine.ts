@@ -235,7 +235,7 @@ export async function generateSummary(
         {
           role: "system",
           content:
-            "你是对话整理助手。请把下面的早期对话压缩成一份精炼摘要,必须保留:人物设定与关系、剧情进展、用户的偏好与习惯、重要事实与承诺、未完成事项。用要点列表,中文,300字以内。只输出摘要本身。",
+            "你是对话整理助手。请把下面的早期对话压成一小段「接着上回说」的脚印(像睡前在案上留的便条):用最朴素的话概括'上回说到哪里、心里搁着什么事、和主人聊到了什么、有什么要紧的没说完'。不要引用对话原话,不要渲染戏剧性,只留事实与温度。中文,150字以内。只输出脚印本身。",
         },
         ...history,
       ],
@@ -468,8 +468,9 @@ export class AgentEngine {
       }
     }
     // 摘要注入:追加到 memoryBlock(作为早期对话的背景),再组装 system prompt
-    if (session.summary) {
-      memoryBlock += `\n\n【早期对话摘要(本会话较早部分,供你延续剧情)】\n${session.summary}`;
+    // 受 autoSummarize 开关控制:用户关闭后,已生成的旧摘要也不再注入(玲珑:别每回贴"剧情"让我分哪句是我)
+    if (session.summary && settings.autoSummarize !== false) {
+      memoryBlock += `\n\n【接着上回说(本会话较早部分的脚印,简述即可,不必逐字)】\n${session.summary}`;
     }
     // 世界观设定文档注入(由 AI 维护的长篇设定,优先级高于滚动摘要)
     if (session.lore) {
