@@ -499,6 +499,21 @@ export function SettingsView() {
             <option value="recent5">仅最近 5 条完整(快,可能报错)</option>
             <option value="off">不回传(最快,可能报错)</option>
           </select>
+        </div>
+        <div className="field" style={{ marginBottom: 10 }}>
+          <label>思考强度档位(DeepSeek V4 reasoning_effort)</label>
+          <select
+            value={settings.reasoningEffort ?? "high"}
+            onChange={(e) => void updateSettings({ reasoningEffort: e.target.value as "off" | "low" | "high" | "max" })}
+            title="思考模式的强度:低=简短思考(正文快,正文空时选这个),高=标准(默认),最大=深度思考(慢但准);关=直接回答(同输入框左边💭)"
+          >
+            <option value="off">关闭(直接回答,最快)</option>
+            <option value="low">低(简短思考,正文快)</option>
+            <option value="high">高(标准,默认)</option>
+            <option value="max">最大(深度思考,慢但准)</option>
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 10 }}>
           <label>
             请求体保命线上限(KB):
             <input
