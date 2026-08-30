@@ -9,7 +9,7 @@ import logo from "../assets/icon.png";
 // 模块级常量:避免 selector 里 ?? [] 每次返回新引用导致 React 无限重渲染
 const EMPTY_OPTIONS: string[] = [];
 
-export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveTool }: { msg: ChatMessage; streaming?: boolean; onRemoveTool?: (msgId: string) => void }) {
+export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveTool, onRemoveThinking }: { msg: ChatMessage; streaming?: boolean; onRemoveTool?: (msgId: string) => void; onRemoveThinking?: (msgId: string) => void }) {
   const isUser = msg.role === "user";
   const showThinking = useApp((s) => s.settings?.showThinking ?? true);
   const deleteMessage = useApp((s) => s.deleteMessage);
@@ -81,7 +81,14 @@ export const MessageItem = memo(function MessageItem({ msg, streaming, onRemoveT
         <audio ref={audioRef} onEnded={() => setSpeaking(false)} onPause={() => setSpeaking(false)} />
         {!isUser && thinking && showThinking && (
           <details className="thinking-block">
-            <summary>🖊 思考过程</summary>
+            <summary>
+              <span>🖊 思考过程</span>
+              {onRemoveThinking && (
+                <button className="btn-link sm" title="删除思考过程(只留正文,省上下文)" onClick={(e) => { e.preventDefault(); onRemoveThinking(msg.id); }}>
+                  删除
+                </button>
+              )}
+            </summary>
             <div className="thinking-content">{thinking}</div>
           </details>
         )}
@@ -292,6 +299,24 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
     }
   };
 
+  /** 删除一条消息里的思考过程(只留正文);思考是过程不是记忆,删了省上下文、界面干净 */
+  const removeThinking = async (sessionId: string, msgId: string) => {
+    const ok = await (window.hanalite?.confirmDialog ? window.hanalite.confirmDialog("删除此条消息的思考过程?只保留正文(操作不可恢复)") : true);
+    if (!ok) return;
+    try {
+      await api.stripThinking(sessionId, msgId);
+      useApp.setState((s) => ({
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: (s.messagesBySession[sessionId] ?? []).map((m) => (m.id === msgId ? { ...m, parts: m.parts.filter((p) => p.type !== "thinking") } : m)),
+        },
+      }));
+      useApp.getState().showToast("已删除思考过程,只保留正文");
+    } catch (err) {
+      useApp.getState().showToast(`删除失败:${(err as Error).message}`);
+    }
+  };
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -330,7 +355,7 @@ export const MessageList = memo(function MessageList({ messages, streaming }: { 
   return (
     <div className="message-list" ref={ref}>
       {messages.map((m, i) => (
-        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} onRemoveTool={(msgId) => void removeTools(activeSessionId ?? "", msgId)} />
+        <MessageItem key={m.id} msg={m} streaming={streaming && i === messages.length - 1 && m.role === "assistant"} onRemoveTool={(msgId) => void removeTools(activeSessionId ?? "", msgId)} onRemoveThinking={(msgId) => void removeThinking(activeSessionId ?? "", msgId)} />
       ))}
       {options.length > 0 && !streaming && (
         <div className="chat-options">

@@ -263,6 +263,7 @@ export interface EngineDeps {
     toolWhitelistDir: string;
     visionProvider?: string;
     thinkingEcho?: "all" | "recent5" | "off";
+    reasoningEffort?: "off" | "low" | "high" | "max";
     autoSummarize?: boolean;
     enableOptions?: boolean;
     style?: Settings["style"];
@@ -351,7 +352,7 @@ export class AgentEngine {
           let toolCalls: ProviderToolCall[] = [];
           let iterText = "";
           let iterThinking = "";
-          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: agent.temperature ?? 0.8, maxTokens: 2048, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
+          for await (const chunk of provider.chatStream({ messages: providerMessages, tools, temperature: agent.temperature ?? 0.8, maxTokens: 8192, reasoningEffort: settings.reasoningEffort, maxBodyBytes: bodyLimitOf(settings) }, signal)) {
             if (chunk.delta) {
               textBuf += chunk.delta;
               iterText += chunk.delta;
@@ -582,7 +583,7 @@ export class AgentEngine {
         let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
-          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 4096, maxBodyBytes: bodyLimitOf(settings) },
+          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 8192, reasoningEffort: settings.reasoningEffort, maxBodyBytes: bodyLimitOf(settings) },
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;

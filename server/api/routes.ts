@@ -134,6 +134,18 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true, message: msg });
   });
 
+  /** 删除一条消息里的思考过程(thinking parts),只留正文——思考是过程不是记忆,删了省上下文、界面干净 */
+  app.post("/api/sessions/:sid/messages/:id/strip-thinking", (c) => {
+    const sid = c.req.param("sid");
+    const id = c.req.param("id");
+    const msgs = deps.db.getMessages(sid);
+    const msg = msgs.find((m) => m.id === id);
+    if (!msg) return c.json({ ok: false, error: "消息不存在" }, 404);
+    msg.parts = msg.parts.filter((p) => p.type !== "thinking");
+    deps.db.updateMessage(msg);
+    return c.json({ ok: true, message: msg });
+  });
+
   /** 修改数据目录(写重定向,重启生效) */
   app.post("/api/settings/data-dir", async (c) => {
     const { path } = (await c.req.json()) as { path: string };

@@ -42,8 +42,11 @@ export class OpenAICompatibleProvider implements ChatProvider {
         stream_options: { include_usage: true },
         temperature: req.temperature ?? 0.7,
         ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-        // 关闭思考模式(DeepSeek V3.2+/V4):模型不再“先想后答”,首字大幅提速
-        ...(this.disableThinking ? { thinking: { type: "disabled" } } : {}),
+        // 思考强度档位(DeepSeek V4):off=关闭思考;low/high/max 对应 reasoning_effort(官方默认 high)
+        ...(req.reasoningEffort === "off" || (req.reasoningEffort == null && this.disableThinking)
+          ? { thinking: { type: "disabled" } }
+          : {}),
+        ...(req.reasoningEffort && req.reasoningEffort !== "off" ? { reasoning_effort: req.reasoningEffort } : {}),
       });
 
     // 请求体过大(超长会话 + 思考全量回传)会传输截断/模型端解析失败:自动压缩(保命线)

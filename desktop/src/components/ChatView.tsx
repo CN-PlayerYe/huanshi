@@ -70,13 +70,16 @@ export function ChatView() {
     void runCallLoop();
   };
 
-  // 历史思考回传快捷切换:off → recent5 → all(与设置页 thinkingEcho 联动,全局生效)
-  const thinkEcho = settings?.thinkingEcho ?? "all";
-  const THINK_LABEL: Record<string, string> = { all: "🧠 思考·全部", recent5: "🧠 思考·近5条", off: "🧠 思考·关" };
-  const cycleThinking = () => {
-    const next = thinkEcho === "off" ? "recent5" : thinkEcho === "recent5" ? "all" : "off";
-    void useApp.getState().updateSettings({ thinkingEcho: next }).then(() =>
-      useApp.getState().showToast(`历史思考回传:${next === "all" ? "全部" : next === "recent5" ? "最近 5 条" : "关闭"}`),
+  // 思考强度档位切换:off → low → high → max → off(DeepSeek V4 reasoning_effort,官方默认 high)
+  const effort = settings?.reasoningEffort;
+  const EFFORT_LABEL: Record<string, string> = { off: "🈚 思考·关", low: "🧠 思考·低", high: "🧠 思考·高", max: "🧠 思考·最大" };
+  const cycleEffort = () => {
+    const cur = effort ?? "high";
+    const next = cur === "off" ? "low" : cur === "low" ? "high" : cur === "high" ? "max" : "off";
+    void useApp.getState().updateSettings({ reasoningEffort: next }).then(() =>
+      useApp.getState().showToast(
+        `思考档位:${next === "off" ? "关闭(直接回答,最快)" : next === "low" ? "低(简短思考)" : next === "high" ? "高(标准思考)" : "最大(深度思考)"}`,
+      ),
     );
   };
 
@@ -141,10 +144,10 @@ export function ChatView() {
         {activeSessionId && (
           <button
             className="btn secondary sm"
-            title={`历史思考回传:${thinkEcho === "all" ? "全部" : thinkEcho === "recent5" ? "最近 5 条" : "关闭"}(点击切换;超长会话建议关闭可提速)`}
-            onClick={cycleThinking}
+            title={`思考档位:${effort === "off" ? "关闭" : effort === "low" ? "低" : effort === "max" ? "最大" : "高"}(点击切换;正文空时可调低或关闭)`}
+            onClick={cycleEffort}
           >
-            {THINK_LABEL[thinkEcho] ?? "🧠 思考"}
+            {EFFORT_LABEL[effort ?? "high"] ?? "🧠 思考"}
           </button>
         )}
         {activeSessionId && (

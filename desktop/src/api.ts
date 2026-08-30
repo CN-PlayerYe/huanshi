@@ -84,6 +84,8 @@ export const api = {
   deleteSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}`, { method: "DELETE" }),
   /** 删除一条消息里的全部工具调用信息(只留正文/思考) */
   stripTools: (sessionId: string, messageId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${messageId}/strip-tools`, { method: "POST" }),
+  /** 删除一条消息里的思考过程(只留正文) */
+  stripThinking: (sessionId: string, messageId: string) => request<{ ok: boolean }>(`/api/sessions/${sessionId}/messages/${messageId}/strip-thinking`, { method: "POST" }),
   archiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/archive`, { method: "POST" }),
   unarchiveSession: (id: string) => request<{ ok: boolean }>(`/api/sessions/${id}/unarchive`, { method: "POST" }),
   /** 隐私保险:隐藏会话(从所有列表消失+消息文件移出 db/,设置里可恢复) */

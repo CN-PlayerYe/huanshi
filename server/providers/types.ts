@@ -44,6 +44,8 @@ export interface ChatRequest {
   maxTokens?: number;
   /** 请求体保命线上限(字节):超此值自动压缩;0=不限制;缺省用全局默认 */
   maxBodyBytes?: number;
+  /** 思考强度档位(DeepSeek V4 reasoning_effort):off=关闭思考,low/high/max 递增;不传用模型默认 */
+  reasoningEffort?: "off" | "low" | "high" | "max";
 }
 
 /** 多模态内容块(OpenAI 兼容格式;Anthropic 序列化时转换) */

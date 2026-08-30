@@ -136,6 +136,8 @@ export interface Settings {
   };
   /** 历史思考回传策略:DeepSeek thinking 要求回传 reasoning_content;all=全量,recent5=仅最近 5 条完整(更快,可能报错),off=不回传(最快,可能报错) */
   thinkingEcho?: "all" | "recent5" | "off";
+  /** 思考强度档位(DeepSeek V4 reasoning_effort):off=关闭思考,low/high/max 递增(官方默认 high) */
+  reasoningEffort?: "off" | "low" | "high" | "max";
   /** 自动摘要长上下文:会话过长时用 AI 把早期对话压成摘要,发送时注入(默认开启) */
   autoSummarize?: boolean;
   /** 局域网访问:开启后手机/其他设备可通过本机 IP 访问聊天(需重启生效) */
@@ -229,6 +231,8 @@ export interface ChatRequest {
   agentId?: string;
   /** 图片附件(相对数据目录的文件路径) */
   attachments?: { file: string; mime: string }[];
+  /** 思考强度档位(DeepSeek V4):off=关闭思考,low/high/max 递增;不传用模型默认(high) */
+  reasoningEffort?: "off" | "low" | "high" | "max";
 }
 
 export type StreamEvent =
