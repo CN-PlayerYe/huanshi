@@ -374,18 +374,19 @@ const ChatInput = memo(function ChatInput({
   // 思考模式快捷切换:当前 activeProvider 的 disableThinking(模型先想后答 vs 直接答)
   const settings = useApp((s) => s.settings);
   const activePid = settings?.activeProvider ?? "";
-  const thinkingOff = settings?.providers?.[activePid]?.disableThinking === true;
-  const toggleThinkingMode = () => {
+  // 思考档位(💭 输入框左边):off → low → high → max → off,一个按钮管"开关+强度"
+  const effort = settings?.reasoningEffort;
+  const EFFORT_SHORT: Record<string, string> = { off: "关", low: "低", high: "高", max: "最" };
+  const cycleEffort = () => {
     if (!activePid || !settings?.providers?.[activePid]) {
-      useApp.getState().showToast("未配置模型,无法切换思考模式");
+      useApp.getState().showToast("未配置模型,无法切换思考档位");
       return;
     }
-    const cfg = settings.providers[activePid];
-    const next = !cfg.disableThinking;
-    void useApp
-      .getState()
-      .updateSettings({ providers: { ...settings.providers, [activePid]: { ...cfg, disableThinking: next } } })
-      .then(() => useApp.getState().showToast(`思考模式:${next ? "关闭(直接回答,更快)" : "开启(先思考再回答,更深入)"}`));
+    const cur = effort ?? "high";
+    const next = cur === "off" ? "low" : cur === "low" ? "high" : cur === "high" ? "max" : "off";
+    void useApp.getState().updateSettings({ reasoningEffort: next }).then(() =>
+      useApp.getState().showToast(`思考:${next === "off" ? "关闭(直接回答,最快)" : next === "low" ? "低(简短思考,正文快)" : next === "high" ? "高(标准,默认)" : "最大(深度思考,慢但准)"}`),
+    );
   };
 
   useEffect(() => {
@@ -560,12 +561,12 @@ const ChatInput = memo(function ChatInput({
         </button>
         <button
           className="attach-btn"
-          onClick={toggleThinkingMode}
-          title={`思考模式:${thinkingOff ? "关闭(直接回答,更快)" : "开启(先思考再回答,更深入)"} — 点击切换`}
+          onClick={cycleEffort}
+          title={`思考档位:${effort === "off" ? "关闭(直接回答)" : effort === "low" ? "低(简短思考)" : effort === "max" ? "最大(深度思考)" : "高(标准,默认)"} — 点击循环 关/低/高/最大`}
           disabled={sending}
-          style={{ opacity: thinkingOff ? 0.6 : 1 }}
+          style={{ opacity: effort === "off" ? 0.6 : 1 }}
         >
-          💭
+          💭{EFFORT_SHORT[effort ?? "high"] ?? "高"}
         </button>
         <input ref={fileRef} type="file" accept="image/*,.txt,.md,.csv,.json,.log,.pdf,.docx" multiple hidden onChange={(e) => void pickFiles(e.target.files)} />
         <button className="attach-btn voice-btn" onClick={startVoice} title={listening ? "聆听中…" : "语音输入"} disabled={sending}>
