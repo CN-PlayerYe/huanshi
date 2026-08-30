@@ -181,7 +181,7 @@ export function sanitizeToolMessages(msgs: ProviderMsg[]): ProviderMsg[] {
  *  ① 思考回传(纯开销、非记忆)优先删 → ② 工具输出(过程记录,非记忆)截短 → ③ 工具参数回放截短
  *  → ④ 旧正文【截短而非丢弃】(保留每条消息头部,记忆最大化) → ⑤ 丢旧消息(保底 15 条) → ⑥ 极端兜底。
  *  正文是记忆本体,最后才动;正文超多的超长会话会优先截短而非整段丢弃。 */
-export const SHRINK_TARGET = 200 * 1024;
+export const SHRINK_TARGET = 1024 * 1024;
 
 export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET): ProviderMsg[] {
   let m = msgs;

@@ -110,7 +110,7 @@ describe("sanitizeToolMessages(tool 消息配对)", () => {
 });
 
 describe("shrinkMessages 字节目标压缩(超长会话 400 修复)", () => {
-  it("3835 条级超长会话压缩到 ≤200KB 且 ≥15 条", () => {
+  it("3835 条级超长会话压缩到 ≤1MB 且 ≥15 条", () => {
     // 构造 2000 条消息、每条含思考+文本,模拟 historyUnlimited 全量发送
     const msgs: any[] = [];
     for (let i = 0; i < 2000; i++) {
@@ -118,10 +118,10 @@ describe("shrinkMessages 字节目标压缩(超长会话 400 修复)", () => {
       msgs.push({ role: "assistant", content: `第 ${i} 条回复${"好".repeat(300)}`, reasoningContent: `思考${"想".repeat(400)}` });
     }
     const raw = Buffer.byteLength(JSON.stringify(msgs));
-    expect(raw).toBeGreaterThan(200 * 1024);
+    expect(raw).toBeGreaterThan(1024 * 1024);
     const out = shrinkMessages(msgs);
     const len = Buffer.byteLength(JSON.stringify(out));
-    expect(len).toBeLessThanOrEqual(200 * 1024);
+    expect(len).toBeLessThanOrEqual(1024 * 1024);
     expect(out.length).toBeGreaterThanOrEqual(15);
   });
 
@@ -147,7 +147,7 @@ describe("压缩优先级:工具/思考先清,正文最后动", () => {
     const fullText = msgs.filter((x) => x.role !== "tool").map((x) => (x.content || "").length).reduce((a, b) => a + b, 0);
     const out = shrinkMessages(msgs);
     const keptText = out.filter((x) => x.role !== "tool").map((x) => (x.content || "").length).reduce((a, b) => a + b, 0);
-    expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(200 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(out))).toBeLessThanOrEqual(1024 * 1024);
     // 正文保留比例应显著高于工具(工具全截,正文基本不动)
     expect(keptText / fullText).toBeGreaterThan(0.5);
   });
