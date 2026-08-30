@@ -209,7 +209,7 @@ export function shrinkMessages(msgs: ProviderMsg[], targetBytes = SHRINK_TARGET)
     return rankFromEnd <= 3 ? { ...x, reasoningContent: x.reasoningContent.slice(0, 300) } : { ...x, reasoningContent: undefined };
   });
   // ② 工具输出(过程记录,非记忆):截断到 80 字符,只留"干了什么"
-  m = m.map((x) => (x.role === "tool" && x.content.length > 80 ? { ...x, content: `${x.content.slice(0, 80)}…` } : x));
+  m = m.map((x) => (x.role === "tool" && x.content.length > 500 ? { ...x, content: `${x.content.slice(0, 500)}…` } : x));
   // ③ 工具调用参数回放:截断到 120 字符
   m = m.map((x) =>
     x.toolCalls?.length

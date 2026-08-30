@@ -36,7 +36,8 @@ export function memoryTools(memory: MemoryService): Tool[] {
         if (!ctx.memory) return "记忆服务不可用";
         const items = await ctx.memory.recall(String(input.query), Number(input.limit) || 5, ctx.agentId);
         if (!items.length) return "(没有找到相关记忆)";
-        return items.map((m) => `- ${m.content}`).join("\n");
+        // 每条精简到 200 字符:检索结果太长会被请求体压缩截成 80 字符的碎片,模型反而"记不起来"
+        return items.map((m) => `- ${(m.content || "").slice(0, 200)}${(m.content || "").length > 200 ? "…" : ""}`).join("\n");
       },
     },
     {
