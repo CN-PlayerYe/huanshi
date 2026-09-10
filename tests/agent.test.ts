@@ -178,3 +178,31 @@ describe("historyToProviderMessages(工具调用历史回放)", () => {
     expect(out[1].content).toBe("hello");
   });
 });
+
+describe("capSummarySource 摘要素材封顶(防超长会话摘要必失败)", () => {
+  it("超长会话素材总字符封顶(3000 条 × 1000 字 → ≤40 万字符)", async () => {
+    const { capSummarySource } = await import("../server/agent/engine");
+    const msgs = Array.from({ length: 3000 }, (_, i) => ({
+      id: "m" + i,
+      sessionId: "s",
+      role: (i % 2 ? "assistant" : "user") as "user" | "assistant",
+      parts: [{ type: "text" as const, text: "x".repeat(1000) }],
+      createdAt: i,
+    }));
+    const capped = capSummarySource(msgs);
+    const total = capped.reduce((n, m) => n + m.content.length, 0);
+    expect(total).toBeLessThanOrEqual(400_000 + 1000); // 封顶(允许最后一条溢出)
+    expect(capped.length).toBeGreaterThan(0);
+    expect(capped.length).toBeLessThan(msgs.length); // 确实截掉了早期的
+  });
+
+  it("短素材全保留,每条截断到 800 字符", async () => {
+    const { capSummarySource } = await import("../server/agent/engine");
+    const msgs = [
+      { id: "1", sessionId: "s", role: "user" as const, parts: [{ type: "text" as const, text: "y".repeat(2000) }], createdAt: 1 },
+    ];
+    const capped = capSummarySource(msgs);
+    expect(capped.length).toBe(1);
+    expect(capped[0].content.length).toBe(800); // 单条截断
+  });
+});

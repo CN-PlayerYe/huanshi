@@ -58,6 +58,8 @@ const NETWORK_TOOLS = new Set(["fetch_url", "search_web"]);
 const MAX_HISTORY_MESSAGES = 30;
 /** 「历史不限长度」的物理上限:模型上下文有限,超长会极慢甚至超限(野生人格遇到过 1.4MB/88 秒) */
 const MAX_HISTORY_UNLIMITED = 400;
+/** 摘要素材最多取多少条(超长会话封顶,避免一次摘要素材上百万字符导致请求必然失败) */
+const MAX_SUMMARY_SOURCE = 800;
 /** 单条 assistant 最多回放的工具结果数(迁移会话可能出现上百个工具调用,全量回放会撑爆 payload) */
 const MAX_TOOL_RESULTS = 15;
 /** 每条工具输出回放截断长度 */
@@ -210,6 +212,32 @@ export async function generateLore(
  * 用模型把早期对话压成摘要(纯文本请求,不调工具)。
  * 供"AI 自动摘要":会话过长时让 AI 自主提炼关键信息,而不是简单截断。
  */
+/**
+ * 摘要素材封顶(可测):超长会话只取最近部分,且总字符受限——
+ * 否则 3000+ 条会话一次摘要要吞上百万字符,必然超上下文 → 请求失败 → 每轮重试烧钱。
+ */
+export function capSummarySource(messages: ChatMessage[]): { role: "user" | "assistant"; content: string }[] {
+  const mapped = messages
+    .map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.parts
+        .filter((p) => p.type === "text")
+        .map((p) => p.text ?? "")
+        .join("\n")
+        .slice(0, 800),
+    }))
+    .filter((m) => m.content.trim());
+  const MAX_SOURCE_CHARS = 400_000; // ≈ 10 万 tokens
+  const out: typeof mapped = [];
+  let acc = 0;
+  for (let i = mapped.length - 1; i >= 0; i--) {
+    acc += mapped[i].content.length;
+    if (acc > MAX_SOURCE_CHARS) break;
+    out.unshift(mapped[i]);
+  }
+  return out;
+}
+
 export async function generateSummary(
   providerCfg: ModelConfig,
   messages: ChatMessage[],
@@ -217,16 +245,7 @@ export async function generateSummary(
 ): Promise<string> {
   if (!providerCfg || !messages.length) return "";
   const provider = createProvider(providerCfg);
-  const history = messages
-    .map((m) => ({
-      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-      content: m.parts
-        .filter((p) => p.type === "text")
-        .map((p) => p.text ?? "")
-        .join("\n")
-        .slice(0, 2000),
-    }))
-    .filter((m) => m.content.trim());
+  const history = capSummarySource(messages);
   if (!history.length) return "";
   let text = "";
   try {
@@ -458,12 +477,18 @@ export class AgentEngine {
       const stale = !session.summary || allHistory.length - (session.summaryCount ?? 0) > 50;
       if (stale && !summaryLocks.has(session.id)) {
         summaryLocks.add(session.id);
-        const early = allHistory.slice(0, allHistory.length - MAX_HISTORY_UNLIMITED);
+        // 素材限条数:超长会话(3000+ 条)不能让 early 无限大,否则一次摘要上百万字符必然失败
+        const early = allHistory.slice(0, allHistory.length - MAX_HISTORY_UNLIMITED).slice(-MAX_SUMMARY_SOURCE);
         void generateSummary(providerCfg, early, dataDir)
           .then((text) => {
             if (text) db.updateSession(session.id, { summary: text, summaryCount: allHistory.length });
+            // 生成失败(空结果)也推进 summaryCount:否则 stale 永远为真 → 每轮重试 → 花钱不办事
+            else db.updateSession(session.id, { summaryCount: allHistory.length });
           })
-          .catch(() => undefined)
+          .catch((err) => {
+            console.error("[summary] 摘要生成失败:", err instanceof Error ? err.message : err);
+            db.updateSession(session.id, { summaryCount: allHistory.length }); // 失败也推进,防每轮重试
+          })
           .finally(() => summaryLocks.delete(session.id));
       }
     }
