@@ -457,7 +457,12 @@ const ChatInput = memo(function ChatInput({
 
   const handleSend = async () => {
     const text = input.trim();
-    if ((!text && !attachments.length) || sending || uploading) return;
+    if ((!text && !attachments.length) || sending) return;
+    if (uploading) {
+      // 上传中点发送:明确提示而不是静默忽略(否则用户以为发了)
+      useApp.getState().showToast("⏳ 图片还在上传中,稍等一下再发送");
+      return;
+    }
     // 文本类附件(文献/笔记)直接拼进消息正文;图片附件走多模态
     const textParts = attachments.filter((a) => a.text);
     const content = textParts.length
@@ -475,14 +480,22 @@ const ChatInput = memo(function ChatInput({
 
   const pickFiles = async (files: FileList | null) => {
     if (!files?.length) return;
+    await uploadFiles(Array.from(files));
+  };
+
+  /** 上传文件(📎选图/拖拽/Ctrl+V 粘贴共用):图片进附件走多模态,文本拼正文,其他存工作区 */
+  const uploadFiles = async (files: File[]) => {
+    if (!files.length) return;
     setUploading(true);
     try {
-      for (const f of Array.from(files)) {
+      for (const f of files) {
         const isImage = f.type.startsWith("image/");
         const isText = f.type.startsWith("text/") || /\.(txt|md|csv|json|log)$/i.test(f.name);
         if (isImage) {
           const up = await api.upload(f);
           setAttachments((prev) => [...prev, { ...up, preview: `${api.base}/files/${up.file}` }]);
+          // 明确反馈:图片进了"待发送"区,点发送才会送出(以前这里无声,用户以为选图=已发)
+          useApp.getState().showToast("✅ 图片已就绪,点「发送」才会送出");
         } else if (isText) {
           // 文本类:提取内容,发送时拼进对话(免去让 AI 读文件的门槛)
           const up = await api.upload(f);
@@ -541,6 +554,7 @@ const ChatInput = memo(function ChatInput({
               </button>
             </div>
           ))}
+          <div className="chat-attachment-hint">📎 待发送 {attachments.length} 项(点「发送」才送出;✕ 可移除)</div>
         </div>
       )}
       <div
@@ -587,6 +601,18 @@ const ChatInput = memo(function ChatInput({
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void handleSend();
+            }
+          }}
+          onPaste={(e) => {
+            // 支持 Ctrl+V 直接粘贴图片(以前只有 📎 和拖拽,粘贴的图会被忽略 → 用户以为发了其实没发)
+            const imgs = Array.from(e.clipboardData?.items ?? [])
+              .filter((it) => it.type.startsWith("image/"))
+              .map((it) => it.getAsFile())
+              .filter((f): f is File => Boolean(f))
+              .map((f, i) => (f.name ? f : new File([f], `paste-${Date.now()}-${i}.png`, { type: f.type || "image/png" })));
+            if (imgs.length) {
+              e.preventDefault();
+              void uploadFiles(imgs);
             }
           }}
         />
