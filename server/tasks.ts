@@ -204,6 +204,8 @@ export class Scheduler {
       allowDangerousCommands: hb.commands === "allow",
       // 心跳是自主活动,不需要全量历史:固定只发最近 40 条(不跟随人格 100% 全量,大幅省输入成本)
       historyLimit: 40,
+      // 心跳也不需要深思考:固定 low 档省 token;正经对话仍跟随全局思考档位(💭 按钮)
+      reasoningEffort: "low",
     };
     if (hb.scope === "self") {
       mkdirSync(agentSpace, { recursive: true });

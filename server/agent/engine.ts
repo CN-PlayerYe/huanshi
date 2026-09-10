@@ -45,6 +45,8 @@ export interface ChatRunOpts {
   allowedWriteDirs?: string[];
   /** 历史条数上限(心跳等自主任务固定只发最近 N 条,不跟随人格的 100% 全量,省输入成本) */
   historyLimit?: number;
+  /** 覆盖思考档位(心跳等自主任务用 low 省钱,正经对话跟随全局设置) */
+  reasoningEffort?: "off" | "low" | "high" | "max";
   /** 覆盖高危命令权限 */
   allowDangerousCommands?: boolean;
   /** 覆盖路径白名单 */
@@ -615,7 +617,7 @@ export class AgentEngine {
         let iterThinking = "";
 
         for await (const chunk of provider.chatStream(
-          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 8192, reasoningEffort: settings.reasoningEffort, maxBodyBytes: bodyLimitOf(settings) },
+          { messages: providerMessages, tools, temperature: agent.temperature ?? 0.7, maxTokens: 8192, reasoningEffort: opts?.reasoningEffort ?? settings.reasoningEffort, maxBodyBytes: bodyLimitOf(settings) },
           signal,
         )) {
           if (!firstTokenMs) firstTokenMs = Date.now() - reqStart;
