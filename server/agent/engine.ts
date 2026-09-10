@@ -828,7 +828,9 @@ export async function describeImages(
       },
     ],
     tools: [],
-    maxTokens: 1024,
+    // 看图不需要思考:关思考避免"思考占满 maxTokens → 正文为空"(曾导致描述返回空,人格看不到图)
+    reasoningEffort: "off",
+    maxTokens: 2048,
   })) {
     if (chunk.delta) desc += chunk.delta;
   }
