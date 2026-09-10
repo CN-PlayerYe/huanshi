@@ -153,8 +153,8 @@ export async function generateFacts(
     })) {
       if (chunk.delta) text += chunk.delta;
     }
-  } catch {
-    /* 事实提炼失败不影响主流程 */
+  } catch (err) {
+    logBackgroundError("facts", err, dataDir);
   }
   return text.trim();
 }
@@ -202,8 +202,8 @@ export async function generateLore(
     })) {
       if (chunk.delta) text += chunk.delta;
     }
-  } catch {
-    /* 失败不影响主流程 */
+  } catch (err) {
+    logBackgroundError("lore", err, dataDir);
   }
   return text.trim();
 }
@@ -212,6 +212,20 @@ export async function generateLore(
  * 用模型把早期对话压成摘要(纯文本请求,不调工具)。
  * 供"AI 自动摘要":会话过长时让 AI 自主提炼关键信息,而不是简单截断。
  */
+/** 后台任务失败记录:console + 落盘(数据目录 logs/errors.log,生产环境 GUI 无控制台也能查) */
+function logBackgroundError(tag: string, err: unknown, dataDir?: string): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`[${tag}]`, msg);
+  if (!dataDir) return;
+  try {
+    const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
+    mkdirSync(join(dataDir, "logs"), { recursive: true });
+    appendFileSync(join(dataDir, "logs", "errors.log"), `${new Date().toISOString()} [${tag}] ${msg}\n`);
+  } catch {
+    /* 日志写入失败无所谓 */
+  }
+}
+
 /**
  * 摘要素材封顶(可测):超长会话只取最近部分,且总字符受限——
  * 否则 3000+ 条会话一次摘要要吞上百万字符,必然超上下文 → 请求失败 → 每轮重试烧钱。
@@ -263,8 +277,8 @@ export async function generateSummary(
     })) {
       if (chunk.delta) text += chunk.delta;
     }
-  } catch {
-    /* 摘要失败不影响主流程 */
+  } catch (err) {
+    logBackgroundError("summary", err, dataDir);
   }
   return text.trim();
 }
@@ -712,8 +726,8 @@ export class AgentEngine {
                 for (const fact of facts) {
                   try {
                     await memory.retain(fact.slice(0, 500), "fact", agent.isolatedMemory ? agent.id : undefined);
-                  } catch {
-                    /* retain 失败不影响主流程 */
+                  } catch (err) {
+                    logBackgroundError("facts-retain", err, dataDir);
                   }
                 }
               }
