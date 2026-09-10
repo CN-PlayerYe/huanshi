@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { newId, type AgentDef, type ChatMessage, type ModelConfig, type SessionMeta, type Settings, type StreamEvent } from "../../shared/types";
 import type { MemoryService } from "../memory/service";
+import { logError } from "../log";
 import { createProvider } from "../providers";
 import type { ProviderContent, ProviderMsg, ProviderToolCall } from "../providers/types";
 import type { Db } from "../storage";
@@ -214,16 +215,7 @@ export async function generateLore(
  */
 /** 后台任务失败记录:console + 落盘(数据目录 logs/errors.log,生产环境 GUI 无控制台也能查) */
 function logBackgroundError(tag: string, err: unknown, dataDir?: string): void {
-  const msg = err instanceof Error ? err.message : String(err);
-  console.error(`[${tag}]`, msg);
-  if (!dataDir) return;
-  try {
-    const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
-    mkdirSync(join(dataDir, "logs"), { recursive: true });
-    appendFileSync(join(dataDir, "logs", "errors.log"), `${new Date().toISOString()} [${tag}] ${msg}\n`);
-  } catch {
-    /* 日志写入失败无所谓 */
-  }
+  logError(tag, err, dataDir);
 }
 
 /**

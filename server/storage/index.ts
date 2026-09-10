@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { logWarn } from "../log";
 import { newId, type AgentDef, type ChatMessage, type SessionMeta, type TaskDef } from "../../shared/types";
 import type { ResolvedPaths } from "../config";
 
@@ -136,8 +137,9 @@ export class Db {
     const f = join(this.dataDir, "db", `messages-${id}.json`);
     try {
       if (existsSync(f)) renameSync(f, f + ".deleted");
-    } catch {
-      /* ignore */
+    } catch (err) {
+      // 标记已删但文件仍在磁盘(孤儿文件),按判据留一行
+      logWarn("storage-delete", err, this.dataDir);
     }
     this.messageCache.delete(id);
   }
@@ -152,8 +154,9 @@ export class Db {
       const from = join(this.dataDir, "db", `messages-${id}.json`);
       const to = join(this.dataDir, ".私藏", `messages-${id}.json`);
       if (existsSync(from)) renameSync(from, to);
-    } catch {
-      /* 移动失败不影响标记 */
+    } catch (err) {
+      // 隐私保险失效:标记已隐藏,但消息文件仍在 db/(翻目录可见)
+      logWarn("storage-hide", err, this.dataDir);
     }
     this.messageCache.delete(id);
     return s;
@@ -168,8 +171,9 @@ export class Db {
       const from = join(this.dataDir, ".私藏", `messages-${id}.json`);
       const to = join(this.dataDir, "db", `messages-${id}.json`);
       if (existsSync(from)) renameSync(from, to);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      // 文件未移回 db/:标记已恢复但消息读不到
+      logWarn("storage-unhide", err, this.dataDir);
     }
     this.messageCache.delete(id);
     return s;

@@ -1,4 +1,5 @@
 import { serve, type ServerType } from "@hono/node-server";
+import { logWarn } from "./log";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { cors } from "hono/cors";
 import type { AddressInfo } from "node:net";
@@ -50,8 +51,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   try {
     const hbArchived = fixLegacyHeartbeatSessions(db);
     if (hbArchived > 0) console.log(`[hanalite] 已归档 ${hbArchived} 个旧心跳碎片会话`);
-  } catch {
-    /* 不影响启动 */
+  } catch (err) {
+    logWarn("startup-heartbeat-archive", err, paths.dataDir); // 归档没生效也要可见
   }
 
   const memory = new MemoryService(settings.memory, paths.dataDir);
@@ -61,8 +62,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     void cleanHeartbeatMemories(memory, db.listAgents().filter((a) => a.isolatedMemory).map((a) => a.id)).then((n) => {
       if (n > 0) console.log(`[hanalite] 已清理 ${n} 条误入记忆的心跳消息`);
     });
-  } catch {
-    /* 不影响启动 */
+  } catch (err) {
+    logWarn("startup-memory-clean", err, paths.dataDir); // 清理没跑也要可见
   }
 
   const registry = new ToolRegistry();
@@ -153,8 +154,8 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
         break; // 该会话里最新的一条 user 消息(从尾往前第一条)
       }
     }
-  } catch {
-    /* 恢复失败不阻塞启动 */
+  } catch (err) {
+    logWarn("startup-lastuser-restore", err, paths.dataDir); // 恢复失败会导致心跳避让判断失准
   }
   const workspaceDir = settings.toolWhitelistDir || join(paths.dataDir, "workspace");
   const scheduler = new Scheduler(
