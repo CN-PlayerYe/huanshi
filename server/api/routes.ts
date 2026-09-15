@@ -590,6 +590,11 @@ ${tools || "- (无工具)"}
 
   app.post("/api/chat", (c) => {
     return streamSSE(c, async (stream) => {
+      // 客户端断开(用户点■停止/关窗口)时真正中止后端:只靠 c.req.raw.signal 在 SSE 场景不可靠,
+      // 会出现"前端断了但后端还在跑"(继续调模型、继续写消息),表现为"停止按钮无效"。
+      const ac = new AbortController();
+      stream.onAbort(() => ac.abort());
+      const chatSignal = ac.signal;
       const body = (await c.req.json().catch(() => ({}))) as ChatRequest & { title?: string };
       if (!body.content?.trim()) {
         await stream.writeSSE({ event: "error", data: JSON.stringify({ type: "error", message: "消息内容为空" }) });
@@ -631,11 +636,11 @@ ${tools || "- (无工具)"}
       if (groupIds) {
         const groupAgents = groupIds.map((id) => deps.db.getAgent(id)).filter((a): a is AgentDef => Boolean(a));
         if (groupAgents.length >= 2) {
-          await deps.engine.groupChat(session, groupAgents, body.content, onEvent, c.req.raw.signal);
+          await deps.engine.groupChat(session, groupAgents, body.content, onEvent, chatSignal);
           return;
         }
       }
-      await deps.engine.runChat(session!, agent, finalContent, onEvent, c.req.raw.signal, body.attachments, runOpts);
+      await deps.engine.runChat(session!, agent, finalContent, onEvent, chatSignal, body.attachments, runOpts);
     });
   });
 

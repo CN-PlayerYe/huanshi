@@ -141,15 +141,21 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   // ---- 定时任务调度器 ----
   let lastUserAt: number | undefined;
   let lastUserAgentId: string | undefined;
-  // 重启后恢复"主人最后说话时间":取所有会话最后一条非心跳 user 消息(心跳是系统代发,不算)
+  // 重启后恢复"主人最后说话时间":取所有会话最后一条非系统代发的 user 消息
+  // 注意:必须跳过"任务固定会话"(心跳日记/自由活动/自由心跳)——那里的 user 消息是任务 prompt,
+  // 不是主人说话;以前只过滤【心跳】前缀,导致「自由心跳」任务(22:00)的消息被当成主人说话,
+  // 把 lastUserAt 顶到错误时间(心跳里显示"主人上次说话"忽大忽小)。
   try {
+    const taskSessions = new Set(db.listTasks().map((t) => t.sessionId).filter(Boolean) as string[]);
     for (const s of db.listSessions(true)) {
+      if (taskSessions.has(s.id)) continue; // 任务会话:user 消息都是系统代发
       const msgs = db.getMessages(s.id);
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m = msgs[i];
         if (m.role !== "user") continue;
         const partsStr = JSON.stringify(m.parts ?? []);
         if (partsStr.includes("【心跳")) continue; // 系统代发的心跳邀请,不是主人说话
+        if (partsStr.includes("这是你的自由心跳") || partsStr.includes("这是你的心跳")) continue; // 自由心跳任务 prompt
         lastUserAt = Math.max(lastUserAt ?? 0, m.createdAt);
         break; // 该会话里最新的一条 user 消息(从尾往前第一条)
       }

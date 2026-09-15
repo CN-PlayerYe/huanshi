@@ -375,6 +375,7 @@ export class AgentEngine {
         let iteration = 0;
         let stop = false;
         while (!stop && iteration < MAX_TOOL_ITERATIONS) {
+          if (signal?.aborted) break; // 客户端已停止:不再发起新的模型/工具调用
           iteration++;
           let toolCalls: ProviderToolCall[] = [];
           let iterText = "";
@@ -610,6 +611,7 @@ export class AgentEngine {
 
     try {
       while (!stop && iteration < MAX_TOOL_ITERATIONS) {
+        if (signal?.aborted) break; // 客户端已停止:不再发起新的模型/工具调用
         iteration++;
         let toolCalls: ProviderToolCall[] = [];
         // 本轮增量:用于把"思考 + 文本 + 工具调用"完整回传给 API(DeepSeek thinking 要求)
