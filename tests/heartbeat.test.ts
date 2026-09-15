@@ -66,6 +66,32 @@ describe("心跳消息", () => {
     expect(msg).not.toContain("undefined");
   });
 
+  it("主人 ≥24h 没出现且她未自设 → 心跳里替主人问一句(带 set_heartbeat 用法)", () => {
+    const now = new Date(2026, 7, 7, 21, 30);
+    const base = {
+      now,
+      lastBeatAt: now.getTime() - 8 * 3600_000,
+      spaceStatus: "空",
+      homeDir: "/data/workspace/测试人格",
+      isBedtime: false,
+      agent,
+    };
+    // 25 小时没来 → 出现询问
+    const long = buildHeartbeatMessage({ ...base, lastUserAt: now.getTime() - 25 * 3600_000 });
+    expect(long).toContain("25 小时没来了");
+    expect(long).toContain("set_heartbeat");
+    // 2 小时前说过话 → 不打扰
+    const recent = buildHeartbeatMessage({ ...base, lastUserAt: now.getTime() - 2 * 3600_000 });
+    expect(recent).not.toContain("set_heartbeat");
+    // 她已经自己设过节奏 → 不再问
+    const selfSet = buildHeartbeatMessage({
+      ...base,
+      lastUserAt: now.getTime() - 30 * 3600_000,
+      agent: { ...agent, selfHeartbeatHours: 2 } as typeof agent,
+    });
+    expect(selfSet).not.toContain("set_heartbeat");
+  });
+
   it("默认配置齐全", () => {
     expect(DEFAULT_HEARTBEAT.scope).toBe("self");
     expect(DEFAULT_HEARTBEAT.network).toBe("off");

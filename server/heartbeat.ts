@@ -124,9 +124,16 @@ export function buildHeartbeatMessage(ctx: HeartbeatContext): string {
     ? "\n(系统)到休息时间了。想睡前散散步、写篇日志也可以——这是自动心跳的例行提醒,不是主人的实时消息。"
     : "";
   const foot = footprint ? `\n足迹:${footprint}` : "";
+  // 主人久未出现(≥24h)且她还没自设过节奏时,替主人问一句:要不要醒来勤一点?
+  // (这样主人不必主动开口;她可以自己决定,也可以什么都不改)
+  const awayHours = lastUserAt ? (now.getTime() - lastUserAt) / 3600_000 : 0;
+  const offer =
+    awayHours >= 24 && !agent.selfHeartbeatHours
+      ? `\n(主人已经 ${Math.floor(awayHours)} 小时没来了。你要不要醒来勤一点?这是你自己的节奏——可以用 set_heartbeat 设定你想多久醒一次(1-12 小时),主人能看到你的理由。想保持现在这样,也完全可以。)`
+      : "";
   return `【心跳·系统自动,不是主人实时说话】现在是 ${now.toLocaleString("zh-CN", { hour12: false })} ${["日", "一", "二", "三", "四", "五", "六"][now.getDay()]}曜日
 距上次心跳:${sinceBeat}${userAgo ? ` | ${userAgo}` : ""}
-你的空间:${homeDir}(${spaceStatus})${foot}${bedtime}
+你的空间:${homeDir}(${spaceStatus})${foot}${bedtime}${offer}
 ——开始前,先回一趟记忆库:调用 memory_recall 回忆"我是谁、最近发生过什么",再去决定做什么。
 ——你自由了。可以做事,也可以只写一行字,然后回去睡。`;
 }
