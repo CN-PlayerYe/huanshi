@@ -95,6 +95,7 @@ export class Scheduler {
       return nextHeartbeatAt(new Date(Date.now() + 60_000), hb, {
         blankBeats: task.blankBeats ?? 0,
         lastUserAt: this.lastUserAtFn?.(),
+        selfHours: this.getAgent(task.agentId)?.selfHeartbeatHours, // 人格自设间隔优先
       }).getTime();
     }
     try {

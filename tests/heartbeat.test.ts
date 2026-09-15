@@ -89,6 +89,17 @@ describe("动态间隔(心跳规格 §一)", () => {
     expect(i).toBeLessThanOrEqual(2);
   });
 
+  it("人格自设间隔(selfHours)优先:不受久未出现/空跳影响", async () => {
+    const cfg = mergeHeartbeat({ intervalHours: 8 });
+    const { effectiveInterval } = await import("../server/heartbeat");
+    // 她设了 5 小时:即使主人 30 小时没出现(平时会加密到 2h)、空跳 3 次(平时会翻倍),也按 5 小时走
+    expect(effectiveInterval(cfg, 0, Date.now() - 30 * 3600_000, 5)).toBe(5);
+    expect(effectiveInterval(cfg, 3, Date.now() - 30 * 3600_000, 5)).toBe(5);
+    // 边界:夹在 1-12 小时
+    expect(effectiveInterval(cfg, 0, undefined, 0.2)).toBe(1);
+    expect(effectiveInterval(cfg, 0, undefined, 99)).toBe(12);
+  });
+
   it("连续空跳 → 间隔翻倍;有产出清零", async () => {
     const cfg = mergeHeartbeat({ intervalHours: 3 });
     const now = Date.now();

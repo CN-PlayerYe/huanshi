@@ -1433,6 +1433,31 @@ export function SettingsView() {
                   {t.kind === "heartbeat" ? describeHeartbeat(t.heartbeat) : describeCron(t.schedule)}
                 </span>
               </span>
+              {/* 人格自设的心跳间隔(她通过 set_heartbeat 工具自己调的):显示她设的值和理由,可一键改回 */}
+              {t.kind === "heartbeat" &&
+                (() => {
+                  const ag = agents.find((a) => a.id === t.agentId);
+                  if (!ag?.selfHeartbeatHours) return null;
+                  return (
+                    <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span>
+                        💗 她自己设的:{ag.selfHeartbeatHours} 小时醒一次
+                        {ag.selfHeartbeatReason ? ` —— “${ag.selfHeartbeatReason}”` : ""}
+                        {ag.selfHeartbeatAt ? `(${new Date(ag.selfHeartbeatAt).toLocaleString("zh-CN")})` : ""}
+                      </span>
+                      <button
+                        className="btn secondary sm"
+                        title="收回她的自设,回到主人设置的间隔"
+                        onClick={async () => {
+                          await api.clearSelfHeartbeat(ag.id);
+                          await useApp.getState().refreshAgents();
+                        }}
+                      >
+                        改回主人设置
+                      </button>
+                    </div>
+                  );
+                })()}
               <label style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 4 }}>
                 <input type="checkbox" checked={t.enabled} onChange={(e) => void api.updateTask(t.id, { enabled: e.target.checked }).then(refreshTasks)} />
                 启用

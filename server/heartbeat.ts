@@ -35,7 +35,12 @@ export function inQuietWindow(now: Date, cfg: Required<HeartbeatConfig>): boolea
  * - 主人久未出现(>24h)→ 间隔加密到 ≤2h(院子空了,看家)
  * - 连续空跳 → 间隔翻倍(防空转)
  */
-export function effectiveInterval(hb: Required<HeartbeatConfig>, blankBeats: number, lastUserAt?: number): number {
+export function effectiveInterval(hb: Required<HeartbeatConfig>, blankBeats: number, lastUserAt?: number, selfHours?: number): number {
+  // 人格自己设了间隔(通过 set_heartbeat 工具):尊重她的选择,不再叠加自动加密/翻倍。
+  // 主人可在设置页看到并一键改回主人设置(清除 agent.selfHeartbeatHours)。
+  if (selfHours && Number.isFinite(selfHours) && selfHours > 0) {
+    return Math.min(12, Math.max(1, Math.round(selfHours)));
+  }
   let base = Math.max(1, hb.intervalHours);
   // 连续空跳:第 2 次起翻倍(最多 8 倍)
   if (blankBeats >= 2) {
@@ -56,9 +61,9 @@ export function effectiveInterval(hb: Required<HeartbeatConfig>, blankBeats: num
 export function nextHeartbeatAt(
   now: Date,
   cfg: Required<HeartbeatConfig>,
-  opts?: { blankBeats?: number; lastUserAt?: number },
+  opts?: { blankBeats?: number; lastUserAt?: number; selfHours?: number },
 ): Date {
-  const step = Math.max(1, effectiveInterval(cfg, opts?.blankBeats ?? 0, opts?.lastUserAt)) * 3600_000;
+  const step = Math.max(1, effectiveInterval(cfg, opts?.blankBeats ?? 0, opts?.lastUserAt, opts?.selfHours)) * 3600_000;
   // 从 0 点对齐:找 now 之后第一个整数倍心跳点
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);

@@ -368,10 +368,16 @@ export function createApp(deps: AppDeps): Hono {
   app.get("/api/agents", (c) => c.json({ agents: deps.db.listAgents() }));
 
   app.post("/api/agents", async (c) => {
-    const body = (await c.req.json()) as Partial<AgentDef>;
+    const body = (await c.req.json()) as Partial<AgentDef> & { clearSelfHeartbeat?: boolean };
     const agent: AgentDef = body.id
       ? { ...deps.db.getAgent(body.id)!, ...body }
       : createCustomAgent(body);
+    // 主人"改回主人设置":清除人格自设的心跳间隔(她的心愿被收回,回到主人设的节奏)
+    if (body.clearSelfHeartbeat) {
+      delete agent.selfHeartbeatHours;
+      delete agent.selfHeartbeatReason;
+      delete agent.selfHeartbeatAt;
+    }
     deps.db.saveAgent(agent);
     // 出生档案:仅在【新建】人格时生成(编辑时不重新生成,避免覆盖人格自己写的版本)
     if (!body.id) {

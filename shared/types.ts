@@ -85,6 +85,12 @@ export interface AgentDef {
   historyContextPct?: number;
   /** 独立记忆空间:开启后记忆读写只走该人格自己的库,不与他人格共享 */
   isolatedMemory?: boolean;
+  /** 人格自设心跳间隔(小时,1-12):由人格自己通过 set_heartbeat 工具设定,优先于主人设置 */
+  selfHeartbeatHours?: number;
+  /** 人格自设心跳的理由(它自己说的,如"主人两天没来了,想醒来勤一点") */
+  selfHeartbeatReason?: string;
+  /** 自设时间戳(设置页显示"她何时调的") */
+  selfHeartbeatAt?: number;
 }
 
 export type ProviderKind = "openai" | "anthropic" | "ollama";

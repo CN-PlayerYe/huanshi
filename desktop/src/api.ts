@@ -76,6 +76,8 @@ export const api = {
 
   listAgents: () => request<{ agents: AgentDef[] }>("/api/agents"),
   saveAgent: (a: Partial<AgentDef>) => request<{ agent: AgentDef }>("/api/agents", { method: "POST", body: JSON.stringify(a) }),
+  /** 主人改回主人设置:清除人格自设的心跳间隔 */
+  clearSelfHeartbeat: (id: string) => request<{ agent: AgentDef }>("/api/agents", { method: "POST", body: JSON.stringify({ id, clearSelfHeartbeat: true }) }),
   deleteAgent: (id: string) => request<{ ok: boolean }>(`/api/agents/${id}`, { method: "DELETE" }),
 
   listSessions: (includeArchived?: boolean) => request<{ sessions: SessionMeta[] }>(`/api/sessions${includeArchived ? "?includeArchived=1" : ""}`),

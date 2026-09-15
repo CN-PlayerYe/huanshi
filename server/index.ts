@@ -15,6 +15,7 @@ import { Db } from "./storage";
 import { Scheduler } from "./tasks";
 import { datetimeTool, fileTools, searchTool, shellTool, webTool } from "./tools/files";
 import { memoryTools } from "./tools/memory";
+import { heartbeatTools } from "./tools/heartbeat";
 import { ToolRegistry } from "./tools/registry";
 
 export interface ServerHandle {
@@ -67,7 +68,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
   }
 
   const registry = new ToolRegistry();
-  for (const t of [...fileTools, shellTool, webTool, searchTool, datetimeTool, ...memoryTools(memory)]) {
+  for (const t of [...fileTools, shellTool, webTool, searchTool, datetimeTool, ...memoryTools(memory), ...heartbeatTools]) {
     registry.register(t);
   }
 

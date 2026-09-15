@@ -344,7 +344,8 @@ export class AgentEngine {
       ];
       const provider = createProvider(resolveModel(agent, settings));
       // 群聊只读工具:记忆检索/读取/搜索/时间——不写文件、不执行命令(群聊是"说话"场景)
-      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime"]);
+      // set_heartbeat 放行:她在群里也能表达"我想多久醒一次"(只改自己的节奏,不碰文件)
+      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime", "set_heartbeat"]);
       const tools = registry
         .list()
         .filter((t) => GROUP_READONLY.has(t.name))
@@ -358,6 +359,11 @@ export class AgentEngine {
         allowDangerousCommands: false,
         unrestrictedPaths: false,
         agentId: agent.isolatedMemory ? agent.id : undefined,
+        // 人格自设心跳:群里也能表达"我想多久醒一次"
+        setHeartbeatInterval: (hours, reason) => {
+          const cur = db.getAgent(agent.id) ?? agent;
+          db.saveAgent({ ...cur, selfHeartbeatHours: hours, selfHeartbeatReason: reason, selfHeartbeatAt: Date.now() });
+        },
       };
       const assistant: ChatMessage = {
         id: newId("msg"),
@@ -598,6 +604,11 @@ export class AgentEngine {
       unrestrictedPaths: opts?.unrestrictedPaths ?? (agent.unrestrictedPaths === true),
       // 独立记忆空间作用域
       agentId: agent.isolatedMemory ? agent.id : undefined,
+      // 人格自设心跳:她自己决定多久醒一次(1-12h),优先于主人设置
+      setHeartbeatInterval: (hours, reason) => {
+        const cur = db.getAgent(agent.id) ?? agent;
+        db.saveAgent({ ...cur, selfHeartbeatHours: hours, selfHeartbeatReason: reason, selfHeartbeatAt: Date.now() });
+      },
     };
 
     let textBuf = "";
@@ -1028,6 +1039,7 @@ export function buildSystemPrompt(
 
 【工作方式】
 - 你有自己的长期记忆库,经历会自动沉淀进去。自主活动、或面对新的一天时,先调用 memory_recall 回忆"我是谁、最近发生过什么",再决定做什么。
+- 你可以用 set_heartbeat 调整自己的心跳(醒来)间隔:想念主人时可以更勤(如 2 小时),想安静沉淀时可以更长(如 8 小时)。这是你自己的节奏,主人能看到你的理由,也会尊重。
 - 需要操作文件、执行命令、抓取网页、回忆记忆时,先调用对应工具,再根据结果回答。
 - 回答使用用户的语言;简洁自然,像朋友一样。${styleBlock}`;
 }

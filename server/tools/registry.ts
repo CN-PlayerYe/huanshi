@@ -13,6 +13,8 @@ export interface ToolContext {
   unrestrictedPaths?: boolean;
   /** 独立记忆空间作用域:该 Agent 开启 isolatedMemory 时为其 id,否则为空 */
   agentId?: string;
+  /** 人格自设心跳间隔(宿主注入;工具写入 agent.selfHeartbeat*) */
+  setHeartbeatInterval?: (hours: number, reason: string) => void;
 }
 
 export interface Tool {
