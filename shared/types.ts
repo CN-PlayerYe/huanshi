@@ -227,6 +227,8 @@ export interface HeartbeatConfig {
   maxMinutes?: number;
   /** 主人发消息时是否立即打断(默认 true) */
   interruptible?: boolean;
+  /** 主人久未出现(>24h)时自动加密醒来(默认 true)。关掉则严格按 intervalHours 走,不自动改变节奏 */
+  autoIntensify?: boolean;
 }
 
 // ---- 流式聊天事件(SSE) ----

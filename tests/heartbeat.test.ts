@@ -92,6 +92,15 @@ describe("心跳消息", () => {
     expect(selfSet).not.toContain("set_heartbeat");
   });
 
+  it("「久未出现自动加密」可关闭:关掉后严格按 intervalHours 走", async () => {
+    const { effectiveInterval } = await import("../server/heartbeat");
+    const away = Date.now() - 30 * 3600_000; // 主人 30 小时没出现
+    // 默认(开):加密到 ≤2h
+    expect(effectiveInterval(mergeHeartbeat({ intervalHours: 8 }), 0, away)).toBeLessThanOrEqual(2);
+    // 关掉 autoIntensify:严格按 8 小时走,不自动改变节奏
+    expect(effectiveInterval(mergeHeartbeat({ intervalHours: 8, autoIntensify: false }), 0, away)).toBe(8);
+  });
+
   it("默认配置齐全", () => {
     expect(DEFAULT_HEARTBEAT.scope).toBe("self");
     expect(DEFAULT_HEARTBEAT.network).toBe("off");

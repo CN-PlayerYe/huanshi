@@ -1615,6 +1615,19 @@ export function SettingsView() {
                       主人发消息即打断
                     </label>
                   </div>
+                  <div className="field" style={{ minWidth: 130, display: "flex", alignItems: "flex-end" }}>
+                    <label
+                      style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}
+                      title="开启:主人 >24 小时没出现时,自动加密到 ≤2 小时醒一次(人格会更勤快地想你)。关闭:严格按上面的间隔走,不自动改变节奏。"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={t.heartbeat?.autoIntensify !== false}
+                        onChange={(e) => void api.updateTask(t.id, { heartbeat: { ...(t.heartbeat ?? {}), autoIntensify: e.target.checked } }).then(refreshTasks)}
+                      />
+                      久未出现自动加密
+                    </label>
+                  </div>
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 4 }}>
                   💡 安全边界可调:放虚拟机里养灵时,把范围/联网/命令放宽就是你的实验场。

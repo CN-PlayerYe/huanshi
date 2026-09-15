@@ -13,6 +13,8 @@ export const DEFAULT_HEARTBEAT: Required<HeartbeatConfig> = {
   commands: "off",
   maxMinutes: 10,
   interruptible: true,
+  /** 主人久未出现时自动加密醒来(默认开;关掉则严格按 intervalHours 走) */
+  autoIntensify: true,
 };
 
 export function mergeHeartbeat(cfg?: HeartbeatConfig): Required<HeartbeatConfig> {
@@ -50,7 +52,8 @@ export function effectiveInterval(hb: Required<HeartbeatConfig>, blankBeats: num
     const hours = (Date.now() - lastUserAt) / 3600_000;
     // 不再"刚聊完拉长":主人刚说过话就按正常间隔跳(避免 4h 节奏被拉成 6h 网格,
     // 产生 2h 的乱跳——如 16:00 触发后 18:00 又跳一次)。用户要求心跳严格按 intervalHours 走。
-    if (hours > 24) {
+    // 久未出现加密可由 autoIntensify 关闭("久未出现自动加密"开关,关掉后严格按设定走)
+    if (hours > 24 && hb.autoIntensify !== false) {
       base = Math.min(base, 2); // 久未出现:加密
     }
   }
