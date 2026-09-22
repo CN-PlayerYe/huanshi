@@ -85,7 +85,12 @@ export function ChatView() {
     void sendMessage(text, atts);
   };
 
-  const activeModel = settings?.activeProvider ? settings.providers[settings.activeProvider]?.model : undefined;
+  // 右上角模型标签:显示"当前会话人格实际用的模型"(人格级 provider/model 优先,否则跟随全局)。
+  // 之前只读全局 activeProvider,导致人格设了别的模型标签仍显示 DeepSeek(设置其实已生效,只是显示错)。
+  const activeAgent = agents.find((a) => a.id === (activeSession?.agentId ?? lastAgentId));
+  const modelPid = activeAgent?.provider || settings?.activeProvider;
+  const activeModel = modelPid ? activeAgent?.model || settings?.providers?.[modelPid]?.model : undefined;
+  const modelLabel = activeModel ? `${activeAgent?.name ? `${activeAgent.name} · ` : ""}${activeModel}` : undefined;
 
   return (
     <div className="chat-view">
@@ -183,7 +188,11 @@ export function ChatView() {
             📖 世界观
           </button>
         )}
-        {activeModel && <span className="model-tag">{activeModel}</span>}
+        {modelLabel && (
+          <span className="model-tag" title={`当前人格实际调用:${modelPid} / ${activeModel}(人格级设置优先,未设则跟随全局)`}>
+            {modelLabel}
+          </span>
+        )}
         {loreOpen && activeSessionId && (
           <LorePanel
             sessionId={activeSessionId}
