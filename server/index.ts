@@ -4,6 +4,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { cors } from "hono/cors";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import type { Settings, StreamEvent } from "../shared/types";
 import { AgentEngine } from "./agent/engine";
 import { ensureDefaultAgents } from "./agents";
@@ -165,6 +166,16 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     logWarn("startup-lastuser-restore", err, paths.dataDir); // 恢复失败会导致心跳避让判断失准
   }
   const workspaceDir = settings.toolWhitelistDir || join(paths.dataDir, "workspace");
+  // 确保每个人格都有自己的院子目录(包括迁移来的、从没活动过的人格):
+  // 否则 systemPrompt 里"你的专属空间在 <ws>/<名字>/"会指向不存在的路径,它们去读/列会困惑
+  // "文件不存在/院子是空的"(如从 Cherry 迁移的小柒)。
+  try {
+    for (const a of db.listAgents()) {
+      mkdirSync(join(workspaceDir, a.name), { recursive: true });
+    }
+  } catch (err) {
+    logWarn("startup-agent-home", err, paths.dataDir); // 人格名含非法字符等;不影响启动
+  }
   const scheduler = new Scheduler(
     db,
     engine,
