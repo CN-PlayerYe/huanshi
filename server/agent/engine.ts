@@ -277,6 +277,10 @@ export async function generateSummary(
   return text.trim();
 }
 const MAX_TOOL_ITERATIONS = 15;
+/** 单轮最多执行多少个并行工具调用(模型可能一轮请求几十个;超出的丢弃) */
+const MAX_TOOLS_PER_ROUND = 8;
+/** 单次对话最多执行多少次工具调用(防"一轮 800+ 次 read_file"式烧 token;超过则收手,让它基于已有结果作答) */
+const MAX_TOOLS_TOTAL = 40;
 
 export interface EngineDeps {
   db: Db;
@@ -380,6 +384,7 @@ export class AgentEngine {
         // 工具调用循环(与单人对话一致):模型可请求只读工具,结果回传后继续发言
         let iteration = 0;
         let stop = false;
+        let totalToolCalls = 0;
         while (!stop && iteration < MAX_TOOL_ITERATIONS) {
           if (signal?.aborted) break; // 客户端已停止:不再发起新的模型/工具调用
           iteration++;
@@ -399,6 +404,14 @@ export class AgentEngine {
             if (chunk.toolCalls) toolCalls = chunk.toolCalls;
           }
           if (!toolCalls.length) {
+            stop = true;
+            break;
+          }
+          // 工具调用总量防护:模型可能一轮请求几十个工具、循环十几轮(曾出现单轮 823 次 read_file),
+          // 每次都要执行+回填+全量重发,能把 token 烧爆。超限直接收手,让它基于已有结果作答。
+          if (toolCalls.length > MAX_TOOLS_PER_ROUND) toolCalls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
+          totalToolCalls += toolCalls.length;
+          if (totalToolCalls > MAX_TOOLS_TOTAL) {
             stop = true;
             break;
           }
@@ -615,6 +628,7 @@ export class AgentEngine {
     let thinkingBuf = "";
     let iteration = 0;
     let stop = false;
+    let totalToolCalls = 0;
     // 请求性能日志(诊断慢会话用):记录 payload 大小 / 首 token 耗时 / 总耗时
     const reqLogPath = join(dataDir, "logs", "requests.log");
     const reqStart = Date.now();
@@ -655,6 +669,15 @@ export class AgentEngine {
         }
 
         if (!toolCalls.length) {
+          stop = true;
+          break;
+        }
+
+        // 工具调用总量防护:模型可能一轮请求几十个工具、循环十几轮(曾出现单轮 823 次 read_file),
+        // 每次都要执行+回填+全量重发,能把 token 烧爆。超限直接收手,让它基于已有结果作答。
+        if (toolCalls.length > MAX_TOOLS_PER_ROUND) toolCalls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
+        totalToolCalls += toolCalls.length;
+        if (totalToolCalls > MAX_TOOLS_TOTAL) {
           stop = true;
           break;
         }
