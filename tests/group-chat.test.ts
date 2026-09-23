@@ -158,6 +158,13 @@ describe("群聊 groupChat", () => {
     const m2 = await memory.list(a2.id);
     expect(m1.some((m) => m.content.includes("群聊") && m.content.includes("中秋快乐"))).toBe(true);
     expect(m2.some((m) => m.content.includes("群聊") && m.content.includes("中秋快乐"))).toBe(true);
+
+    // 第二轮群聊(不同的话)必须再记一条:模板若用固定前缀,会被记忆库"前 40 字重合"去重掉,
+    // 导致多轮群聊只存第一条(实锤 bug:6 人群聊 5 轮只沉淀 1 条)
+    await engine.groupChat(db.getSession(session.id)!, [a1, a2], "今晚月亮真圆", () => {});
+    await new Promise((r) => setTimeout(r, 100));
+    const m1b = await memory.list(a1.id);
+    expect(m1b.filter((m) => m.content.includes("【群聊")).length).toBe(2);
   });
 });
 

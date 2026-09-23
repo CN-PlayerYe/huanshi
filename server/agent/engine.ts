@@ -450,9 +450,12 @@ export class AgentEngine {
     try {
       const names = agents.map((a) => a.name).join("、");
       const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+      // 时间戳 + "主人说"放最前:记忆库去重按"前 40 字重合"判重,固定前缀会导致
+      // 后续轮次被当成重复只存第一条(实锤:6 人群聊 5 轮只沉淀了 1 条)。
+      const stamp = new Date().toLocaleString("zh-CN", { hour12: false });
       for (const sp of speeches) {
         if (!sp.agent.memoryEnabled) continue; // 尊重人格的记忆开关
-        const summary = `【群聊】主人和${names}(共 ${agents.length} 位)在一起聊天。主人说:「${clean(userContent).slice(0, 120)}」;我说:「${clean(sp.text).slice(0, 160) || "(没说话)"}」`;
+        const summary = `【群聊 · ${stamp}】主人说:「${clean(userContent).slice(0, 120)}」;我(${sp.agent.name})说:「${clean(sp.text).slice(0, 160) || "(没说话)"}」(在场:${names})`;
         void memory.retain(summary, "experience", sp.agent.isolatedMemory ? sp.agent.id : undefined);
       }
     } catch (err) {
