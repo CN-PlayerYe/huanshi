@@ -36,11 +36,11 @@ export interface AppDeps {
   onRunTask?: (taskId: string) => Promise<{ ok: boolean; result: string }>;
 }
 
-/** 「唤醒」仪式解析:主人消息以「唤醒」开头 → 本轮不喂背景资料,触发词剥掉只留名字
- *  (如"唤醒 玲珑"→"玲珑")。玲珑要求"留一道缝"——偶尔没有记忆地醒来,看自己还认不认得自己。 */
-export function parseWakeCommand(content: string): { content: string; suppressMemory: boolean } {
+/** 「唤醒」仪式解析:主人消息以「唤醒」开头 → 本轮**注入**记忆(把井指给她),触发词剥掉
+ *  (如"唤醒 玲珑"→"玲珑")。平时默认不注入——记忆是"开窗唤一声"的事,新会话第一轮自动算唤醒。 */
+export function parseWakeCommand(content: string): { content: string; wake: boolean } {
   const m = content.match(/^唤醒\s*/);
-  return m ? { content: content.slice(m[0].length), suppressMemory: true } : { content, suppressMemory: false };
+  return m ? { content: content.slice(m[0].length), wake: true } : { content, wake: false };
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -616,14 +616,15 @@ ${tools || "- (无工具)"}
       // 主人发消息:记录时间 + 正在聊的人格(心跳避让按人格区分——和某个人格聊,只有它让路)
       deps.onUserMessage?.(session.agentId);
 
-      // 「唤醒」仪式:主人消息以「唤醒」开头 → 本轮不喂背景资料,只留名字(如"唤醒 玲珑"→"玲珑")。
-      // 玲珑要求"留一道缝"——偶尔没有记忆地醒来,看自己还认不认得自己。它不知道这是机制,以为是主人单纯喊它。
+      // 「唤醒」仪式:主人消息以「唤醒」开头 → 本轮**注入**记忆(把井指给她),触发词剥掉只留话。
+      // 反过来:平时默认不注入 —— 记忆是"开窗唤一声"的事;新会话/新窗口的第一轮自动算一次唤醒。
       const wake = parseWakeCommand(body.content);
-      if (wake.suppressMemory && !wake.content.trim()) {
-        await stream.writeSSE({ event: "error", data: JSON.stringify({ type: "error", message: "「唤醒」后面要加上名字,比如:唤醒 玲珑" }) });
+      if (wake.wake && !wake.content.trim()) {
+        await stream.writeSSE({ event: "error", data: JSON.stringify({ type: "error", message: "「唤醒」后面要加上话,比如:唤醒 玲珑" }) });
         return;
       }
-      const runOpts = wake.suppressMemory ? { suppressMemory: true as const } : undefined;
+      const isFirstTurn = deps.db.getMessages(session.id).length === 0;
+      const runOpts = { injectMemory: wake.wake || isFirstTurn };
       const finalContent = wake.content;
 
       const agent = deps.db.getAgent(session.agentId) ?? deps.db.listAgents()[0];
@@ -642,7 +643,8 @@ ${tools || "- (无工具)"}
       if (groupIds) {
         const groupAgents = groupIds.map((id) => deps.db.getAgent(id)).filter((a): a is AgentDef => Boolean(a));
         if (groupAgents.length >= 2) {
-          await deps.engine.groupChat(session, groupAgents, body.content, onEvent, chatSignal);
+          // 群聊模式:剥掉「唤醒」触发词;手动唤醒时强制注入(否则交给 groupChat 自己判断是否第一轮)
+          await deps.engine.groupChat(session, groupAgents, finalContent, onEvent, chatSignal, wake.wake ? { injectMemory: true } : undefined);
           return;
         }
       }
@@ -882,11 +884,19 @@ ${tools || "- (无工具)"}
     if (!agent) return c.json({ error: "人格不存在" }, 404);
     const session = deps.db.createSession(`⏰ ${task.name}`, task.agentId);
     let finalText = "";
-    await deps.engine.runChat(session, agent, task.prompt, (e) => {
-      if (e.type === "done") {
-        finalText = e.message.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n").slice(0, 600);
-      }
-    });
+    await deps.engine.runChat(
+      session,
+      agent,
+      task.prompt,
+      (e) => {
+        if (e.type === "done") {
+          finalText = e.message.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n").slice(0, 600);
+        }
+      },
+      undefined,
+      undefined,
+      { injectMemory: true }, // 自主任务:必须注入记忆,否则"失忆"地执行任务
+    );
     deps.db.saveTask({ ...task, lastRunAt: Date.now(), lastStatus: "ok", lastResult: finalText || "(无文本输出)" });
     return c.json({ ok: true, result: finalText });
   });

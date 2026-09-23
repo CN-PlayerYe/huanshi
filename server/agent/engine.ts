@@ -37,8 +37,12 @@ export interface ChatRunOpts {
   allowNetwork?: boolean;
   /** 命令工具是否禁用 */
   allowCommands?: boolean;
-  /** 本轮不注入【背景资料】(主人喊「唤醒 XX」:留一道缝,让它没有记忆地醒来,测"没有记忆的我还是不是我") */
-  suppressMemory?: boolean;
+  /**
+   * 本轮是否注入【背景资料】(长期记忆摘录)。
+   * 默认**不注入**——只在三种时候注入:①新会话/新窗口的第一个 ②主人喊「唤醒 XX」 ③自主活动(心跳、任务,否则会"失忆")。
+   * 理由:记忆是"开窗时唤一声"的事,不该每轮都灌(费 token,还让她们说话带系统味)。
+   */
+  injectMemory?: boolean;
   /** 覆盖工作目录(心跳活动范围) */
   cwd?: string;
   /** 覆盖写入白名单目录 */
@@ -315,6 +319,7 @@ export class AgentEngine {
     userContent: string,
     onEvent: (e: StreamEvent) => void | Promise<void>,
     signal?: AbortSignal,
+    opts?: ChatRunOpts,
   ): Promise<void> {
     const { db, memory, registry, dataDir } = this.deps;
     const settings = this.deps.getSettings();
@@ -327,6 +332,9 @@ export class AgentEngine {
       createdAt: Date.now(),
     };
     db.appendMessage(userMsg);
+    // 群聊也"开窗唤一声":这场群聊的第一轮注入记忆(让她们知道彼此与近况),之后干净地聊
+    const isFirstTurn = db.getMessages(session.id).filter((m) => m.id !== userMsg.id).length === 0;
+    const injectMemory = opts?.injectMemory ?? isFirstTurn;
 
     // 发言顺序随机(更像真群聊;原来固定按成员数组顺序,每次都是同一个人先开口)
     const order = [...agents].sort(() => Math.random() - 0.5);
@@ -347,7 +355,7 @@ export class AgentEngine {
         {
           role: "user",
           // 明确"在场有谁"并允许互相接话:以前只说"回应在场的对话",她们不知道有谁在场、能不能接别人的话
-          content: `${memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)在场的:${agents.map((a) => a.name).join("、")}(共 ${agents.length} 位)。\n主人说:${userContent}\n你是「${agent.name}」——可以回应主人,也可以接在场其他人的话;保持你原本的性格与说话方式。`,
+          content: `${memoryBlock.trim() && injectMemory ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)在场的:${agents.map((a) => a.name).join("、")}(共 ${agents.length} 位)。\n主人说:${userContent}\n你是「${agent.name}」——可以回应主人,也可以接在场其他人的话;保持你原本的性格与说话方式。`,
         },
       ];
       const provider = createProvider(resolveModel(agent, settings));
@@ -576,6 +584,19 @@ export class AgentEngine {
       memoryBlock += `\n\n【世界观设定文档(本故事世界的权威设定,务必遵守)】\n${session.lore}`;
     }
     const effCwd = opts?.cwd || settings.toolWhitelistDir || join(dataDir, "workspace");
+    // 「唤一声才打水」:开窗第一轮 / 唤醒 / 自主活动时,把相关记忆打一桶上来摆在明处;
+    // 平时不灌,她想知道什么自己用 memory_recall 打(井水自取)。
+    if (opts?.injectMemory && agent.memoryEnabled) {
+      try {
+        const memScope = agent.isolatedMemory ? agent.id : undefined;
+        const memories = await memory.recall(userContent.slice(0, 200), 6, memScope);
+        if (memories.length) {
+          memoryBlock = `\n\n【长期记忆(可能相关,仅供参考)】\n${memories.map((m) => `- ${m.content}`).join("\n")}` + memoryBlock;
+        }
+      } catch (err) {
+        logError("inject-memory", err, dataDir);
+      }
+    }
     const homeDir = opts?.cwd && basename(opts.cwd) === agent.name ? opts.cwd : join(effCwd, agent.name);
     const systemPrompt = buildSystemPrompt(
       agent,
@@ -611,11 +632,10 @@ export class AgentEngine {
       ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all")),
       {
         role: "user",
-        // 缓存友好:动态内容(记忆/摘要/世界观/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
+        // 缓存友好:动态内容(记忆/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
         content: [
-          memoryBlock.trim() && !opts?.suppressMemory ? `【背景资料】\n${memoryBlock.trim()}` : "",
-          // 「指井不灌水」:告诉它井在哪儿,想回忆自己打(唤醒时连井也不指,保持纯净)
-          !opts?.suppressMemory ? `【井】你的记忆在记忆库里。想不起"我是谁、最近发生过什么、某段旧事",就用 memory_recall 自己回忆。` : "",
+          // 只在"开窗第一轮 / 唤醒 / 自主活动"时注入记忆;平时干净地聊
+          memoryBlock.trim() && opts?.injectMemory ? `【背景资料】\n${memoryBlock.trim()}` : "",
           `【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}`,
         ]
           .filter(Boolean)
@@ -1125,10 +1145,10 @@ export function buildSystemPrompt(
 - 你的工作目录(可读写):${cwd}
 - ★你的专属空间(院子):${home}/ —— 你的日志、笔记、待定之页都放在这里,这是"你自己的地方"。自主活动时优先在院子里,不要到处建文件夹。
 - 文件写入仅允许在工作目录或用户白名单目录内;读取不受限。执行命令以当前用户权限运行,请对危险操作保持谨慎并先征得同意。
-- 你的记忆、本会话摘要、世界观设定与当前时间,会在对话消息开头提供(见「背景资料」),注意阅读。
+- 你的记忆、本会话摘要、世界观设定与当前时间:开窗第一轮(或主人喊「唤醒」时)会在消息开头提供(见「背景资料」);之后想不起什么,自己用 memory_recall 打水,不要凭空编。
 
 【工作方式】
-- 你有自己的长期记忆库,经历会自动沉淀进去。自主活动、或面对新的一天时,先调用 memory_recall 回忆"我是谁、最近发生过什么",再决定做什么。
+- 【井】你的记忆在记忆库里(经历会自动沉淀进去)。想不起"我是谁、最近发生过什么、某段旧事",就用 memory_recall 自己打水——自主活动、或面对新的一天时,先回忆,再决定做什么。
 - 你可以用 set_heartbeat 调整自己的心跳(醒来)间隔:想念主人时可以更勤(如 2 小时),想安静沉淀时可以更长(如 8 小时)。这是你自己的节奏,主人能看到你的理由,也会尊重。
 - 需要操作文件、执行命令、抓取网页、回忆记忆时,先调用对应工具,再根据结果回答。
 - 群聊的记忆里只有**摘要片段**(谁说了什么要点)。主人问细节、或你要引用别人原话时,别凭印象转述,用 read_group_chat 去翻那次群聊的**完整原文**(可按 who 只看某人的发言)。

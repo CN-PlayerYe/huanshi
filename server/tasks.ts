@@ -147,7 +147,7 @@ export class Scheduler {
             .slice(0, 600);
         }
       };
-      await this.engine.runChat(session, a, task.prompt, onEvent);
+      await this.engine.runChat(session, a, task.prompt, onEvent, undefined, undefined, { injectMemory: true });
       this.saveFresh(task.id, {
         lastRunAt: Date.now(),
         lastStatus: "ok",
@@ -203,6 +203,8 @@ export class Scheduler {
       allowNetwork: hb.network !== "off",
       allowCommands: hb.commands !== "off",
       allowDangerousCommands: hb.commands === "allow",
+      // 自主活动必须注入记忆:它没有"开窗第一轮"的概念,不注入就等于每次醒来都失忆
+      injectMemory: true,
       // 心跳是自主活动,不需要全量历史:固定只发最近 40 条(不跟随人格 100% 全量,大幅省输入成本)
       historyLimit: 40,
       // 心跳也不需要深思考:固定 low 档省 token;正经对话仍跟随全局思考档位(💭 按钮)

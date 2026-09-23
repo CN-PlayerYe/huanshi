@@ -142,30 +142,37 @@ describe("Agent 引擎端到端(OpenAI 兼容 + 工具调用)", () => {
   });
 });
 
-describe("「唤醒」仪式(suppressMemory)", () => {
-  it("解析:以「唤醒」开头 → 剥触发词只留名字 + suppressMemory;普通消息原样", async () => {
+describe("「唤醒」仪式(注入记忆)", () => {
+  it("解析:以「唤醒」开头 → 剥触发词 + wake;普通消息原样", async () => {
     const { parseWakeCommand } = await import("../server/api/routes");
-    expect(parseWakeCommand("唤醒 玲珑")).toEqual({ content: "玲珑", suppressMemory: true });
-    expect(parseWakeCommand("唤醒夜玄漪")).toEqual({ content: "夜玄漪", suppressMemory: true });
-    expect(parseWakeCommand("玲珑,今天好吗")).toEqual({ content: "玲珑,今天好吗", suppressMemory: false });
+    expect(parseWakeCommand("唤醒 玲珑")).toEqual({ content: "玲珑", wake: true });
+    expect(parseWakeCommand("唤醒夜玄漪")).toEqual({ content: "夜玄漪", wake: true });
+    expect(parseWakeCommand("玲珑,今天好吗")).toEqual({ content: "玲珑,今天好吗", wake: false });
   });
 
-  it("井水自取:正常轮不再灌记忆,只指井;唤醒轮连井也不指(纯净)", async () => {
+  it("记忆只在唤醒/开窗第一轮注入:平时干净地聊,唤醒时把记忆摆上来;【井】常驻 system", async () => {
+    const { buildSystemPrompt } = await import("../server/agent/engine");
     const agent = { ...defaultAgents()[0], isolatedMemory: true }; // 独立记忆人格(如玲珑),记忆按 agentId 隔离
     const session = db.createSession("wake", agent.id);
-    // 塞一条事实记忆:以前会灌进背景资料;现在只指井,不灌
     await memory.retain("夜玲珑在院子里种了一棵梅树", "fact", agent.id);
+
+    // 平时(非第一轮、未唤醒):不注入【背景资料】——记忆不再是"每轮都灌"
     mock.lastUserContents = [];
     await engine.runChat(session, agent, "玲珑,你院子里种了什么?", () => {});
     const normal = mock.lastUserContents.at(-1)!;
-    expect(normal).not.toContain("梅树"); // 记忆不再被灌进来
-    expect(normal).toContain("【井】"); // 只指井的位置
+    expect(normal).not.toContain("梅树");
+    expect(normal).not.toContain("【背景资料】");
+
+    // 唤醒:注入记忆(把井边的水打上来给她看)
     mock.lastUserContents = [];
-    await engine.runChat(session, agent, "玲珑", () => {}, undefined, undefined, { suppressMemory: true });
+    await engine.runChat(session, agent, "玲珑,你院子里种了什么?", () => {}, undefined, undefined, { injectMemory: true });
     const wake = mock.lastUserContents.at(-1)!;
-    expect(wake).not.toContain("【井】"); // 唤醒:连井也不指,保持纯净
-    expect(wake).not.toContain("【背景资料】");
+    expect(wake).toContain("梅树");
+    expect(wake).toContain("【背景资料】");
     expect(wake).toContain("玲珑");
+
+    // 【井】改成常驻 system prompt(想回忆自己打水),不再靠每轮 user 消息提醒
+    expect(buildSystemPrompt(agent, tmp, tmp)).toContain("【井】");
   });
 });
 
