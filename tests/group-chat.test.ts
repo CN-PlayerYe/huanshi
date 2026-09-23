@@ -93,12 +93,11 @@ describe("群聊 groupChat", () => {
 
     await engine.groupChat(session, [a1, a2], "大家好啊", onEvent);
 
-    // 1. 两次 message_start,id 不同,agentId 对应
+    // 1. 两次 message_start,id 不同,agentId 对应(发言顺序随机,不假定谁先)
     const starts = events.filter((e) => e.type === "message_start");
     expect(starts).toHaveLength(2);
     expect(starts[0].id).not.toBe(starts[1].id);
-    expect(starts[0].agentId).toBe(a1.id);
-    expect(starts[1].agentId).toBe(a2.id);
+    expect(starts.map((s) => s.agentId).sort()).toEqual([a1.id, a2.id].sort()); // 两人都发言了(顺序随机)
 
     // 2. delta 为模型输出本身,不含【名字】前缀(前缀由前端按 agentId 显示人格名)
     const deltas = events.filter((e) => e.type === "delta").map((e) => e.content ?? "");
@@ -106,11 +105,11 @@ describe("群聊 groupChat", () => {
     expect(deltas.join("")).toContain("来");
     expect(deltas.join("")).not.toContain("【");
 
-    // 3. done 指向最后一条 assistant = 小尺
+    // 3. done 指向最后一条 assistant(发言顺序随机,取最后一个发言者)
     const done = events.find((e) => e.type === "done");
     expect(done).toBeDefined();
-    expect(done!.agentId).toBe(a2.id);
-    expect(done!.id).toBe(starts[1].id);
+    expect(done!.agentId).toBe(starts[starts.length - 1].agentId);
+    expect(done!.id).toBe(starts[starts.length - 1].id);
 
     // 4. db 落库:1 user + 2 assistant,每条 assistant 独立且带 agentId
     const msgs = db.getMessages(session.id);

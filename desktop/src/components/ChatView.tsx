@@ -330,6 +330,9 @@ function GroupPanel({ sessionId, onClose, onChanged }: { sessionId: string; onCl
           <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 10px" }}>
             选 2 个以上人格,它们会在一个会话里同场登场、轮流对你说的话回应。留空或只选 1 个 = 单人模式。
           </p>
+          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 10px", lineHeight: 1.5 }}>
+            💡 建议用下面的「🏮 新建独立群聊」:在当前会话里开群聊,会把这个人格的私人聊天记录也带进群,她们会困惑"我在谁的框里"。
+          </p>
           {agents.map((a) => (
             <label key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}>
               <input type="checkbox" checked={selected.includes(a.id)} onChange={() => toggle(a.id)} />
@@ -338,9 +341,33 @@ function GroupPanel({ sessionId, onClose, onChanged }: { sessionId: string; onCl
           ))}
         </div>
         <div className="modal-foot">
+          {/* 推荐:新建一个干净的群聊会话(不把任何人格的私人聊天记录带进群) */}
           <button
             className="btn"
+            disabled={busy || selected.length < 2}
+            title="新建一个干净的群聊会话(推荐):人格之间不会看到彼此的私人聊天"
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const r = await api.createSession("🏮 群聊", selected[0]);
+                await api.setSessionGroup(r.session.id, selected);
+                await useApp.getState().refreshSessions();
+                useApp.getState().selectSession(r.session.id);
+                useApp.getState().showToast(`🏮 群聊已开:${selected.length} 位人格同场(可改名)`);
+                onClose();
+              } catch (err) {
+                useApp.getState().showToast(`创建群聊失败:${(err as Error).message}`);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            🏮 新建独立群聊
+          </button>
+          <button
+            className="btn secondary"
             disabled={busy}
+            title="在当前会话启用群聊(会带上本会话已有的聊天记录)"
             onClick={async () => {
               setBusy(true);
               try {
@@ -355,7 +382,7 @@ function GroupPanel({ sessionId, onClose, onChanged }: { sessionId: string; onCl
               }
             }}
           >
-            保存
+            在本会话启用
           </button>
         </div>
       </div>

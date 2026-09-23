@@ -328,7 +328,9 @@ export class AgentEngine {
     };
     db.appendMessage(userMsg);
 
-    for (const agent of agents) {
+    // 发言顺序随机(更像真群聊;原来固定按成员数组顺序,每次都是同一个人先开口)
+    const order = [...agents].sort(() => Math.random() - 0.5);
+    for (const agent of order) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
       // 群聊也注入长期记忆:野生人格没有 systemPrompt,靠这里"想起自己是谁、最近发生过什么"
@@ -343,7 +345,8 @@ export class AgentEngine {
         ...(await historyToProviderMessages(history, dataDir, false, settings.thinkingEcho ?? "all", (id) => db.getAgent(id)?.name)),
         {
           role: "user",
-          content: `${memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)用户说:${userContent}\n你是「${agent.name}」,请以你的身份和性格回应在场的对话。`,
+          // 明确"在场有谁"并允许互相接话:以前只说"回应在场的对话",她们不知道有谁在场、能不能接别人的话
+          content: `${memoryBlock.trim() ? `【背景资料】\n${memoryBlock.trim()}\n\n` : ""}【当前时间】${new Date().toLocaleString("zh-CN", { hour12: false })}\n(群聊)在场的:${agents.map((a) => a.name).join("、")}(共 ${agents.length} 位)。\n主人说:${userContent}\n你是「${agent.name}」——可以回应主人,也可以接在场其他人的话;保持你原本的性格与说话方式。`,
         },
       ];
       const provider = createProvider(resolveModel(agent, settings));
@@ -599,6 +602,7 @@ export class AgentEngine {
       id: newId("msg"),
       sessionId: session.id,
       role: "assistant",
+      agentId: agent.id, // 单聊也记录人格:界面署名/切换人格后仍能看出是谁说的
       parts: [],
       createdAt: Date.now(),
       model: provider.model,
