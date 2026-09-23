@@ -15,6 +15,10 @@ export interface ToolContext {
   agentId?: string;
   /** 人格自设心跳间隔(宿主注入;工具写入 agent.selfHeartbeat*) */
   setHeartbeatInterval?: (hours: number, reason: string) => void;
+  /** 列出最近的群聊会话(供 read_group_chat 工具:回忆全貌用) */
+  listGroupChats?: () => { id: string; title: string; updatedAt: number }[];
+  /** 读某个群聊会话的完整记录(谁说了什么) */
+  readGroupChat?: (sessionId: string, limit: number) => { who: string; text: string; at: number }[];
 }
 
 export interface Tool {

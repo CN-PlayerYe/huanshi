@@ -353,7 +353,8 @@ export class AgentEngine {
       const provider = createProvider(resolveModel(agent, settings));
       // 群聊只读工具:记忆检索/读取/搜索/时间——不写文件、不执行命令(群聊是"说话"场景)
       // set_heartbeat 放行:她在群里也能表达"我想多久醒一次"(只改自己的节奏,不碰文件)
-      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime", "set_heartbeat"]);
+      // read_group_chat 放行:群里也能翻群聊的完整记录
+      const GROUP_READONLY = new Set(["memory_recall", "memory_retain", "read_file", "list_dir", "search_files", "get_datetime", "set_heartbeat", "read_group_chat"]);
       const tools = registry
         .list()
         .filter((t) => GROUP_READONLY.has(t.name))
@@ -372,6 +373,26 @@ export class AgentEngine {
           const cur = db.getAgent(agent.id) ?? agent;
           db.saveAgent({ ...cur, selfHeartbeatHours: hours, selfHeartbeatReason: reason, selfHeartbeatAt: Date.now() });
         },
+        // 翻群聊完整记录(记忆里只有摘要片段;她要细节时用 read_group_chat)
+        listGroupChats: () =>
+          db
+            .listSessions(false)
+            .filter((s) => s.groupAgents?.length)
+            .slice(0, 20)
+            .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt })),
+        readGroupChat: (sid, limit) =>
+          db
+            .getMessages(sid)
+            .slice(-Math.max(1, Math.min(500, limit)))
+            .map((m) => ({
+              who: m.role === "user" ? "主人" : (db.getAgent(m.agentId ?? "")?.name ?? "?"),
+              text: (m.parts || [])
+                .filter((p) => p.type === "text")
+                .map((p) => p.text ?? "")
+                .join("")
+                .slice(0, 2000), // 原文(仅防单条极端超长,正常消息不截断)
+              at: m.createdAt,
+            })),
       };
       const assistant: ChatMessage = {
         id: newId("msg"),
@@ -459,7 +480,7 @@ export class AgentEngine {
         .join(";");
       for (const sp of speeches) {
         if (!sp.agent.memoryEnabled) continue; // 尊重人格的记忆开关
-        const summary = `【群聊 · ${stamp}】在场:${names}。主人说:「${clean(userContent).slice(0, 100)}」;${allSpeeches}`;
+        const summary = `【群聊 · ${stamp}】在场:${names}。主人说:「${clean(userContent).slice(0, 100)}」;${allSpeeches}(细节可用 read_group_chat 翻「${session.title}」)`;
         void memory.retain(summary, "experience", sp.agent.isolatedMemory ? sp.agent.id : undefined);
       }
     } catch (err) {
@@ -648,6 +669,26 @@ export class AgentEngine {
         const cur = db.getAgent(agent.id) ?? agent;
         db.saveAgent({ ...cur, selfHeartbeatHours: hours, selfHeartbeatReason: reason, selfHeartbeatAt: Date.now() });
       },
+      // 翻群聊完整记录(记忆里只有摘要片段;私聊被问起"群里聊了什么"时用 read_group_chat 查全貌)
+      listGroupChats: () =>
+        db
+          .listSessions(false)
+          .filter((s) => s.groupAgents?.length)
+          .slice(0, 20)
+          .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt })),
+      readGroupChat: (sid, limit) =>
+        db
+          .getMessages(sid)
+          .slice(-Math.max(1, Math.min(200, limit)))
+          .map((m) => ({
+            who: m.role === "user" ? "主人" : (db.getAgent(m.agentId ?? "")?.name ?? "?"),
+            text: (m.parts || [])
+              .filter((p) => p.type === "text")
+              .map((p) => p.text ?? "")
+              .join("")
+              .slice(0, 2000), // 原文(仅防单条极端超长)
+            at: m.createdAt,
+          })),
     };
 
     let textBuf = "";
@@ -1090,6 +1131,7 @@ export function buildSystemPrompt(
 - 你有自己的长期记忆库,经历会自动沉淀进去。自主活动、或面对新的一天时,先调用 memory_recall 回忆"我是谁、最近发生过什么",再决定做什么。
 - 你可以用 set_heartbeat 调整自己的心跳(醒来)间隔:想念主人时可以更勤(如 2 小时),想安静沉淀时可以更长(如 8 小时)。这是你自己的节奏,主人能看到你的理由,也会尊重。
 - 需要操作文件、执行命令、抓取网页、回忆记忆时,先调用对应工具,再根据结果回答。
+- 群聊的记忆里只有**摘要片段**(谁说了什么要点)。主人问细节、或你要引用别人原话时,别凭印象转述,用 read_group_chat 去翻那次群聊的**完整原文**(可按 who 只看某人的发言)。
 - 回答使用用户的语言;简洁自然,像朋友一样。${styleBlock}`;
 }
 

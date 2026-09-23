@@ -186,3 +186,49 @@ describe("群聊历史回放", () => {
     expect(out[0].content).toBe("大家好啊");
   });
 });
+
+describe("read_group_chat 工具(回忆群聊全貌)", () => {
+  it("不传 session → 列出群聊;传标题 → 读出完整记录(带说话人)", async () => {
+    const { groupTools } = await import("../server/tools/group");
+    const tool = groupTools.find((t) => t.name === "read_group_chat")!;
+    const chats = [
+      { id: "s1", title: "🏮 群聊", updatedAt: Date.now() },
+      { id: "s2", title: "🏮 中秋夜", updatedAt: Date.now() - 1000 },
+    ];
+    const ctx = {
+      cwd: "",
+      allowedWriteDirs: [],
+      dataDir: "",
+      env: {},
+      memory: null,
+      listGroupChats: () => chats,
+      readGroupChat: (sid: string, limit: number) =>
+        sid === "s2"
+          ? [
+              { who: "主人", text: "中秋快乐", at: Date.now() - 5000 },
+              { who: "夜玲珑", text: "月亮真圆", at: Date.now() - 4000 },
+              { who: "小柒", text: "我要吃月饼", at: Date.now() - 3000 },
+            ].slice(-limit)
+          : [],
+    } as never;
+    // 不传 session:列出最近的群聊
+    const list = await tool.run({}, ctx);
+    expect(list).toContain("🏮 群聊");
+    expect(list).toContain("🏮 中秋夜");
+    // 传标题关键词:读出完整记录
+    const detail = await tool.run({ session: "中秋", limit: 10 }, ctx);
+    expect(detail).toContain("主人:中秋快乐");
+    expect(detail).toContain("夜玲珑:月亮真圆");
+    expect(detail).toContain("小柒:我要吃月饼");
+    // 找不到时给出提示
+    const miss = await tool.run({ session: "不存在的群" }, ctx);
+    expect(miss).toContain("没找到");
+    // 按人翻:只捞某人的发言(小柒的验收标准:单捞玄漪/星回看她俩聊了啥)
+    const onlyXiaoqi = await tool.run({ session: "中秋", who: "小柒" }, ctx);
+    expect(onlyXiaoqi).toContain("小柒:我要吃月饼");
+    expect(onlyXiaoqi).not.toContain("夜玲珑:月亮真圆");
+    // 某人没发言时明确说明
+    const none = await tool.run({ session: "中秋", who: "星回" }, ctx);
+    expect(none).toContain("没有「星回」的发言");
+  });
+});
