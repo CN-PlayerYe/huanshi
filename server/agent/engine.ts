@@ -330,6 +330,7 @@ export class AgentEngine {
 
     // 发言顺序随机(更像真群聊;原来固定按成员数组顺序,每次都是同一个人先开口)
     const order = [...agents].sort(() => Math.random() - 0.5);
+    const speeches: { agent: AgentDef; text: string }[] = []; // 收集各自发言,便于结束后各记一条群聊经历
     for (const agent of order) {
       const historyAll = db.getMessages(session.id).filter((m) => m.id !== userMsg.id);
       const history = sliceHistoryByPct(historyAll, agent);
@@ -442,6 +443,20 @@ export class AgentEngine {
       }
       db.updateMessage(assistant);
       db.updateSession(session.id, { updatedAt: Date.now() });
+      speeches.push({ agent, text: textBuf });
+    }
+    // 群聊记忆沉淀:每个参与者各记一条经历(含自己说了什么)。
+    // 否则群聊内容只存在于这个会话里,她们单人聊天/自主活动时想不起"群里聊过什么"。
+    try {
+      const names = agents.map((a) => a.name).join("、");
+      const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+      for (const sp of speeches) {
+        if (!sp.agent.memoryEnabled) continue; // 尊重人格的记忆开关
+        const summary = `【群聊】主人和${names}(共 ${agents.length} 位)在一起聊天。主人说:「${clean(userContent).slice(0, 120)}」;我说:「${clean(sp.text).slice(0, 160) || "(没说话)"}」`;
+        void memory.retain(summary, "experience", sp.agent.isolatedMemory ? sp.agent.id : undefined);
+      }
+    } catch (err) {
+      logError("group-chat-memory", err, dataDir);
     }
     await onEvent({ type: "done", message: db.getMessages(session.id).slice(-1)[0], session });
   }

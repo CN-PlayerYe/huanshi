@@ -111,15 +111,53 @@ describe("群聊 groupChat", () => {
     expect(done!.agentId).toBe(starts[starts.length - 1].agentId);
     expect(done!.id).toBe(starts[starts.length - 1].id);
 
-    // 4. db 落库:1 user + 2 assistant,每条 assistant 独立且带 agentId
+    // 4. db 落库:1 user + 2 assistant,每条 assistant 独立且带 agentId(发言顺序随机,不假定谁先)
     const msgs = db.getMessages(session.id);
     expect(msgs).toHaveLength(3);
     expect(msgs[0].role).toBe("user");
     expect(msgs[1].role).toBe("assistant");
-    expect(msgs[1].agentId).toBe(a1.id);
-    expect(msgs[1].parts[0]).toMatchObject({ type: "text", text: expect.stringContaining("我来") });
-    expect(msgs[2].agentId).toBe(a2.id);
-    expect(msgs[2].parts[0]).toMatchObject({ type: "text", text: expect.stringContaining("我来") });
+    expect(msgs[2].role).toBe("assistant");
+    expect([msgs[1].agentId, msgs[2].agentId].sort()).toEqual([a1.id, a2.id].sort());
+    for (const m of [msgs[1], msgs[2]]) {
+      expect(m.parts[0]).toMatchObject({ type: "text", text: expect.stringContaining("我来") });
+    }
+  });
+
+  it("群聊结束后每个参与者各记一条经历(单人聊天时能想起群里聊过什么)", async () => {
+    const mock = await startMockOpenAI();
+    servers.push(mock);
+    const dir = mkdtempSync(join(tmpdir(), "group-mem-"));
+    const db = Db.fromPaths({ dataDir: dir } as never);
+    const memory = new MemoryService(
+      { mode: "local", hindsightBaseUrl: "", hindsightApiKey: "", hindsightBankId: "t", localEnabled: true, experienceCap: 2000 },
+      dir,
+    );
+    const registry = new ToolRegistry();
+    const engine = new AgentEngine({
+      db,
+      memory,
+      registry,
+      dataDir: dir,
+      getSettings: () => ({
+        providers: { mock: { kind: "openai", baseUrl: `http://127.0.0.1:${mock.port}`, apiKey: "t", model: "m" } },
+        activeProvider: "mock",
+        mainModel: "m",
+        toolWhitelistDir: join(dir, "work"),
+      }),
+    } as never);
+    const a1: AgentDef = { ...makeAgent("甲"), memoryEnabled: true, isolatedMemory: true };
+    const a2: AgentDef = { ...makeAgent("乙"), memoryEnabled: true, isolatedMemory: true };
+    db.saveAgent(a1);
+    db.saveAgent(a2);
+    const session = db.createSession("群聊测试", a1.id);
+    db.updateSession(session.id, { groupAgents: [a1.id, a2.id] });
+    await engine.groupChat(db.getSession(session.id)!, [a1, a2], "中秋快乐", () => {});
+    // 沉淀是 async(void),给它一点时间
+    await new Promise((r) => setTimeout(r, 100));
+    const m1 = await memory.list(a1.id);
+    const m2 = await memory.list(a2.id);
+    expect(m1.some((m) => m.content.includes("群聊") && m.content.includes("中秋快乐"))).toBe(true);
+    expect(m2.some((m) => m.content.includes("群聊") && m.content.includes("中秋快乐"))).toBe(true);
   });
 });
 
