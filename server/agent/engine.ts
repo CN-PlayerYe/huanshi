@@ -379,7 +379,7 @@ export class AgentEngine {
             .listSessions(false)
             .filter((s) => s.groupAgents?.length)
             .slice(0, 20)
-            .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt })),
+            .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, messageCount: db.getMessages(s.id).length })),
         readGroupChat: (sid, limit) =>
           db
             .getMessages(sid)
@@ -675,11 +675,11 @@ export class AgentEngine {
           .listSessions(false)
           .filter((s) => s.groupAgents?.length)
           .slice(0, 20)
-          .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt })),
+          .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, messageCount: db.getMessages(s.id).length })),
       readGroupChat: (sid, limit) =>
         db
           .getMessages(sid)
-          .slice(-Math.max(1, Math.min(200, limit)))
+          .slice(-Math.max(1, Math.min(500, limit)))
           .map((m) => ({
             who: m.role === "user" ? "主人" : (db.getAgent(m.agentId ?? "")?.name ?? "?"),
             text: (m.parts || [])

@@ -12,7 +12,16 @@ export const CORE_TOOLS = [
   "memory_retain",
   "memory_recall",
   "memory_reflect",
+  "read_group_chat",
 ];
+
+/**
+ * "记忆/自我认知"类的内置只读工具:凡是有记忆能力(memory_recall)的人格都该有。
+ * 为什么单独列出来:工具是显式白名单,每新增一个内置工具,否则就要手动迁移每一个人格,
+ * 漏一个就出现"群里能用、私聊没有"这种怪事(read_group_chat 就踩过)。
+ * 只补这一类零副作用的只读工具;用户有意裁剪的(search_web 等)一律不动。
+ */
+const MEMORY_READONLY_TOOLS = ["read_group_chat"];
 
 /** 内置人格模板(首次启动时写入) */
 export function defaultAgents(): AgentDef[] {
@@ -92,6 +101,13 @@ export function ensureDefaultAgents(db: Db): AgentDef[] {
     } else {
       db.saveAgent(d);
     }
+  }
+  // 内置只读工具补全(自动迁移):给有记忆能力的人格补上新增的 memory 类只读工具,
+  // 免得每加一个工具都要手动改所有人格的工具白名单(漏一个就"群里能用、私聊没有")。
+  for (const a of db.listAgents()) {
+    if (!a.tools?.includes("memory_recall")) continue; // 没记忆能力的人格不需要翻群聊
+    const missing = MEMORY_READONLY_TOOLS.filter((t) => !a.tools!.includes(t));
+    if (missing.length) db.saveAgent({ ...a, tools: [...a.tools, ...missing] });
   }
   return db.listAgents();
 }

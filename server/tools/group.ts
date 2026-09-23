@@ -27,8 +27,12 @@ export const groupTools: Tool[] = [
       if (!chats.length) return "(还没有群聊记录)";
       if (!raw) {
         return `最近的群聊(${chats.length} 个):\n${chats
-          .map((c) => `- 「${c.title}」 最后更新 ${new Date(c.updatedAt).toLocaleString("zh-CN", { hour12: false })}(id: ${c.id})`)
-          .join("\n")}\n想读哪次,把标题关键词或 id 传给我(可加 who 只看某人发言)。`;
+          .map((c) => {
+            const when = new Date(c.updatedAt).toLocaleString("zh-CN", { hour12: false });
+            const cnt = c.messageCount ? ` · ${c.messageCount} 条` : "";
+            return `- 「${c.title}」 最后更新 ${when}${cnt} (id: ${c.id})`;
+          })
+          .join("\n")}\n想读哪次,把标题关键词或 id 传给我(可加 who 只看某人发言)。\n注意:同名群聊只传标题会读到最新那场,要翻更早那场请带上 id。`;
       }
       const hit = chats.find((c) => c.id === raw) ?? chats.find((c) => c.title.includes(raw)) ?? chats.find((c) => raw.includes(c.title));
       if (!hit) return `没找到匹配「${raw}」的群聊。现有:${chats.map((c) => c.title).join("、")}`;

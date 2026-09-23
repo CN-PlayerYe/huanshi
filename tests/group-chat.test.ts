@@ -232,3 +232,19 @@ describe("read_group_chat 工具(回忆群聊全貌)", () => {
     expect(none).toContain("没有「星回」的发言");
   });
 });
+
+describe("内置只读工具自动迁移", () => {
+  it("有记忆能力的人格自动补上 read_group_chat(免手动迁移);没记忆能力的不动", async () => {
+    const { ensureDefaultAgents } = await import("../server/agents");
+    const dir = mkdtempSync(join(tmpdir(), "agents-tools-"));
+    const db = Db.fromPaths({ dataDir: dir } as never);
+    db.saveAgent({ ...makeAgent("甲"), id: "a1", tools: ["memory_recall", "read_file"] });
+    db.saveAgent({ ...makeAgent("乙"), id: "b1", tools: ["read_file", "run_command"] }); // 无记忆能力
+    ensureDefaultAgents(db);
+    expect(db.getAgent("a1")!.tools).toContain("read_group_chat");
+    expect(db.getAgent("b1")!.tools).not.toContain("read_group_chat");
+    // 用户的原有工具不被清掉
+    expect(db.getAgent("a1")!.tools).toContain("read_file");
+    expect(db.getAgent("b1")!.tools).toContain("run_command");
+  });
+});
