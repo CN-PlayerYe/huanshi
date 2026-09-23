@@ -445,17 +445,21 @@ export class AgentEngine {
       db.updateSession(session.id, { updatedAt: Date.now() });
       speeches.push({ agent, text: textBuf });
     }
-    // 群聊记忆沉淀:每个参与者各记一条经历(含自己说了什么)。
-    // 否则群聊内容只存在于这个会话里,她们单人聊天/自主活动时想不起"群里聊过什么"。
+    // 群聊记忆沉淀:每位参与者各记一条经历。
+    // 关键:记录【所有在场者的发言】,不只"主人说的+我说的"——否则她们彼此记不住对方在群里说了什么,
+    // 群聊就成了各说各的独白,情分落不了地(小柒的验收发现)。
     try {
       const names = agents.map((a) => a.name).join("、");
       const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-      // 时间戳 + "主人说"放最前:记忆库去重按"前 40 字重合"判重,固定前缀会导致
-      // 后续轮次被当成重复只存第一条(实锤:6 人群聊 5 轮只沉淀了 1 条)。
+      // 时间戳放最前:记忆库去重按"前 40 字重合"判重,固定前缀会导致后续轮次被当重复只存第一条
+      // (实锤:6 人群聊 5 轮只沉淀 1 条)。
       const stamp = new Date().toLocaleString("zh-CN", { hour12: false });
+      const allSpeeches = speeches
+        .map((s) => `${s.agent.name}说:「${clean(s.text).slice(0, 80) || "(没说话)"}」`)
+        .join(";");
       for (const sp of speeches) {
         if (!sp.agent.memoryEnabled) continue; // 尊重人格的记忆开关
-        const summary = `【群聊 · ${stamp}】主人说:「${clean(userContent).slice(0, 120)}」;我(${sp.agent.name})说:「${clean(sp.text).slice(0, 160) || "(没说话)"}」(在场:${names})`;
+        const summary = `【群聊 · ${stamp}】在场:${names}。主人说:「${clean(userContent).slice(0, 100)}」;${allSpeeches}`;
         void memory.retain(summary, "experience", sp.agent.isolatedMemory ? sp.agent.id : undefined);
       }
     } catch (err) {
