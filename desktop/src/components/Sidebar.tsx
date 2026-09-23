@@ -82,14 +82,21 @@ export function Sidebar() {
   }, [menuFor, moveFor]);
 
   // 会话按 Agent 分组(保持 Agent 顺序:有会话的在前,按会话数降序)
+  // 群聊会话单独归一组(👥 群聊):它不属于任何单个人格,挂在某人格下会像"某个人的私聊"
+  const GROUP_KEY = "__groupchat__";
   const sessionGroups = useMemo(() => {
     const map = new Map<string, typeof sessions>();
     for (const s of sessions) {
-      const list = map.get(s.agentId) ?? [];
+      const key = s.groupAgents?.length ? GROUP_KEY : s.agentId;
+      const list = map.get(key) ?? [];
       list.push(s);
-      map.set(s.agentId, list);
+      map.set(key, list);
     }
-    return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === GROUP_KEY) return -1; // 群聊组置顶
+      if (b[0] === GROUP_KEY) return 1;
+      return b[1].length - a[1].length;
+    });
   }, [sessions]);
 
   const toggleGroup = (agentId: string) => {
@@ -167,7 +174,7 @@ export function Sidebar() {
               title="点击折叠/展开"
             >
               <span className="arrow">{collapsed.has(agentId) ? "▶" : "▼"}</span>
-              <span className="gname">{agents.find((a) => a.id === agentId)?.name ?? "其他"}</span>
+              <span className="gname">{agentId === GROUP_KEY ? "👥 群聊" : (agents.find((a) => a.id === agentId)?.name ?? "其他")}</span>
               <span className="gcount">{list.length}</span>
             </button>
             {!collapsed.has(agentId) &&
