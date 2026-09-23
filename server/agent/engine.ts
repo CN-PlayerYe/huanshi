@@ -376,7 +376,7 @@ export class AgentEngine {
         // 翻群聊完整记录(记忆里只有摘要片段;她要细节时用 read_group_chat)
         listGroupChats: () =>
           db
-            .listSessions(false)
+            .listSessions(true) // 含归档:归档只是"收起",记录还在,该翻得到(隐藏的仍排除,隐私优先)
             .filter((s) => s.groupAgents?.length)
             .slice(0, 20)
             .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, messageCount: db.getMessages(s.id).length })),
@@ -672,7 +672,7 @@ export class AgentEngine {
       // 翻群聊完整记录(记忆里只有摘要片段;私聊被问起"群里聊了什么"时用 read_group_chat 查全貌)
       listGroupChats: () =>
         db
-          .listSessions(false)
+          .listSessions(true) // 含归档:归档只是"收起",记录还在,该翻得到(隐藏的仍排除,隐私优先)
           .filter((s) => s.groupAgents?.length)
           .slice(0, 20)
           .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, messageCount: db.getMessages(s.id).length })),
