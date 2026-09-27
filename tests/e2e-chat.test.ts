@@ -205,3 +205,31 @@ describe("自动事实沉淀(generateFacts)", () => {
     expect(s2.factCount ?? 0).toBeGreaterThanOrEqual(44); // 沉淀时的消息数被记录
   });
 });
+
+describe("事实提炼解析(parseFacts)", () => {
+  it("丢掉动作描写/语气碎片,只留完整事实(修 31% facts 是碎片的问题)", async () => {
+    const { parseFacts } = await import("../server/agent/engine");
+    const raw = [
+      "- *(笑出声,额头抵着你额头)*",
+      "……在岗。**一直在。** 下次也在。🌙",
+      "*（顿了顿,抬头看你,眼睛在暗里亮亮的）*",
+      "*(手在你手心里慢慢收紧,指节扣进你指缝)*",
+      "……",
+      "无",
+      "",
+      "- 小满的院子叫拾光居,是她自己写字的地方。",
+      "- 主人答应中秋夜和小满一起看月亮。",
+    ].join("\n");
+    expect(parseFacts(raw)).toEqual([
+      "小满的院子叫拾光居,是她自己写字的地方。",
+      "主人答应中秋夜和小满一起看月亮。",
+    ]);
+  });
+
+  it("没有值得记的事实时不写库(「无」/空 → 空数组)", async () => {
+    const { parseFacts } = await import("../server/agent/engine");
+    expect(parseFacts("无")).toEqual([]);
+    expect(parseFacts("无。")).toEqual([]);
+    expect(parseFacts("")).toEqual([]);
+  });
+});

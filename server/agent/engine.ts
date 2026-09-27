@@ -150,8 +150,14 @@ export async function generateFacts(
       messages: [
         {
           role: "system",
-          content:
-            "你是记忆管家。从下面的对话中,提取值得长期记住的事实:人物关系、主人的个人信息与偏好、重要承诺与约定、故事世界的重要设定。只输出事实本身,每条一行,简洁,中文。不要输出对话原文。没有值得记的事实就只输出一行:无。",
+          content: `你是记忆管家。从下面的对话中,提取值得长期记住的事实:人物关系、主人的个人信息与偏好、重要承诺与约定、故事世界的重要设定。
+
+硬性要求:
+- 每条一行,以「- 」开头。
+- 每条必须是一个**完整自足的事实陈述**(如「小满的院子叫拾光居」「主人答应中秋一起看月亮」)。
+- **禁止**输出动作描写、舞台提示、语气词、对话原文片段(如「*(笑出声)*」「……在岗。」这类一律不要)。
+- 只写可复用的事实,不写"她说/他说"的表演内容。
+- 没有值得记的事实,就只输出一行:无。`,
         },
         ...history,
       ],
@@ -168,6 +174,29 @@ export async function generateFacts(
 
 /** 正在提炼事实的会话(防止并发重复生成) */
 const factLocks = new Set<string>();
+
+/**
+ * 解析"记忆管家"的输出 → 事实列表。
+ * 必须过滤:模型面对情绪重的对话时常被带偏,把助手的整段回复逐行吐出来;
+ * 旧版只按 \n 切分,于是「*(笑出声)*」「……在岗。」这类碎片被当事实入库
+ * (实测 6 位人格共 980 条 facts 中 305 条是这种碎片)。
+ */
+export function parseFacts(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    let l = raw.trim();
+    if (!l || l === "无" || l === "无。") continue;
+    l = l.replace(/^\s*[-*•]\s+/, "").trim(); // 去掉列表标记
+    const bare = l.replace(/[*_`#>\s]/g, "");
+    if (bare.length < 10) continue; // 太短:多半是语气词/半句话
+    if (/^[*（(【]/.test(l)) continue; // 动作描写 / 舞台提示
+    if (/^[.…。]+/.test(l)) continue; // 以省略号/句点开头:接话的语气碎片
+    if (/^[.…,、,。!?~—\-]+$/.test(bare)) continue; // 纯标点语气
+    if (!/[。;；:：,，!?]/.test(l) && l.length < 16) continue; // 极短碎句
+    out.push(l);
+  }
+  return out.slice(0, 20); // 单轮上限,防爆库
+}
 
 /** 世界观文档生成:综合会话摘要 + 最近对话,生成/更新结构化设定文档 */
 export async function generateLore(
@@ -835,10 +864,7 @@ export class AgentEngine {
           const recent = allHistory.slice(-40); // 最近 40 条足够提炼这批新事实
           void generateFacts(providerCfg, recent, dataDir)
             .then(async (text) => {
-              const facts = text
-                .split("\n")
-                .map((l) => l.trim())
-                .filter((l) => l && l !== "无" && l !== "无。");
+              const facts = parseFacts(text);
               if (facts.length) {
                 for (const fact of facts) {
                   try {
