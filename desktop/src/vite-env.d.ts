@@ -12,5 +12,6 @@ interface Window {
     windowClose: () => void;
     recognizeSpeech: () => Promise<{ text: string; error?: string }>;
     confirmDialog: (message: string) => Promise<boolean>;
+    localModelStatus: () => Promise<{ state: string; detail: string; port: number; pid?: number }>;
   };
 }

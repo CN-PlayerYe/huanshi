@@ -23,4 +23,7 @@ contextBridge.exposeInMainWorld("hanalite", {
   recognizeSpeech: (): Promise<{ text: string; error?: string }> => ipcRenderer.invoke("recognize-speech"),
   /** 原生确认对话框(避免 window.confirm 在 Electron 的焦点 bug) */
   confirmDialog: (message: string): Promise<boolean> => ipcRenderer.invoke("confirm-dialog", message),
+  /** 本地模型(llama.cpp)运行状态:stopped/starting/ready/error */
+  localModelStatus: (): Promise<{ state: string; detail: string; port: number; pid?: number }> =>
+    ipcRenderer.invoke("local-model-status"),
 });

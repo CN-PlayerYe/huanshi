@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer, type ServerHandle } from "../server";
+import { localModelStatus, startLocalModel, stopLocalModel } from "./localModel";
 
 // 必须在 app ready 前调用:禁用 GPU 加速,避免 Windows 驱动/远程桌面下 GPU 进程崩溃导致窗口闪退
 app.disableHardwareAcceleration();
@@ -268,6 +269,13 @@ $r.Dispose()`;
     lastThemeBg = themeBg(settings.theme ?? "ink");
     createWindow(lastThemeBg);
     installMenu(mainWindow!);
+    // 本地模型(llama.cpp):随幻世一起拉起,省得每次先手动开 llama-server 再开幻世。
+    // 不阻塞窗口显示(后台启动,就绪前聊天仍可用云端模型);
+    // 状态查询:渲染层 ipc "local-model-status"
+    ipcMain.handle("local-model-status", () => localModelStatus());
+    void startLocalModel(settings.localModel, settings.dataDir).catch((err) =>
+      log(`local model start failed: ${(err as Error).message}`),
+    );
     // 系统托盘:关闭窗口最小化到托盘,幻世后台继续跑(心跳不断);托盘菜单可打开/退出
     try {
       const iconPath = join(app.getAppPath(), "build", "icon.png");
@@ -325,8 +333,9 @@ app.on("window-all-closed", () => {
   /* 不退出,交给托盘/退出流程 */
 });
 
-// 退出时关闭后端
+// 退出时关闭后端 + 本地模型进程(否则 llama-server 会留在后台占显存)
 app.on("before-quit", () => {
   isQuitting = true;
+  stopLocalModel();
   void serverHandle?.close().catch(() => undefined);
 });

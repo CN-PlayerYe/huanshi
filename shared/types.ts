@@ -172,6 +172,19 @@ export interface Settings {
     /** 聊天气泡不透明度(0.3-1) */
     bubbleOpacity?: number;
   };
+  /** 本地模型(llama.cpp):让幻世自己拉起 llama-server,不用先手动开再开幻世 */
+  localModel?: {
+    /** 随幻世启动(退出幻世时自动关掉) */
+    autoStart?: boolean;
+    /** llama-server.exe 的完整路径 */
+    serverPath?: string;
+    /** 模型文件(*.gguf)的完整路径 */
+    modelPath?: string;
+    /** 端口(默认 8080) */
+    port?: number;
+    /** 额外参数,如 "-ngl 99 -c 32768"(--jinja 与 --model/--port 由幻世自动加) */
+    extraArgs?: string;
+  };
 }
 
 export interface SystemInfo {

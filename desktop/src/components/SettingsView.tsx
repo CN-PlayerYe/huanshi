@@ -104,6 +104,25 @@ export function SettingsView() {
   const unhideSession = useApp((s) => s.unhideSession);
 
   const [newProviderOpen, setNewProviderOpen] = useState(false);
+  // 本地模型(llama.cpp)运行状态:每 3 秒查询一次(启动是后台的,就绪前显示 starting)
+  const [localModel, setLocalModel] = useState<{ state: string; detail: string; port: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const s = await window.hanalite?.localModelStatus?.();
+        if (alive && s) setLocalModel(s);
+      } catch {
+        /* 非 Electron 环境(网页版)忽略 */
+      }
+    };
+    void tick();
+    const timer = setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
   const [dataDirInput, setDataDirInput] = useState(systemInfo?.dataDir ?? "");
   const [hiddenSessions, setHiddenSessions] = useState<SessionMeta[]>([]);
   const [hiddenOpen, setHiddenOpen] = useState(false);
@@ -409,6 +428,72 @@ export function SettingsView() {
             ＋ 添加模型提供商
           </button>
         )}
+      </div>
+
+      {/* ---- 本地模型(llama.cpp) ---- */}
+      <div className="settings-section">
+        <h3>🦙 本地模型(llama.cpp)</h3>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
+          让幻世自己拉起 llama-server,不用每次先手动启动它。退出幻世时会连带关掉(不留显存占用)。改完重启幻世生效。
+        </p>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={!!settings.localModel?.autoStart}
+            onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), autoStart: e.target.checked } })}
+          />
+          <span>随幻世启动</span>
+        </label>
+        <div className="field-row">
+          <div className="field">
+            <label>llama-server.exe 路径</label>
+            <input
+              type="text"
+              value={settings.localModel?.serverPath ?? ""}
+              placeholder="F:\LLama\llama-b9733-bin-win-cuda-12.4-x64\llama-server.exe"
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), serverPath: e.target.value } })}
+            />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>模型文件(.gguf)</label>
+            <input
+              type="text"
+              value={settings.localModel?.modelPath ?? ""}
+              placeholder="F:\红尘坊\models\xxx.gguf"
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), modelPath: e.target.value } })}
+            />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>端口</label>
+            <input
+              type="number"
+              value={settings.localModel?.port ?? 8080}
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), port: Number(e.target.value) || 8080 } })}
+            />
+          </div>
+          <div className="field" style={{ flex: 2 }}>
+            <label>额外参数(可选)</label>
+            <input
+              type="text"
+              value={settings.localModel?.extraArgs ?? ""}
+              placeholder="-ngl 99 -c 32768"
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), extraArgs: e.target.value } })}
+            />
+          </div>
+        </div>
+        <div className="status-line">
+          <span>状态:</span>
+          <span style={{ color: localModel?.state === "ready" ? "var(--ok)" : localModel?.state === "error" ? "var(--err, #e66)" : "var(--text-dim)" }}>
+            {localModel ? `${localModel.state}${localModel.detail ? ` — ${localModel.detail}` : ""}` : "(未查询)"}
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "6px 0 0" }}>
+          然后在「🤖 模型」里加一个提供商:baseUrl 填 <code>http://127.0.0.1:{settings.localModel?.port ?? 8080}/v1</code>,apiKey 随便填,模型名填 llama-server 显示的名字。
+        </p>
       </div>
 
       {/* ---- 数据目录 ---- */}
