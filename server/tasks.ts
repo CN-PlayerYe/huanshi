@@ -205,8 +205,10 @@ export class Scheduler {
       allowDangerousCommands: hb.commands === "allow",
       // 自主活动必须注入记忆:它没有"开窗第一轮"的概念,不注入就等于每次醒来都失忆
       injectMemory: true,
-      // 心跳是自主活动,不需要全量历史:固定只发最近 40 条(不跟随人格 100% 全量,大幅省输入成本)
-      historyLimit: 40,
+      // 心跳是自主活动:只发最近 8 条,且每条的正文/工具输出/工具参数都收得紧。
+      // 依据实测:40 条时单次 payload 可达 1MB ≈ 一块钱;8 条 + 紧回放约 10~15K tokens,
+      // 云端便宜,本地 32K 上下文(显卡只开 -c 32)也留得住余量。
+      historyLimit: 8,
       // 心跳也不需要深思考:固定 low 档省 token;正经对话仍跟随全局思考档位(💭 按钮)
       reasoningEffort: "low",
     };

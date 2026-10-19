@@ -656,9 +656,15 @@ export class AgentEngine {
     const historyForProvider = visionProviderCfg
       ? await describeHistoryImages(history, visionProviderCfg, dataDir, db)
       : history;
+    // 自主活动(心跳等,带 historyLimit)用更紧的回放上限:历史正文/工具输出/工具参数全收窄,
+    // 否则 40 条 × (工具输出 3000/条 + write_file 的超长参数) 就能把单次请求撑到 1MB、一块钱。
+    // 收到 8 条 + 这几个上限后约 10~15K tokens:云端便宜,本地 32K 上下文也放得下。
+    const replayLimits: ReplayLimits | undefined = opts?.historyLimit
+      ? { textLen: 2000, toolOutLen: 400, toolArgLen: 400, maxToolResults: 3 }
+      : undefined;
     const providerMessages: ProviderMsg[] = [
       { role: "system", content: systemPrompt },
-      ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all")),
+      ...(await historyToProviderMessages(historyForProvider, dataDir, Boolean(visionProviderCfg), settings.thinkingEcho ?? "all", undefined, replayLimits)),
       {
         role: "user",
         // 缓存友好:动态内容(记忆/时间)放 user 消息开头,system 前缀恒定 → DeepSeek 缓存高命中
@@ -1031,13 +1037,29 @@ async function describeHistoryImages(
  * (OpenAI 兼容 API 严格校验 tool_calls 后必须有对应的 tool 消息,否则 400)。
  * 关键2:assistant 带思考时,把 reasoning_content 原样回传(DeepSeek thinking 模式要求)。
  */
+export interface ReplayLimits {
+  /** 单条正文回放上限(字符) */
+  textLen?: number;
+  /** 单条工具输出回放上限 */
+  toolOutLen?: number;
+  /** 单条工具调用参数上限(参数的 content 可能极大,尤其 write_file) */
+  toolArgLen?: number;
+  /** 每条 assistant 最多回放几个工具结果 */
+  maxToolResults?: number;
+}
+
 export async function historyToProviderMessages(
   messages: ChatMessage[],
   dataDir?: string,
   describeAsText = false,
   thinkingEcho: "all" | "recent5" | "off" = "all",
   agentNameOf?: (agentId: string) => string | undefined,
+  limits?: ReplayLimits,
 ): Promise<ProviderMsg[]> {
+  const textLen = limits?.textLen ?? MAX_TEXT_LEN;
+  const toolOutLen = limits?.toolOutLen ?? MAX_TOOL_OUTPUT;
+  const toolArgLen = limits?.toolArgLen ?? Number.MAX_SAFE_INTEGER; // 默认不截参数(正经对话保持原样)
+  const maxToolResults = limits?.maxToolResults ?? MAX_TOOL_RESULTS;
   const out: ProviderMsg[] = [];
   // assistant 序号(从后往前),用于思考回传压缩
   const assistantIdx: number[] = [];
@@ -1048,7 +1070,7 @@ export async function historyToProviderMessages(
     // 文本截断:迁移的超长正文避免撑爆请求
     const text = truncate(
       m.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("\n"),
-      MAX_TEXT_LEN,
+      textLen,
     );
     if (m.role === "user") {
       const images = m.parts.filter((p) => p.type === "image" && p.image).map((p) => p.image!);
@@ -1067,8 +1089,8 @@ export async function historyToProviderMessages(
       });
       continue;
     }
-    // 只回放最近 MAX_TOOL_RESULTS 个工具结果(迁移会话可能有上百个,全量会极慢)
-    const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool).slice(-MAX_TOOL_RESULTS);
+    // 只回放最近 maxToolResults 个工具结果(迁移会话可能有上百个,全量会极慢)
+    const toolParts = m.parts.filter((p) => p.type === "tool" && p.tool).slice(-maxToolResults);
     // 思考回传策略:all=全量;recent5=仅最近 5 条 assistant 完整、更早截断;off=不回传(实验,可能 400)
     let reasoning: string | undefined;
     if (m.role === "assistant") {
@@ -1091,12 +1113,16 @@ export async function historyToProviderMessages(
         toolCalls: toolParts.map((p) => ({
           id: p.tool!.id,
           name: p.tool!.name,
-          arguments: p.tool!.input || "{}",
+          // 参数可能极大(write_file 的 content 全量塞在 arguments 里):自主活动时截短,省输入成本
+          arguments:
+            String(p.tool!.input ?? "{}").length > toolArgLen
+              ? String(p.tool!.input).slice(0, toolArgLen) + "…[已截断]"
+              : p.tool!.input || "{}",
         })),
         reasoningContent: reasoning || undefined,
       });
       for (const p of toolParts) {
-        out.push({ role: "tool", content: truncate(p.tool!.output ?? "(无输出)", MAX_TOOL_OUTPUT), toolCallId: p.tool!.id });
+        out.push({ role: "tool", content: truncate(p.tool!.output ?? "(无输出)", toolOutLen), toolCallId: p.tool!.id });
       }
     } else if (m.role === "assistant" && !text.trim() && !reasoning) {
       // 防御:跳过既无文本、无思考、也无工具调用的空 assistant(避免触发 "content or tool_calls must be set")

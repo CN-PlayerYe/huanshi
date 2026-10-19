@@ -233,3 +233,35 @@ describe("事实提炼解析(parseFacts)", () => {
     expect(parseFacts("")).toEqual([]);
   });
 });
+
+describe("自主活动的紧回放(心跳省成本)", () => {
+  it("正文 / 工具输出 / 工具调用参数都被截断,payload 大幅缩小", async () => {
+    const { historyToProviderMessages } = await import("../server/agent/engine");
+    const msgs = [
+      {
+        id: "m1",
+        sessionId: "s",
+        role: "assistant",
+        createdAt: 1,
+        parts: [
+          { type: "text", text: "长".repeat(10000) },
+          {
+            type: "tool",
+            tool: { id: "t1", name: "write_file", input: JSON.stringify({ content: "内".repeat(5000) }), output: "出".repeat(5000) },
+          },
+        ],
+      },
+    ] as never;
+    const loose = await historyToProviderMessages(msgs, undefined, false, "off");
+    const tight = await historyToProviderMessages(msgs, undefined, false, "off", undefined, {
+      textLen: 4000,
+      toolOutLen: 800,
+      toolArgLen: 800,
+      maxToolResults: 4,
+    });
+    const looseLen = JSON.stringify(loose).length;
+    const tightLen = JSON.stringify(tight).length;
+    expect(tightLen).toBeLessThan(looseLen / 3); // 至少缩到三分之一以下
+    expect(JSON.stringify(tight)).toContain("已截断"); // 参数截断有标记
+  });
+});
