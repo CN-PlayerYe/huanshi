@@ -31,6 +31,8 @@ export class Scheduler {
     private isHeartbeatPaused?: () => boolean,
     /** 主人正在聊天的人格 id(心跳避让只对这个人格生效,其他人格照常生活) */
     private lastUserAgentIdFn?: () => string | undefined,
+    /** 全局思考档位(心跳默认 low,但主人关了思考就别硬让它想) */
+    private getReasoningEffort?: () => "off" | "low" | "high" | "max" | undefined,
   ) {}
 
   start(): void {
@@ -209,8 +211,9 @@ export class Scheduler {
       // 依据实测:40 条时单次 payload 可达 1MB ≈ 一块钱;8 条 + 紧回放约 10~15K tokens,
       // 云端便宜,本地 32K 上下文(显卡只开 -c 32)也留得住余量。
       historyLimit: 8,
-      // 心跳也不需要深思考:固定 low 档省 token;正经对话仍跟随全局思考档位(💭 按钮)
-      reasoningEffort: "low",
+      // 心跳默认 low 省 token;但主人明确把思考关掉时,心跳也关——
+      // 否则本地模型/不支持 low 的模型照样会思考(实测:聊天没思考、心跳却有)
+      reasoningEffort: this.getReasoningEffort?.() === "off" ? "off" : "low",
     };
     if (hb.scope === "self") {
       mkdirSync(agentSpace, { recursive: true });

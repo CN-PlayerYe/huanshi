@@ -189,6 +189,7 @@ export async function createServer(opts: { version?: string; isPackaged?: boolea
     () => lastUserAt,
     () => settings.heartbeatPaused === true,
     () => lastUserAgentId,
+    () => settings.reasoningEffort,
   );
   scheduler.start();
 
