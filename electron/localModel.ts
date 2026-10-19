@@ -17,6 +17,10 @@ export interface LocalModelConfig {
   serverPath?: string;
   modelPath?: string;
   port?: number;
+  /** 上下文窗口(tokens,拼 -c;默认 32768) */
+  contextSize?: number;
+  /** GPU 层数(拼 -ngl;默认 99) */
+  gpuLayers?: number;
   extraArgs?: string;
 }
 
@@ -100,7 +104,22 @@ export async function startLocalModel(cfg: LocalModelConfig | undefined, dataDir
   }
 
   const log = logFile(dataDir);
-  const args = ["--model", cfg.modelPath, "--port", String(port), "--jinja", ...splitArgs(cfg.extraArgs ?? "")];
+  // 上下文与 GPU 层数是小白最常踩的两个坑,单独成字段自动拼,不用他们记 -c / -ngl
+  // (不给 -c 时 llama-server 默认只有 4096,长对话直接 400 exceed_context_size)
+  const ctx = Number(cfg.contextSize) || 32768;
+  const ngl = Number.isFinite(Number(cfg.gpuLayers)) ? Number(cfg.gpuLayers) : 99;
+  const args = [
+    "--model",
+    cfg.modelPath,
+    "--port",
+    String(port),
+    "--jinja",
+    "-c",
+    String(ctx),
+    "-ngl",
+    String(ngl),
+    ...splitArgs(cfg.extraArgs ?? ""),
+  ];
   state = "starting";
   stateDetail = `启动中(:${port})`;
   writeLog(log, `start: ${cfg.serverPath} ${args.join(" ")}`);

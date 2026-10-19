@@ -475,16 +475,40 @@ export function SettingsView() {
               onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), port: Number(e.target.value) || 8080 } })}
             />
           </div>
-          <div className="field" style={{ flex: 2 }}>
-            <label>额外参数(可选)</label>
+          <div className="field">
+            <label>上下文窗口(tokens)</label>
             <input
-              type="text"
-              value={settings.localModel?.extraArgs ?? ""}
-              placeholder="-ngl 99 -c 32768"
-              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), extraArgs: e.target.value } })}
+              type="number"
+              value={settings.localModel?.contextSize ?? 32768}
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), contextSize: Number(e.target.value) || 32768 } })}
+            />
+          </div>
+          <div className="field">
+            <label>GPU 层数</label>
+            <input
+              type="number"
+              value={settings.localModel?.gpuLayers ?? 99}
+              onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), gpuLayers: Number(e.target.value) } })}
             />
           </div>
         </div>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "2px 0 10px", lineHeight: 1.6 }}>
+          <b>上下文窗口</b>决定一次能带多少历史:llama-server 不给 <code>-c</code> 时只有 4096,长对话会报「exceeds the available context size」。建议按显卡能力填 <b>16384 / 32768 / 65536</b>。<br />
+          <b>GPU 层数</b>填 <b>99</b> = 模型全放显卡(最快);显存不够就调小(如 40),剩下的放内存。
+        </p>
+        <details style={{ marginTop: 4 }}>
+          <summary style={{ cursor: "pointer", fontSize: 12.5, color: "var(--text-dim)" }}>高级参数(一般不用动)</summary>
+          <div className="field-row" style={{ marginTop: 8 }}>
+            <div className="field" style={{ flex: 2 }}>
+              <input
+                type="text"
+                value={settings.localModel?.extraArgs ?? ""}
+                placeholder="例如:--flash-attn"
+                onChange={(e) => void updateSettings({ localModel: { ...(settings.localModel ?? {}), extraArgs: e.target.value } })}
+              />
+            </div>
+          </div>
+        </details>
         <div className="status-line">
           <span>状态:</span>
           <span style={{ color: localModel?.state === "ready" ? "var(--ok)" : localModel?.state === "error" ? "var(--err, #e66)" : "var(--text-dim)" }}>

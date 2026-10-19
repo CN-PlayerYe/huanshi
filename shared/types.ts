@@ -182,7 +182,11 @@ export interface Settings {
     modelPath?: string;
     /** 端口(默认 8080) */
     port?: number;
-    /** 额外参数,如 "-ngl 99 -c 32768"(--jinja 与 --model/--port 由幻世自动加) */
+    /** 上下文窗口大小(tokens,自动拼 -c;默认 32768)。llama-server 不给 -c 时只有 4096,长对话会 400 */
+    contextSize?: number;
+    /** 卸载到 GPU 的层数(自动拼 -ngl;默认 99 = 全上显卡) */
+    gpuLayers?: number;
+    /** 高级:额外参数(通常不用填,如 "-t 8 --flash-attn") */
     extraArgs?: string;
   };
 }

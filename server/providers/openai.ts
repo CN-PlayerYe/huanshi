@@ -42,9 +42,15 @@ export class OpenAICompatibleProvider implements ChatProvider {
         stream_options: { include_usage: true },
         temperature: req.temperature ?? 0.7,
         ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-        // 思考强度档位(DeepSeek V4):off=关闭思考;low/high/max 对应 reasoning_effort(官方默认 high)
+        // 思考强度档位:off=关闭思考
+        // DeepSeek 认 thinking:{type:disabled};llama.cpp(--jinja)/Qwen 系认 chat_template_kwargs.enable_thinking;
+        // 还有些服务认顶层 enable_thinking。三样一起发:不认识的键一般被忽略,这样"关闭思考"对本地模型也生效。
         ...(req.reasoningEffort === "off" || (req.reasoningEffort == null && this.disableThinking)
-          ? { thinking: { type: "disabled" } }
+          ? {
+              thinking: { type: "disabled" },
+              enable_thinking: false,
+              chat_template_kwargs: { enable_thinking: false },
+            }
           : {}),
         ...(req.reasoningEffort && req.reasoningEffort !== "off" ? { reasoning_effort: req.reasoningEffort } : {}),
       });
@@ -76,6 +82,18 @@ export class OpenAICompatibleProvider implements ChatProvider {
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
+        // 超上下文:重试没用(同样的请求再发一次还是超),直接给可操作的中文提示
+        // 本地模型最常见的原因:llama-server 没给 -c,默认只有 4096
+        if (/exceed_context_size|exceeds the available context size|maximum context length|context_length_exceeded/i.test(body)) {
+          const size = /(?:n_ctx"?:\s*|context size \()(\d+)/.exec(body)?.[1];
+          throw new ProviderError(
+            `⚠️ 上下文超了${size ? `(模型只开了 ${size} tokens)` : ""}。\n` +
+              `· 本地模型(llama.cpp):到「设置 → 本地模型」把「上下文窗口」调大(如 32768),重启幻世。\n` +
+              `· 云端模型:点标题旁的「🧹 压缩上下文」,或删掉几条早期消息。`,
+            400,
+            body,
+          );
+        }
         if (res.status === 400 && attempt === 0) {
           // 400 偶发解析失败:原样重试一次
           continue;
