@@ -2064,6 +2064,26 @@ export function SettingsView() {
           }}
         />
       </div>
+
+      {/* ---- 关于 ---- */}
+      <div className="settings-section">
+        <h3>✦ 关于幻世</h3>
+        <div className="status-line">
+          <span>版本:</span>
+          <code style={{ color: "var(--text)" }}>{systemInfo?.version ?? "—"}</code>
+          {systemInfo?.portable && <span style={{ color: "var(--ok)" }}>便携模式</span>}
+        </div>
+        <div className="status-line">
+          <span>数据目录:</span>
+          <code style={{ color: "var(--text)" }}>{systemInfo?.dataDir ?? "—"}</code>
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.7 }}>
+          幻世 —— 一个有记忆、有人格的私人 AI 助手。<br />
+          <span style={{ color: "var(--accent, #c9a227)" }}>✦ 由璇玑驱动 ✦</span>
+          <br />
+          <span style={{ fontSize: 11.5 }}>北斗第二星「天璇」与第三星「天玑」,浑天仪上那个璇玑 —— 衡量天地,也维护这院子的路。</span>
+        </p>
+      </div>
     </div>
   );
 }
